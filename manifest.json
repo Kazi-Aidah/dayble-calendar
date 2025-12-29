@@ -1,12 +1,10 @@
 {
 	"id": "dayble-calendar",
 	"name": "Dayble Calendar",
+	"description": "Features an extremely customizable calendar where events do not save as markdown notes.",
 	"version": "0.1.0",
 	"minAppVersion": "0.15.0",
-	"main": "main.js",
-	"description": "Features an extremely customizable calendar where events do not save as markdown notes.",
 	"author": "Kazi Aidah Haque",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"authorUrl": "https://github.com/Kazi-Aidah",
 	"isDesktopOnly": false
 }
