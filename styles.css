@@ -358,7 +358,7 @@
 .dayble-event.dayble-event-colored {
     background: var(--event-bg-color, var(--background-primary));
     color: var(--event-text-color, var(--text-normal));
-    border-color: var(--event-text-color, var(--background-modifier-border));
+    border-color: var(--event-border-color, var(--event-text-color, var(--background-modifier-border)));
 }
 
 .dayble-event:hover {
@@ -1236,4 +1236,43 @@ margin-top: 6px !important;
 
 .dayble-btn.dayble-icon-add.db-btn {
    padding: 8px !important;
+}
+
+/* crucial for today cell - long event + normal */
+.dayble-day.dayble-current-day .dayble-day-header {
+   margin-top: -6px !important;
+   margin-left: 2px !important;
+}
+
+/* Markdown rendering styles */
+.dayble-inline-code {
+   background: var(--background-secondary);
+   padding: 2px 4px;
+   border-radius: 3px;
+}
+
+.dayble-code-block {
+   background: var(--background-secondary);
+   padding: 6px;
+   border-radius: 6px;
+}
+
+.dayble-internal-link {
+   color: var(--link-color);
+}
+
+.dayble-external-link {
+   color: var(--link-color);
+}
+
+.dayble-holder-hidden {
+   display: none !important;
+}
+
+.dayble-event-dim {
+   opacity: 0.6;
+}
+
+.dayble-event-hidden {
+   display: none !important;
 }
