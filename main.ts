@@ -1,4 +1,4 @@
-import { App, ItemView, Modal, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, setIcon, Menu, TFile } from 'obsidian';
+import { App, ItemView, Modal, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, setIcon, Menu, TFile, MarkdownRenderer, MarkdownRenderChild, Component } from 'obsidian';
 
 const VIEW_TYPE = 'dayble-calendar-view';
 
@@ -11,6 +11,7 @@ interface DaybleSettings {
     timeFormat?: '24h' | '12h';
     holderOpen?: boolean;
     holderWidth?: number; // in pixels
+    weeklyNotesHeight?: number; // in pixels
     eventCategories?: EventCategory[];
     preferUserColors?: boolean; // prefer user-set event colors over category colors
     eventBgOpacity?: number; // 0-1, controls background opacity
@@ -27,7 +28,9 @@ interface DaybleSettings {
     customSwatchesFolded?: boolean;
     dayCellMaxHeight?: number;
     holderPlacement?: 'left' | 'right' | 'hidden';
-    triggers?: { pattern: string, categoryId: string }[];
+    calendarWeekActive?: boolean;
+    triggers?: { pattern: string, categoryId: string, color?: string, textColor?: string }[];
+    weeklyNotesEnabled?: boolean;
 } 
 
 const DEFAULT_SETTINGS: DaybleSettings = {
@@ -38,6 +41,7 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     eventDescAlign: 'center',
     timeFormat: '24h',
     holderOpen: true,
+    weeklyNotesHeight: 200,
     preferUserColors: false,
     eventBgOpacity: 0.50,
     eventBorderWidth: 0,
@@ -51,6 +55,8 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     customSwatchesFolded: false,
     dayCellMaxHeight: 0,
     holderPlacement: 'left',
+    calendarWeekActive: false,
+    weeklyNotesEnabled: false,
     swatches: [
         { name: 'Red', color: '#eb3b5a', textColor: '#f9c6d0' },
         { name: 'Orange', color: '#fa8231', textColor: '#fed8be' },
@@ -108,6 +114,20 @@ export default class DaybleCalendarPlugin extends Plugin {
         this.registerView(VIEW_TYPE, leaf => new DaybleCalendarView(leaf, this));
         this.addCommand({ id: 'open-dayble-calendar', name: 'Open Dayble Calendar', callback: () => this.openDayble() });
         this.addCommand({ id: 'dayble-focus-today', name: 'Focus on Today', callback: () => this.focusToday() });
+        this.addCommand({ 
+            id: 'dayble-open-weekly-view', 
+            name: 'Open Weekly View', 
+            callback: async () => { 
+                await this.openDayble(); 
+                const view = this.getCalendarView();
+                if (view) {
+                    this.settings.calendarWeekActive = true;
+                    await this.saveSettings();
+                    await view.loadAllEntries();
+                    view.render();
+                }
+            } 
+        });
         this.addSettingTab(new DaybleSettingTab(this.app, this));
         this.ensureEntriesFolder();
         this.openDayble();
@@ -186,6 +206,7 @@ class DaybleCalendarView extends ItemView {
     currentDate: Date;
     events: DaybleEvent[] = [];
     holderEvents: DaybleEvent[] = [];
+    weeklyNotes: Record<string, string> = {};
     isSelecting = false;
     isDragging = false;
     selectionStartDate: string | null = null;
@@ -197,6 +218,15 @@ class DaybleCalendarView extends ItemView {
     _boundHolderMouseUp = (e: MouseEvent) => {};
     _longRO?: ResizeObserver;
     currentTodayModal?: TodayModal;
+    weekToggleBtn?: HTMLElement;
+    weeklyNotesEl?: HTMLElement;
+    draggedEvent: HTMLElement | null = null;
+    saveTimeout: any;
+    isResizingWeeklyNotes = false;
+    weeklyNotesResizeStartY = 0;
+    weeklyNotesResizeStartHeight = 0;
+    _boundWeeklyNotesMouseMove = (e: MouseEvent) => {};
+    _boundWeeklyNotesMouseUp = (e: MouseEvent) => {};
 
     constructor(leaf: WorkspaceLeaf, plugin: DaybleCalendarPlugin) {
         super(leaf);
@@ -205,6 +235,11 @@ class DaybleCalendarView extends ItemView {
         this.plugin.registerDomEvent(window, 'resize', () => {
             this.render();
         });
+    }
+
+    debouncedSave() {
+        if (this.saveTimeout) clearTimeout(this.saveTimeout);
+        this.saveTimeout = setTimeout(() => this.saveAllEntries(), 1000);
     }
 
     getViewType() { return VIEW_TYPE; }
@@ -232,6 +267,18 @@ class DaybleCalendarView extends ItemView {
         searchBtn.className = 'dayble-btn dayble-header-buttons dayble-search-toggle';
         setIcon(searchBtn, 'search');
         searchBtn.onclick = () => { const modal = new PromptSearchModal(this.app, this); modal.open(); };
+
+        const weekToggle = document.createElement('button');
+        weekToggle.className = 'dayble-btn dayble-header-buttons dayble-week-toggle';
+        setIcon(weekToggle, 'calendar-range');
+        weekToggle.onclick = async () => {
+             this.plugin.settings.calendarWeekActive = !this.plugin.settings.calendarWeekActive;
+             await this.plugin.saveSettings();
+             await this.loadAllEntries();
+             this.render();
+        };
+        this.weekToggleBtn = weekToggle;
+
         this.monthTitleEl = this.headerEl.createEl('h1', { cls: 'dayble-month-title' });
         const right = this.headerEl.createDiv({ cls: 'dayble-nav-right' });
         const prevBtn = document.createElement('button'); prevBtn.className = 'dayble-btn dayble-header-buttons';
@@ -244,22 +291,16 @@ class DaybleCalendarView extends ItemView {
         setIcon(nextBtn, 'chevron-right');
         nextBtn.onclick = () => { this.shiftMonth(1); };
         const placement = this.plugin.settings.holderPlacement ?? 'left';
-        if (placement !== 'hidden') {
-            const target = (placement === 'left' ? left : right);
-            target.appendChild(holderToggle);
-            target.appendChild(searchBtn);
-        } else {
-            right.appendChild(searchBtn);
-        }
-        if (placement === 'right') {
-            left.appendChild(prevBtn);
-            left.appendChild(todayBtn);
-            left.appendChild(nextBtn);
-        } else {
-            right.appendChild(prevBtn);
-            right.appendChild(todayBtn);
-            right.appendChild(nextBtn);
-        }
+        
+        if (placement === 'left') left.appendChild(holderToggle);
+        
+        left.appendChild(prevBtn);
+        left.appendChild(todayBtn);
+        left.appendChild(nextBtn);
+        left.appendChild(weekToggle);
+        
+        right.appendChild(searchBtn);
+        if (placement === 'right') right.appendChild(holderToggle);
         this.bodyEl = this.rootEl.createDiv({ cls: 'dayble-body' });
         if (placement === 'right') {
             this.bodyEl.addClass('dayble-holder-right');
@@ -343,8 +384,13 @@ class DaybleCalendarView extends ItemView {
         
         if (this.plugin.settings.holderOpen) this.holderEl.addClass('open'); else this.holderEl.removeClass('open');
         this.calendarEl = this.bodyEl.createDiv({ cls: 'dayble-calendar' });
+        this.calendarEl.style.display = 'flex';
+        this.calendarEl.style.flexDirection = 'column';
+        this.calendarEl.style.height = '100%';
         this.weekHeaderEl = this.calendarEl.createDiv({ cls: 'dayble-weekdays' });
         this.gridEl = this.calendarEl.createDiv({ cls: 'dayble-grid' });
+        this.gridEl.style.flex = '1 1 auto';
+        this.gridEl.style.overflowY = 'auto';
         await this.loadAllEntries();
         this.render();
     }
@@ -369,27 +415,83 @@ class DaybleCalendarView extends ItemView {
             try { if (el && el.parentElement) el.remove(); } catch {}
         });
         this._longEls.clear();
+        if (this._boundWeeklyNotesMouseMove) {
+            document.removeEventListener('mousemove', this._boundWeeklyNotesMouseMove);
+        }
+        if (this._boundWeeklyNotesMouseUp) {
+            document.removeEventListener('mouseup', this._boundWeeklyNotesMouseUp);
+        }
+    }
+
+    getRequiredFiles(): Set<string> {
+        const files = new Set<string>();
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+        
+        const addDate = (d: Date) => {
+            const y = d.getFullYear();
+            const m = monthNames[d.getMonth()];
+            files.add(`${y}${m}.json`);
+        };
+
+        // Always add current date's month
+        addDate(this.currentDate);
+
+        if (this.plugin.settings.calendarWeekActive) {
+            const weekStart = this.plugin.settings.weekStartDay;
+            const base = new Date(this.currentDate);
+            const tDow = base.getDay();
+            const diff = ((tDow - weekStart) + 7) % 7;
+            const start = new Date(base);
+            start.setDate(base.getDate() - diff);
+            const end = new Date(start);
+            end.setDate(start.getDate() + 6);
+            
+            addDate(start);
+            addDate(end);
+        }
+        return files;
     }
 
     async loadAllEntries() {
-        const file = this.getMonthDataFilePath();
-        try {
-            console.log('[Dayble] Loading all entries from', file);
-            const json = await this.app.vault.adapter.read(file);
-            console.log('[Dayble] Read file, size:', json.length, 'bytes');
-            const data = JSON.parse(json) as { events: DaybleEvent[], holder: DaybleEvent[], lastModified?: string };
-            this.events = data.events || [];
-            this.holderEvents = data.holder || [];
-            console.log('[Dayble] Loaded', this.events.length, 'events and', this.holderEvents.length, 'holder events');
-            if (data.lastModified) {
-                console.log('[Dayble] Last modified:', data.lastModified);
+        const files = this.getRequiredFiles();
+        this.events = [];
+        this.holderEvents = [];
+        this.weeklyNotes = {};
+        
+        const currentFile = this.getMonthDataFilePath().split('/').pop();
+
+        for (const filename of files) {
+            const file = `${this.plugin.settings.entriesFolder}/${filename}`;
+            try {
+                console.log('[Dayble] Loading entries from', file);
+                const json = await this.app.vault.adapter.read(file);
+                const data = JSON.parse(json) as { events: DaybleEvent[], holder: DaybleEvent[], weeklyNotes?: Record<string, string>, lastModified?: string };
+                
+                // Merge events
+                if (data.events) {
+                    this.events.push(...data.events);
+                }
+                
+                // Only load holder and weekly notes from the primary current file to avoid duplication/conflicts
+                if (filename === currentFile) {
+                    this.holderEvents = data.holder || [];
+                    this.weeklyNotes = data.weeklyNotes || {};
+                }
+            } catch (e) {
+                console.log('[Dayble] No data file found or error reading:', file);
             }
-        } catch (e) {
-            console.log('[Dayble] No data file found, starting with empty events:', file);
-            console.log('[Dayble] Error details:', e instanceof Error ? e.message : String(e));
-            this.events = [];
-            this.holderEvents = [];
         }
+        
+        // Deduplicate events just in case (though should not happen if files are distinct partitions)
+        const seen = new Set();
+        this.events = this.events.filter(e => {
+            const duplicate = seen.has(e.id);
+            seen.add(e.id);
+            return !duplicate;
+        });
+        
+        console.log('[Dayble] Total loaded events:', this.events.length);
     }
 
     async saveAllEntries() {
@@ -397,27 +499,103 @@ class DaybleCalendarView extends ItemView {
         if (!folder) { new StorageFolderNotSetModal(this.app).open(); return; }
         try { await this.app.vault.adapter.stat(folder); }
         catch { new StorageFolderNotSetModal(this.app).open(); return; }
-        const file = this.getMonthDataFilePath();
-        try {
-            // Folder exists, proceed to save
+
+        const filesToSave = this.getRequiredFiles();
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+                           
+        const getFilenameForDate = (dateStr: string) => {
+             const d = new Date(dateStr);
+             if (isNaN(d.getTime())) return null;
+             const y = d.getFullYear();
+             const m = monthNames[d.getMonth()];
+             return `${y}${m}.json`;
+        };
+
+        const currentFile = this.getMonthDataFilePath().split('/').pop();
+
+        // We need to read all files first to ensure we don't lose events that are NOT in this.events (e.g. out of view range)
+        // But wait, if we only loaded events from `filesToSave`, and `this.events` contains modifications...
+        // If we modify an event, it's in `this.events`.
+        // If we delete an event, it's removed from `this.events`.
+        // If there are events in the files that are NOT in `this.events`, it implies they were not loaded.
+        // Since `loadAllEntries` loads EVERYTHING from `filesToSave`, `this.events` should cover ALL events in those files.
+        // So we can safely overwrite `filesToSave`.
+        
+        // Partition events by target filename
+        const eventsByFile: Record<string, DaybleEvent[]> = {};
+        
+        // Initialize arrays for known files
+        filesToSave.forEach(f => eventsByFile[f] = []);
+        
+        const orphanEvents: DaybleEvent[] = [];
+
+        this.events.forEach(ev => {
+            let targetFile = currentFile; // Default to current file if no date
+            if (ev.date) {
+                targetFile = getFilenameForDate(ev.date) || currentFile;
+            } else if (ev.startDate) {
+                targetFile = getFilenameForDate(ev.startDate) || currentFile;
+            }
             
-            console.log('[Dayble] Saving all entries to', file);
-            console.log('[Dayble] Current events:', this.events.length);
-            console.log('[Dayble] Current holder events:', this.holderEvents.length);
+            if (targetFile) {
+                if (!eventsByFile[targetFile]) eventsByFile[targetFile] = [];
+                eventsByFile[targetFile].push(ev);
+            } else {
+                orphanEvents.push(ev);
+            }
+        });
+        
+        // If we have events that belong to files NOT in `filesToSave` (e.g. moved event to far future),
+        // we should probably save those files too.
+        // But for now, let's focus on `filesToSave` + any new targets found.
+        
+        // Save each file
+        for (const filename of Object.keys(eventsByFile)) {
+            const fileEvents = eventsByFile[filename];
+            const isCurrent = filename === currentFile;
+            
+            const file = `${folder}/${filename}`;
+            
+            // We need to preserve holder/weeklyNotes if we are NOT the current file
+            // But wait, `loadAllEntries` only loaded holder from `currentFile`.
+            // So for other files, we don't know their holder content!
+            // We MUST read them to preserve holder/notes.
+            
+            let holderToSave: DaybleEvent[] = [];
+            let notesToSave: Record<string, string> = {};
+            
+            if (isCurrent) {
+                holderToSave = this.holderEvents;
+                notesToSave = this.weeklyNotes;
+            } else {
+                // Read file to get existing holder/notes
+                try {
+                    if (await this.app.vault.adapter.exists(file)) {
+                        const json = await this.app.vault.adapter.read(file);
+                        const data = JSON.parse(json);
+                        holderToSave = data.holder || [];
+                        notesToSave = data.weeklyNotes || {};
+                    }
+                } catch (e) {
+                    // Ignore error, maybe new file
+                }
+            }
+
             const data = {
-                events: this.events,
-                holder: this.holderEvents,
+                events: fileEvents,
+                holder: holderToSave,
+                weeklyNotes: notesToSave,
                 lastModified: new Date().toISOString()
             };
-            const jsonStr = JSON.stringify(data, null, 2);
-            console.log('[Dayble] JSON size:', jsonStr.length, 'bytes');
-            await this.app.vault.adapter.write(file, jsonStr);
-            console.log('[Dayble] All entries saved successfully to:', file);
-        }
-        catch (e) {
-            console.error('[Dayble] Failed to save entries:', e);
-            console.error('[Dayble] Error message:', e instanceof Error ? e.message : String(e));
-            new Notice('Failed to save entries: ' + (e instanceof Error ? e.message : String(e)));
+            
+            try {
+                const jsonStr = JSON.stringify(data, null, 2);
+                await this.app.vault.adapter.write(file, jsonStr);
+                console.log('[Dayble] Saved', filename);
+            } catch (e) {
+                console.error('[Dayble] Failed to save', filename, e);
+            }
         }
     }
 
@@ -427,13 +605,427 @@ class DaybleCalendarView extends ItemView {
     }
 
     shiftMonth(delta: number) {
-        const d = new Date(this.currentDate);
-        d.setMonth(d.getMonth() + delta);
-        this.currentDate = d;
+        if (this.plugin.settings.calendarWeekActive) {
+            this.currentDate.setDate(this.currentDate.getDate() + (delta * 7));
+        } else {
+            const d = new Date(this.currentDate);
+            d.setMonth(d.getMonth() + delta);
+            this.currentDate = d;
+        }
         this.loadAllEntries().then(() => this.render());
     }
 
-    render(titleEl?: HTMLElement) {
+    async render(titleEl?: HTMLElement) {
+        if (this.weeklyNotesEl) {
+            this.weeklyNotesEl.remove();
+            this.weeklyNotesEl = undefined;
+        }
+        // Reset grid style
+        this.gridEl.style.flex = '1 1 auto';
+        this.gridEl.style.minHeight = '';
+
+        if (this.plugin.settings.calendarWeekActive) {
+            this.gridEl.addClass('dayble-week-mode');
+            await this.renderWeekView(titleEl);
+        } else {
+            this.gridEl.removeClass('dayble-week-mode');
+            this.renderMonthView(titleEl);
+        }
+    }
+
+    async renderWeekView(titleEl?: HTMLElement) {
+        const y = this.currentDate.getFullYear();
+        const m = this.currentDate.getMonth();
+        const monthLabel = this.currentDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+        if (this.monthTitleEl) this.monthTitleEl.setText(monthLabel);
+        
+        // Update week toggle button active state
+        if (this.weekToggleBtn) {
+            if (this.plugin.settings.calendarWeekActive) this.weekToggleBtn.addClass('active');
+            else this.weekToggleBtn.removeClass('active');
+        }
+
+        this.gridEl.empty();
+        this.weekHeaderEl.empty();
+        
+        const weekStart = this.plugin.settings.weekStartDay;
+        const base = new Date(this.currentDate);
+        const tDow = base.getDay();
+        const diff = ((tDow - weekStart) + 7) % 7;
+        const start = new Date(base);
+        start.setDate(base.getDate() - diff); // Start of the week
+
+        // Header
+        const header = this.weekHeaderEl.createDiv({ cls: 'dayble-grid-header' });
+        const days = ['sun','mon','tue','wed','thu','fri','sat'];
+        const ordered = days.slice(weekStart).concat(days.slice(0, weekStart));
+        ordered.forEach(d => header.createDiv({ text: d, cls: 'dayble-grid-header-cell' }));
+
+        // Pre-calculate long event margins (reused from month view logic)
+        const segmentHeight = 28;
+        const segmentGap = 4; // gappy
+        const countsByDate: Record<string, number> = {};
+        const longEventsPreset = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
+        longEventsPreset.forEach(ev => {
+            const start = new Date(ev.startDate!);
+            const end = new Date(ev.endDate!);
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                const yy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                const key = `${yy}-${mm}-${dd}`;
+                countsByDate[key] = (countsByDate[key] || 0) + 1;
+            }
+        });
+
+        // Grid
+        const fragment = document.createDocumentFragment();
+        
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(start);
+            d.setDate(start.getDate() + i);
+            const yy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const fullDate = `${yy}-${mm}-${dd}`;
+            
+            const cell = fragment.createDiv({ cls: 'dayble-day' });
+            cell.setAttr('data-date', fullDate);
+            
+            const dayHeader = cell.createDiv({ cls: 'dayble-day-header' });
+            const num = dayHeader.createDiv({ cls: 'dayble-day-number', text: String(d.getDate()) });
+            
+            const t = new Date();
+            const isToday = d.getDate() === t.getDate() && d.getMonth() === t.getMonth() && d.getFullYear() === t.getFullYear();
+            
+            if (isToday) {
+                cell.addClass('dayble-current-day');
+                const searchBtn = dayHeader.createEl('button', { cls: 'dayble-day-search-btn' });
+                searchBtn.addClass('db-day-search-btn');
+                setIcon(searchBtn, 'focus');
+                searchBtn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.openTodayModal(fullDate);
+                    return false;
+                };
+                searchBtn.onmousedown = (e) => { e.preventDefault(); e.stopPropagation(); };
+                searchBtn.ontouchstart = (e) => { e.preventDefault(); e.stopPropagation(); };
+            }
+
+            const longContainer = cell.createDiv({ cls: 'dayble-long-container' });
+            longContainer.addClass('db-long-container');
+            
+            const container = cell.createDiv({ cls: 'dayble-event-container' });
+            
+            // Apply margins for long events
+            const preCount = countsByDate[fullDate] || 0;
+            const preMt = preCount > 0 ? (preCount * segmentHeight) + (Math.max(0, preCount - 1) * segmentGap) + 2 : 0;
+            const adjusted = Math.max(0, preMt - 6);
+            container.style.marginTop = adjusted ? `${adjusted}px` : '';
+
+            const dayEvents = this.events.filter(e => e.date === fullDate);
+            dayEvents.forEach(e => container.appendChild(this.createEventItem(e)));
+            
+            // Drag and Drop (reused optimized logic from month view)
+            container.ondragover = (e) => { 
+                e.preventDefault();
+                const targetEvent = (e.target as HTMLElement).closest('.dayble-event') as HTMLElement | null;
+                const eventCount = container.querySelectorAll('.dayble-event').length;
+                if (targetEvent && targetEvent.parentElement === container && eventCount > 1) {
+                    const rect = targetEvent.getBoundingClientRect();
+                    const relativeY = e.clientY - rect.top;
+                    const eventHeight = rect.height;
+                    
+                    container.querySelectorAll('.dayble-drop-indicator').forEach(el => el.remove());
+                    
+                    const indicator = container.createDiv({ cls: 'dayble-drop-indicator' });
+                    if (relativeY < eventHeight / 2) {
+                        indicator.addClass('above');
+                        targetEvent.parentElement?.insertBefore(indicator, targetEvent);
+                    } else {
+                        indicator.addClass('below');
+                        targetEvent.after(indicator);
+                    }
+                }
+            };
+
+            container.ondragleave = (e) => { 
+                if (e.target === container) {
+                    container.querySelectorAll('.dayble-drop-indicator').forEach(el => el.remove());
+                }
+            };
+
+            container.ondrop = async (e) => {
+                e.preventDefault();
+                container.querySelectorAll('.dayble-drop-indicator').forEach(el => el.remove());
+                
+                const id = e.dataTransfer?.getData('text/plain');
+                const src = e.dataTransfer?.getData('dayble-source');
+                if (!id || src !== 'calendar') return;
+                
+                const draggedEl = document.querySelector(`[data-id="${id}"]`) as HTMLElement | null;
+                if (!draggedEl) return;
+                
+                const draggedContainer = draggedEl.closest('.dayble-event-container') as HTMLElement | null;
+                if (draggedContainer !== container) return;
+                
+                const targetEvent = (e.target as HTMLElement).closest('.dayble-event') as HTMLElement | null;
+                if (!targetEvent || targetEvent === draggedEl) return;
+                
+                const rect = targetEvent.getBoundingClientRect();
+                const relativeY = e.clientY - rect.top;
+                
+                if (relativeY < rect.height / 2) {
+                    container.insertBefore(draggedEl, targetEvent);
+                } else {
+                    targetEvent.after(draggedEl);
+                }
+                
+                // Reorder logic
+                const allEventEls = Array.from(container.querySelectorAll('.dayble-event'));
+                const newOrder = allEventEls.map(el => (el as HTMLElement).dataset.id).filter(Boolean) as string[];
+                
+                const dayDate = fullDate;
+                const dayEventIndices: number[] = [];
+                this.events.forEach((ev, idx) => {
+                    if (ev.date === dayDate) dayEventIndices.push(idx);
+                });
+                
+                const eventIdToIndex = new Map<string, number>();
+                newOrder.forEach((eventId, idx) => eventIdToIndex.set(eventId, idx));
+                
+                dayEventIndices.sort((a, b) => {
+                    const idA = this.events[a].id || '';
+                    const idB = this.events[b].id || '';
+                    const orderA = eventIdToIndex.get(idA) ?? 999;
+                    const orderB = eventIdToIndex.get(idB) ?? 999;
+                    return orderA - orderB;
+                });
+                
+                const reorderedEvents: DaybleEvent[] = [];
+                let dayEventIdx = 0;
+                this.events.forEach((ev, idx) => {
+                    if (ev.date === dayDate) {
+                        reorderedEvents.push(this.events[dayEventIndices[dayEventIdx]]);
+                        dayEventIdx++;
+                    } else {
+                        reorderedEvents.push(ev);
+                    }
+                });
+                
+                this.events = reorderedEvents;
+                await this.saveAllEntries();
+            };
+            
+            // Drop on cell (move from holder or other day)
+            cell.ondragover = (e) => { e.preventDefault(); cell.addClass('dayble-drag-over'); };
+            cell.ondragleave = () => { cell.removeClass('dayble-drag-over'); };
+            cell.ondrop = async (e) => {
+                e.preventDefault();
+                cell.removeClass('dayble-drag-over');
+                const id = e.dataTransfer?.getData('text/plain');
+                const src = e.dataTransfer?.getData('dayble-source');
+                if (!id) return;
+                
+                if (src === 'holder') {
+                    const hIdx = this.holderEvents.findIndex(ev => ev.id === id);
+                    if (hIdx !== -1) {
+                        const evn = this.holderEvents.splice(hIdx, 1)[0];
+                        evn.date = fullDate;
+                        this.events.push(evn);
+                        await this.saveAllEntries();
+                        this.loadAllEntries().then(() => this.render());
+                    }
+                } else if (src === 'calendar') {
+                     // Move from another day
+                     const idx = this.events.findIndex(ev => ev.id === id);
+                     if (idx !== -1) {
+                         const ev = this.events[idx];
+                         // Check if moving to same day (already handled by container.ondrop)
+                         if (ev.date !== fullDate) {
+                             ev.date = fullDate;
+                             await this.saveAllEntries();
+                             this.loadAllEntries().then(() => this.render());
+                         }
+                     }
+                }
+            };
+
+            // Interactions
+            cell.onclick = (ev) => {
+                const target = ev.target as HTMLElement;
+                if (!target.closest('.dayble-event') && target.closest('.dayble-event-container') === container) {
+                    this.openEventModal(undefined, fullDate);
+                }
+            };
+            
+            cell.onmousedown = (ev) => {
+                if ((ev as MouseEvent).button !== 0) return;
+                const target = ev.target as HTMLElement;
+                if (target.closest('.dayble-event')) return;
+                if (this.isDragging) return;
+                this.startSelection(fullDate, cell);
+            };
+            
+            cell.onmouseover = () => {
+                if (this.isSelecting && !this.isDragging) this.updateSelection(fullDate);
+            };
+            
+            cell.ontouchstart = (ev) => {
+                const target = ev.target as HTMLElement;
+                if (target.closest('.dayble-event')) return;
+                if (this.isDragging) return;
+                this.startSelection(fullDate, cell);
+            };
+            
+            cell.ontouchmove = () => {
+                if (this.isSelecting && !this.isDragging) this.updateSelection(fullDate);
+            };
+        }
+        
+        this.gridEl.appendChild(fragment);
+        
+        // Render long events
+        // Prepare overlay for long events; hide it until positions are computed
+        if (!this._longOverlayEl || !this._longOverlayEl.isConnected) {
+            this._longOverlayEl = this.gridEl.createDiv({ cls: 'dayble-long-overlay' });
+            this._longOverlayEl.style.position = 'absolute';
+            this._longOverlayEl.style.inset = '0';
+            this._longOverlayEl.style.pointerEvents = 'none';
+            this._longOverlayEl.style.zIndex = '10';
+        } else {
+            this.gridEl.appendChild(this._longOverlayEl);
+        }
+        
+        requestAnimationFrame(() => this.renderLongEvents());
+        
+        if (!this._longRO && (window as any).ResizeObserver) {
+            this._longRO = new (window as any).ResizeObserver(() => {
+                this.renderLongEvents();
+            });
+            if (this._longRO && this.gridEl) this._longRO.observe(this.gridEl);
+        }
+
+        // Weekly Notes
+        if (this.plugin.settings.weeklyNotesEnabled) {
+            // Adjust grid to allow shrinking and let notes take space
+            this.gridEl.style.flex = '0 1 auto';
+            this.gridEl.style.minHeight = '0';
+
+            const base = new Date(this.currentDate);
+            const tDow = base.getDay();
+            const diff = ((tDow - this.plugin.settings.weekStartDay) + 7) % 7;
+            const weekStartDate = new Date(base);
+            weekStartDate.setDate(base.getDate() - diff);
+            const weekKey = weekStartDate.toISOString().split('T')[0];
+            
+            this.weeklyNotesEl = this.calendarEl.createDiv({ cls: 'dayble-weekly-notes' });
+            this.weeklyNotesEl.style.flex = '0 0 auto !important';
+            this.weeklyNotesEl.style.height = 'auto';
+            this.weeklyNotesEl.style.display = 'flex !important';
+            this.weeklyNotesEl.style.flexDirection = 'column !important';
+            this.weeklyNotesEl.style.borderTop = '1px solid var(--background-modifier-border)';
+            this.weeklyNotesEl.style.position = 'relative';
+            
+            // Drag Handle
+            const dragHandle = this.weeklyNotesEl.createDiv({ cls: 'dayble-weekly-drag-handle' });
+            
+            this._boundWeeklyNotesMouseMove = (me: MouseEvent) => {
+                if (!this.isResizingWeeklyNotes || !this.weeklyNotesEl) return;
+                const dy = me.clientY - this.weeklyNotesResizeStartY;
+                const newH = Math.max(100, this.weeklyNotesResizeStartHeight - dy);
+                this.weeklyNotesEl.style.height = `${newH}px !important`;
+            };
+            this._boundWeeklyNotesMouseUp = async () => {
+                if (!this.isResizingWeeklyNotes) return;
+                this.isResizingWeeklyNotes = false;
+                document.removeEventListener('mousemove', this._boundWeeklyNotesMouseMove as EventListener);
+                document.removeEventListener('mouseup', this._boundWeeklyNotesMouseUp as EventListener);
+                if (this.weeklyNotesEl) {
+                    this.plugin.settings.weeklyNotesHeight = this.weeklyNotesEl.offsetHeight;
+                    await this.plugin.saveSettings();
+                }
+            };
+            dragHandle.onmousedown = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!this.weeklyNotesEl) return;
+                this.isResizingWeeklyNotes = true;
+                this.weeklyNotesResizeStartY = e.clientY;
+                this.weeklyNotesResizeStartHeight = this.weeklyNotesEl.offsetHeight;
+                document.addEventListener('mousemove', this._boundWeeklyNotesMouseMove as EventListener);
+                document.addEventListener('mouseup', this._boundWeeklyNotesMouseUp as EventListener);
+            };
+
+            // Header
+            const header = this.weeklyNotesEl.createDiv({ cls: 'dayble-weekly-notes-header' });
+            header.style.display = 'flex';
+            header.style.justifyContent = 'space-between';
+            header.style.alignItems = 'center';
+            header.style.padding = '8px 10px 0 10px';
+            header.style.flex = '0 0 auto';
+            const h4 = header.createEl('h4', { text: 'Weekly Notes' });
+            h4.style.margin = '0';
+            
+            // Content area with textarea only
+            const contentContainer = this.weeklyNotesEl.createDiv({ cls: 'dayble-weekly-notes-content' });
+            contentContainer.style.flex = '0 0 auto !important';
+            contentContainer.style.overflow = 'visible !important';
+            contentContainer.style.padding = '10px';
+            contentContainer.style.display = 'flex !important';
+            contentContainer.style.flexDirection = 'column !important';
+            contentContainer.style.minHeight = '0 !important';
+
+            // Get current text
+            const currentText = this.weeklyNotes[weekKey] || '';
+            
+            // Create textarea for editing
+            const textareaEl = contentContainer.createEl('textarea', { cls: 'dayble-weekly-notes-textarea' });
+            textareaEl.value = currentText;
+            textareaEl.style.width = '100% !important';
+            textareaEl.style.padding = '8px';
+            textareaEl.style.fontFamily = 'var(--font-monospace)';
+            textareaEl.style.fontSize = 'var(--font-text-size)';
+            textareaEl.style.border = '1px solid var(--divider-color)';
+            textareaEl.style.borderRadius = '4px';
+            textareaEl.style.background = 'var(--background-secondary)';
+            textareaEl.style.color = 'var(--text-normal)';
+            textareaEl.style.resize = 'none !important';
+            textareaEl.style.boxSizing = 'border-box';
+            textareaEl.style.overflowY = 'hidden';
+            
+            // Auto-height function - grows with content up to 500px max
+            const updateTextareaHeight = () => {
+                textareaEl.style.height = 'auto';
+                textareaEl.style.height = `${textareaEl.scrollHeight}px`;
+            };
+            
+            // Initial height
+            setTimeout(updateTextareaHeight, 0);
+            
+            // Update on input
+            textareaEl.addEventListener('input', () => {
+                this.weeklyNotes[weekKey] = textareaEl.value;
+                updateTextareaHeight();
+                this.debouncedSave();
+            });
+            
+            // Handle tab key
+            textareaEl.addEventListener('keydown', (e: KeyboardEvent) => {
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const textarea = e.target as HTMLTextAreaElement;
+                    const start = textarea.selectionStart;
+                    const end = textarea.selectionEnd;
+                    textarea.value = textarea.value.substring(0, start) + '\t' + textarea.value.substring(end);
+                    textarea.selectionStart = textarea.selectionEnd = start + 1;
+                }
+            });
+        }
+    }
+
+    renderMonthView(titleEl?: HTMLElement) {
         const y = this.currentDate.getFullYear();
         const m = this.currentDate.getMonth();
         const monthLabel = new Date(y, m).toLocaleString('en-US', { month: 'long', year: 'numeric' });
@@ -449,7 +1041,7 @@ class DaybleCalendarView extends ItemView {
         const ordered = days.slice(weekStart).concat(days.slice(0, weekStart));
         ordered.forEach(d => header.createDiv({ text: d, cls: 'dayble-grid-header-cell' }));
         const segmentHeight = 28;
-        const segmentGap = 4;
+        const segmentGap = 4; // gappy
         const countsByDate: Record<string, number> = {};
         const longEventsPreset = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
         longEventsPreset.forEach(ev => {
@@ -851,7 +1443,7 @@ class DaybleCalendarView extends ItemView {
                 const frLeft = (first as HTMLElement).offsetLeft;
                 const frTop = (first as HTMLElement).offsetTop;
                 const lrRight = (last as HTMLElement).offsetLeft + (last as HTMLElement).offsetWidth;
-                const topOffset = todayNum(first) + 10 + stackIndex * (segmentHeight + segmentGap);
+                const topOffset = todayNum(first) + 14 + stackIndex * (segmentHeight + segmentGap);
                 const left = frLeft - 2;
                 const top = frTop + topOffset;
                 const width = (lrRight - frLeft) + 4;
@@ -908,7 +1500,7 @@ class DaybleCalendarView extends ItemView {
                     const frLeft = (first as HTMLElement).offsetLeft;
                     const frTop = (first as HTMLElement).offsetTop;
                     const lrRight = (last as HTMLElement).offsetLeft + (last as HTMLElement).offsetWidth;
-                    const topOffset = todayNum(first) + 10 + stackIndex * (segmentHeight + segmentGap);
+                    const topOffset = todayNum(first) + 14 + stackIndex * (segmentHeight + segmentGap);
                     const left = frLeft - 2;
                     const top = frTop + topOffset;
                     const width = (lrRight - frLeft) + 4;
@@ -970,9 +1562,10 @@ class DaybleCalendarView extends ItemView {
             const count = countsByDate[date] || 0;
             const container = cell.querySelector('.dayble-event-container') as HTMLElement | null;
             if (container) {
-                const mt = count > 0 ? (count * segmentHeight) + (Math.max(0, count - 1) * segmentGap) + 2 : 0;
+                const baseMt = count > 0 ? (count * segmentHeight) + (Math.max(0, count - 1) * segmentGap) + 2 : 0;
+                const isTodayCell = cell.classList.contains('dayble-current-day');
+                const mt = isTodayCell ? Math.max(0, baseMt - 10) : baseMt; // gappy
                 container.style.marginTop = mt ? `${mt}px` : '';
-                // HERE HERE UNDER LONG EVENT GAPPY
             }
         });
     }
@@ -1602,11 +2195,17 @@ class EventModal extends Modal {
                 color: this.selectedColor,
                 textColor: this.selectedTextColor
             };
-            if (!payload.categoryId) {
+            if (!payload.categoryId || !payload.color) {
                 const triggers = (this as any).plugin?.settings?.triggers || [];
                 const txt = ((payload.title || '') + ' ' + (payload.description || '')).toLowerCase();
                 const found = triggers.find((t: any) => (t.pattern || '').toLowerCase() && txt.includes((t.pattern || '').toLowerCase()));
-                if (found && found.categoryId) payload.categoryId = found.categoryId;
+                if (found) {
+                    if (!payload.categoryId && found.categoryId) payload.categoryId = found.categoryId;
+                    if (!payload.color && found.color) {
+                        payload.color = found.color;
+                        payload.textColor = found.textColor;
+                    }
+                }
             }
             
             if (isMultiDay && endTime && endDateInput) {
@@ -1769,14 +2368,74 @@ class PromptSearchModal extends Modal {
                 const content = row.createDiv({ cls: 'suggestion-content' });
                 const title = content.createDiv({ cls: 'suggestion-title' });
                 title.textContent = ev.title || '(untitled)';
+                const note = content.createDiv({ cls: 'suggestion-note' });
+                note.textContent = ev.date + (ev.time ? ' ' + ev.time : '');
+                note.style.fontSize = '0.8em';
+                note.style.color = 'var(--text-muted)';
                 row.onclick = () => this.choose(i);
+                row.onmousedown = (e) => { e.preventDefault(); e.stopPropagation(); this.choose(i); };
             });
         };
-        const update = () => {
+        const update = async () => {
             const q = (input.value || '').toLowerCase();
             this.query = q;
-            const all = this.view.events.slice();
-            this.results = all.filter(e => ((e.title || '') + ' ' + (e.description || '')).toLowerCase().includes(q)).slice(0, 50);
+            
+            // Search all months by loading all JSON files
+            const folder = this.view.plugin.settings.entriesFolder || 'DaybleCalendar';
+            let allEvents: DaybleEvent[] = [];
+            
+            // Start with current view events to be fast
+            allEvents = this.view.events.slice();
+            
+            try {
+                // Load all other files if we have a query
+                if (q.length > 0) {
+                    let listing;
+                    try {
+                        listing = await this.app.vault.adapter.list(folder);
+                    } catch (e) {
+                        // Folder might not exist or other error
+                        listing = { files: [] };
+                    }
+                    
+                    const files = (listing.files || []).filter((f: string) => f.toLowerCase().endsWith('.json'));
+                    
+                    for (const f of files) {
+                        // Skip current month file as it's already in memory
+                        const currentFile = this.view.getMonthDataFilePath();
+                        if (f === currentFile) continue;
+                        if (f.endsWith(currentFile.split('/').pop()!)) continue;
+                        
+                        try {
+                            const txt = await this.app.vault.adapter.read(f);
+                            const data = JSON.parse(txt);
+                            // Handle both legacy array format and new object format
+                            let fileEvents: DaybleEvent[] = [];
+                            if (Array.isArray(data)) {
+                                fileEvents = data;
+                            } else if (data && Array.isArray(data.events)) {
+                                fileEvents = data.events;
+                            }
+                            
+                            if (fileEvents.length > 0) {
+                                allEvents = allEvents.concat(fileEvents);
+                            }
+                        } catch (e) {}
+                    }
+                }
+            } catch (e) {}
+
+            // Remove duplicates based on ID
+            const seen = new Set();
+            const uniqueEvents = [];
+            for (const ev of allEvents) {
+                if (!seen.has(ev.id)) {
+                    seen.add(ev.id);
+                    uniqueEvents.push(ev);
+                }
+            }
+            
+            this.results = uniqueEvents.filter(e => ((e.title || '') + ' ' + (e.description || '')).toLowerCase().includes(q)).slice(0, 50);
             this.selectedIndex = 0;
             render();
         };
@@ -1791,13 +2450,14 @@ class PromptSearchModal extends Modal {
         input.focus();
         update();
     }
-    choose(idx: number) {
+    async choose(idx: number) {
         const ev = this.results[idx];
         if (!ev) return;
         const dateStr = ev.date || ev.startDate;
         if (dateStr) {
             const [y, m, d] = dateStr.split('-').map(Number);
             this.view.currentDate = new Date(y, (m || 1) - 1, d || 1);
+            await this.view.loadAllEntries();
             this.view.render();
             setTimeout(() => {
                 const nodes = Array.from(this.view.containerEl.querySelectorAll(`.dayble-event[data-id="${ev.id}"]`)) as HTMLElement[];
@@ -2507,6 +3167,19 @@ class DaybleSettingTab extends PluginSettingTab {
                     }
                  });
             });
+
+        new Setting(containerEl)
+            .setName('Enable Weekly Notes')
+            .setDesc('Show a markdown notes section below the calendar in weekly view')
+            .addToggle(t => {
+                t.setValue(this.plugin.settings.weeklyNotesEnabled ?? false)
+                    .onChange(async v => {
+                        this.plugin.settings.weeklyNotesEnabled = v;
+                        await this.plugin.saveSettings();
+                        const view = this.plugin.getCalendarView();
+                        view?.render();
+                    });
+            });
             
         new Setting(containerEl)
             .setName('Max day cell height (px)')
@@ -2639,7 +3312,7 @@ class DaybleSettingTab extends PluginSettingTab {
             });
             controlsBottom.addButton(b => {
                 b.setButtonText('+ Add Color').onClick(async () => {
-                    const wrap = colorsListTop.createDiv();
+                    const wrap = row.createDiv();
                     wrap.style.display = 'flex';
                     wrap.style.alignItems = 'center';
                     wrap.style.gap = '6px';
@@ -2836,6 +3509,10 @@ class DaybleSettingTab extends PluginSettingTab {
         const renderTriggers = () => {
             triggersWrap.empty();
             const items = this.plugin.settings.triggers || [];
+            const swatches = [
+                ...(this.plugin.settings.swatches || []),
+                ...(this.plugin.settings.userCustomSwatches || [])
+            ];
             items.forEach((tr, idx) => {
                 const row = new Setting(triggersWrap);
                 row.settingEl.querySelector('.setting-item-name')?.remove();
@@ -2856,7 +3533,7 @@ class DaybleSettingTab extends PluginSettingTab {
                 });
                 row.addDropdown(d => {
                     const cats = this.plugin.settings.eventCategories || [];
-                    d.addOption('', 'Default');
+                    d.addOption('', 'Default Category');
                     cats.forEach(c => d.addOption(c.id, c.name));
                     d.setValue(tr.categoryId || '');
                     d.onChange(async v => {
@@ -2867,6 +3544,44 @@ class DaybleSettingTab extends PluginSettingTab {
                         view?.render();
                     });
                     (d.selectEl as HTMLSelectElement).classList.add('db-select');
+                    (d.selectEl as HTMLSelectElement).style.width = '90px';
+                });
+                row.addDropdown(d => {
+                    d.addOption('', 'Default Color');
+                    swatches.forEach(s => d.addOption(s.color, s.name));
+                    d.setValue(tr.color || '');
+                    d.onChange(async v => {
+                        if (!v) {
+                            delete items[idx].color;
+                            delete items[idx].textColor;
+                        } else {
+                            const s = swatches.find(sw => sw.color === v);
+                            if (s) {
+                                items[idx].color = s.color;
+                                items[idx].textColor = s.textColor;
+                            }
+                        }
+                        this.plugin.settings.triggers = items;
+                        await this.plugin.saveSettings();
+                    });
+                    (d.selectEl as HTMLSelectElement).classList.add('db-select');
+                    
+                    // Style the dropdown
+                    const applyColorStyles = () => {
+                        Array.from(d.selectEl.options).forEach(opt => {
+                            if (!opt.value) return; // Skip default option
+                            const s = swatches.find(sw => sw.color === opt.value);
+                            if (s) {
+                                opt.style.backgroundColor = s.color;
+                                opt.style.color = s.textColor || '#000';
+                                opt.text = 'Color'; // Replace name with generic text
+                            }
+                        });
+                    };
+                    // Apply initially
+                    applyColorStyles();
+                    
+                    (d.selectEl as HTMLSelectElement).style.maxWidth = '120px';
                 });
                 row.addExtraButton(btn => {
                     btn.setIcon('x').setTooltip('Delete').onClick(async () => {
@@ -2997,13 +3712,8 @@ class DaybleSettingTab extends PluginSettingTab {
                 return wrap;
             };
             combined.forEach((entry, idx) => { makeItem(entry, idx); });
-            const controlsBottom = new Setting(colorsList);
-            controlsBottom.settingEl.addClass('dayble-colors-controls');
-            controlsBottom.settingEl.style.display = 'flex';
-            (controlsBottom.settingEl as HTMLElement).style.alignItems = 'center';
-            (controlsBottom.settingEl as HTMLElement).style.gap = '8px';
-            (controlsBottom.settingEl as HTMLElement).style.width = '100%';
-            (controlsBottom.settingEl as HTMLElement).style.justifyContent = 'flex-start';
+            const controlsBottom = new Setting(swatchesSection);
+            controlsBottom.settingEl.style.borderTop = 'none';
             controlsBottom.addButton(b => {
                 b.setButtonText('Reset to Default Colors').onClick(async () => {
                     const modal = new ConfirmModal(this.app, 'Reset color swatches to default?', async () => {
@@ -3017,94 +3727,11 @@ class DaybleSettingTab extends PluginSettingTab {
             });
             controlsBottom.addButton(b => {
                 b.setButtonText('+ Add Color').onClick(async () => {
-                    const wrap = row.createDiv();
-                    wrap.style.display = 'flex';
-                    wrap.style.alignItems = 'center';
-                    wrap.style.gap = '6px';
-                    wrap.setAttr('draggable', 'true');
-                    wrap.dataset.source = 'custom';
-                    wrap.dataset.name = '';
-                    const input = wrap.createEl('input', { type: 'color' });
-                    input.value = '#ff0000';
-                    input.onchange = async () => {
-                        const newBuilt: { name: string, color: string }[] = [];
-                        const newCustom: { name: string, color: string }[] = [];
-                        row.querySelectorAll('div[draggable="true"]').forEach((w: any) => {
-                            const src = (w as HTMLElement).dataset.source;
-                            const nm = (w as HTMLElement).dataset.name || '';
-                            const val = (w.querySelector('input[type="color"]') as HTMLInputElement).value;
-                            if (src === 'built') newBuilt.push({ name: nm, color: val });
-                            else newCustom.push({ name: '', color: val });
-                        });
-                        this.plugin.settings.swatches = newBuilt;
-                        this.plugin.settings.userCustomSwatches = newCustom;
-                        await this.plugin.saveSettings();
-                    };
-                    const del = wrap.createEl('button', { cls: 'dayble-btn db-color-del' });
-                    (del as HTMLButtonElement).style.background = 'none';
-                    (del as HTMLButtonElement).style.boxShadow = 'none';
-                    (del as HTMLButtonElement).style.border = 'none';
-                    (del as HTMLButtonElement).style.padding = '2px 4px';
-                    setIcon(del, 'x');
-                    del.setAttr('draggable','false');
-                    del.onmousedown = (e) => { e.stopPropagation(); };
-                    del.ontouchstart = (e) => { e.stopPropagation(); };
-                    del.onclick = async () => {
-                        const modal = new ConfirmModal(this.app, 'Delete this color swatch?', async () => {
-                            wrap.remove();
-                            const newBuilt: { name: string, color: string }[] = [];
-                            const newCustom: { name: string, color: string }[] = [];
-                            row.querySelectorAll('div[draggable="true"]').forEach((w: any) => {
-                                const src = (w as HTMLElement).dataset.source;
-                                const nm = (w as HTMLElement).dataset.name || '';
-                                const val = (w.querySelector('input[type="color"]') as HTMLInputElement).value;
-                                if (src === 'built') newBuilt.push({ name: nm, color: val });
-                                else newCustom.push({ name: '', color: val });
-                            });
-                            this.plugin.settings.swatches = newBuilt;
-                            this.plugin.settings.userCustomSwatches = newCustom;
-                            await this.plugin.saveSettings();
-                        });
-                        modal.open();
-                    };
-                    wrap.ondragstart = e => {
-                        e.dataTransfer?.setData('text/plain', 'drag');
-                        (e.dataTransfer as DataTransfer).effectAllowed = 'move';
-                    };
-                    row.ondragover = e => { e.preventDefault(); };
-                    row.ondrop = async e => {
-                        e.preventDefault();
-                        const target = (e.target as HTMLElement).closest('div[draggable="true"]') as HTMLElement | null;
-                        if (!target || target.parentElement !== row) return;
-                        const rect = target.getBoundingClientRect();
-                        const before = (e.clientX - rect.left) < rect.width / 2;
-                        if (before) row.insertBefore(wrap, target);
-                        else target.after(wrap);
-                        const newBuilt: { name: string, color: string }[] = [];
-                        const newCustom: { name: string, color: string }[] = [];
-                        row.querySelectorAll('div[draggable="true"]').forEach((w: any) => {
-                            const src = (w as HTMLElement).dataset.source;
-                            const nm = (w as HTMLElement).dataset.name || '';
-                            const val = (w.querySelector('input[type="color"]') as HTMLInputElement).value;
-                            if (src === 'built') newBuilt.push({ name: nm, color: val });
-                            else newCustom.push({ name: '', color: val });
-                        });
-                        this.plugin.settings.swatches = newBuilt;
-                        this.plugin.settings.userCustomSwatches = newCustom;
-                        await this.plugin.saveSettings();
-                    };
-                    const newBuilt: { name: string, color: string }[] = [];
-                    const newCustom: { name: string, color: string }[] = [];
-                    row.querySelectorAll('div[draggable="true"]').forEach((w: any) => {
-                        const src = (w as HTMLElement).dataset.source;
-                        const nm = (w as HTMLElement).dataset.name || '';
-                        const val = (w.querySelector('input[type="color"]') as HTMLInputElement).value;
-                        if (src === 'built') newBuilt.push({ name: nm, color: val });
-                        else newCustom.push({ name: '', color: val });
-                    });
-                    this.plugin.settings.swatches = newBuilt;
+                    const newCustom = (this.plugin.settings.userCustomSwatches || []).slice();
+                    newCustom.push({ name: '', color: '#ff0000' });
                     this.plugin.settings.userCustomSwatches = newCustom;
                     await this.plugin.saveSettings();
+                    renderColors();
                 });
                 (b.buttonEl as HTMLButtonElement).style.marginLeft = 'auto';
             });
@@ -3193,3 +3820,4 @@ function randomId(): string {
     if (anyCrypto?.randomUUID) return anyCrypto.randomUUID();
     return 'ev-' + Math.random().toString(36).slice(2) + '-' + Date.now();
 }
+

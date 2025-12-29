@@ -88,14 +88,15 @@
 .dayble-body {
     display: flex;
     flex: 1;
-    gap: 8px;
+    gap: 0px;
     overflow: hidden;
 }
 
 .dayble-calendar {
     flex: 1;
-    display: block;
-    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 /* Sidebar/holder */
@@ -158,16 +159,80 @@
     background: var(--interactive-accent);
 }
 
+
+/* Weekly notes resize handle */
+.dayble-weekly-notes {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+/* .dayble-weekly-drag-handle {
+    position: absolute;
+    top: -4px;
+    left: 0;
+    right: 0;
+    height: 8px;
+    cursor: ns-resize;
+    background: transparent;
+    transition: background 0.2s;
+    z-index: 2000;
+} */
+
+/* .dayble-weekly-drag-handle:hover {
+    background: var(--interactive-accent);
+    z-index: 2000;
+} */
+
+.dayble-weekly-notes-header {
+    flex: 0 0 auto !important;
+    min-height: 0;
+}
+
+.dayble-weekly-notes-content {
+    flex: 1 1 auto !important;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Weekly notes textarea only */
+.dayble-weekly-notes-textarea {
+    font-family: var(--font-monospace);
+    font-size: var(--font-text-size);
+    line-height: 1.5;
+    padding: 8px;
+    border: 1px solid var(--divider-color);
+    border-radius: 4px;
+    background: var(--background-secondary);
+    color: var(--text-normal);
+    resize: none !important;
+    width: 100%;
+    box-sizing: border-box;
+    overflow-y: auto;
+}
+
+.dayble-weekly-notes-textarea:focus {
+    outline: none;
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.1);
+}
+
 .dayble-holder-list {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
     overflow: auto;
     max-height: 100%;
 }
 
+.dayble-weekdays {
+    flex: 0 0 auto !important;
+}
+
 /* Calendar grid */
 .dayble-grid {
+    flex: 1 1 auto !important;
     position: relative;
     display: grid;
     grid-template-columns: repeat(7, 1fr);
@@ -175,7 +240,8 @@
     padding: 8px;
     border-radius: 8px;
     background: var(--background-primary);
-    margin-top: -12px;
+    margin-top: -6px;
+    overflow: auto;
 }
 
 .dayble-weekdays {
@@ -189,7 +255,6 @@
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 6px;
-    margin-bottom: 6px;
     padding: 8px;
 }
 
@@ -200,6 +265,7 @@
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.2em;
+    margin-bottom: 0px !important;
 }
 
 /* Days */
