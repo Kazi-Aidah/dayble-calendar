@@ -3636,18 +3636,31 @@ class DaybleSettingTab extends PluginSettingTab {
                         }
                         this.plugin.settings.triggers = items;
                         await this.plugin.saveSettings();
+                        applyColorStyles();
                     });
                     (d.selectEl as HTMLSelectElement).classList.add('db-select');
                     
                     // Style the dropdown
                     const applyColorStyles = () => {
+                        const currentValue = d.getValue();
+                        const selectedSwatch = swatches.find(sw => sw.color === currentValue);
+                        
+                        // Style the select element itself
+                        if (selectedSwatch) {
+                            (d.selectEl as HTMLSelectElement).style.backgroundColor = selectedSwatch.color;
+                            (d.selectEl as HTMLSelectElement).style.color = selectedSwatch.textColor || '#000';
+                        } else {
+                            (d.selectEl as HTMLSelectElement).style.backgroundColor = '';
+                            (d.selectEl as HTMLSelectElement).style.color = '';
+                        }
+                        
+                        // Style the options
                         Array.from(d.selectEl.options).forEach(opt => {
                             if (!opt.value) return; // Skip default option
                             const s = swatches.find(sw => sw.color === opt.value);
                             if (s) {
                                 opt.style.backgroundColor = s.color;
                                 opt.style.color = s.textColor || '#000';
-                                opt.text = 'Color'; // Replace name with generic text
                             }
                         });
                     };
@@ -3842,9 +3855,22 @@ class DaybleSettingTab extends PluginSettingTab {
                                 exportObj.months.push({ file: f, data });
                             } catch (e) {}
                         }
-                        const fname = `${folder}/DaybleExport_${vaultName}_${Date.now()}.json`;
-                        await this.app.vault.adapter.write(fname, JSON.stringify(exportObj, null, 2));
-                        new Notice(`Exported: ${fname}`);
+                        
+                        // Create a file save dialog
+                        const fileName = `DaybleExport_${vaultName}_${Date.now()}.json`;
+                        const jsonStr = JSON.stringify(exportObj, null, 2);
+                        
+                        // Create a download link and trigger save dialog
+                        const link = document.createElement('a');
+                        const blob = new Blob([jsonStr], { type: 'application/json' });
+                        link.href = URL.createObjectURL(blob);
+                        link.download = fileName;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(link.href);
+                        
+                        new Notice(`Export ready: ${fileName}`);
                     } catch (e) {
                         new Notice('Export failed');
                     }
@@ -3879,6 +3905,13 @@ class DaybleSettingTab extends PluginSettingTab {
                             const view = this.plugin.getCalendarView();
                             if (view) { await view.loadAllEntries(); view.render(); }
                             new Notice('Import completed');
+                            
+                            // Reload the plugin
+                            const pluginManager = (this.plugin.app as any).plugins;
+                            if (pluginManager) {
+                                await pluginManager.disablePlugin(this.plugin.manifest.id);
+                                await pluginManager.enablePlugin(this.plugin.manifest.id);
+                            }
                         } catch (e) {
                             new Notice('Import failed');
                         }

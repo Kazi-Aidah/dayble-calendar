@@ -1051,16 +1051,17 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     min-width: 0;
 }
 .db-category-row .db-select {
-    flex: 0 1 170px;
-    min-width: 0;
-    width: 170px;
+    /* flex: 0 1 auto; */
+    min-width: 100px;
+    width: 150px;
 }
 .db-category-row .db-color {
     flex: 0 0 auto;
 }
 .db-category-row .db-animation2 {
-    flex: 0 0 170px;
-    width: 170px;
+    /* flex: 0 0 auto; */
+    min-width: 100px;
+    width: 150px;
 }
 .db-category-row .db-delete-category {
     margin-left: auto;
@@ -1068,7 +1069,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 /* Specific widths to keep a single row */
-.db-category-row .db-effect { width: 170px; }
+.db-category-row .db-effect { width: 150px; }
 .db-category-row .db-animation { width: 170px; }
 
 /* Color swatches */
