@@ -1,7 +1,7 @@
 {
 	"id": "dayble-calendar",
 	"name": "Dayble Calendar",
-	"description": "Features an extremely customizable calendar where events do not save as markdown notes.",
+	"description": "A customizable calendar with JSON based events that do not clutter daily notes.",
 	"version": "0.1.0",
 	"minAppVersion": "0.15.0",
 	"author": "Kazi Aidah Haque",
