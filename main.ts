@@ -3266,8 +3266,31 @@ class DaybleSettingTab extends PluginSettingTab {
                         if (src === 'built') newBuilt.push({ name: nm, color: bg, textColor: tx });
                         else newCustom.push({ name: '', color: bg, textColor: tx });
                     });
+                    const colorMap: Record<string, { color: string, textColor?: string }> = {};
+                    for (let i = 0; i < prevBuiltArr.length && i < newBuilt.length; i++) {
+                        const prev = prevBuiltArr[i];
+                        const now = newBuilt[i];
+                        if (prev.color !== now.color || (prev.textColor || '') !== (now.textColor || '')) {
+                            colorMap[prev.color] = { color: now.color, textColor: now.textColor };
+                        }
+                    }
+                    for (let i = 0; i < prevCustomArr.length && i < newCustom.length; i++) {
+                        const prev = prevCustomArr[i];
+                        const now = newCustom[i];
+                        if (prev.color !== now.color || (prev.textColor || '') !== (now.textColor || '')) {
+                            colorMap[prev.color] = { color: now.color, textColor: now.textColor };
+                        }
+                    }
+                    const updatedTriggers = (this.plugin.settings.triggers || []).map(t => {
+                        if (t.color && colorMap[t.color]) {
+                            const mapped = colorMap[t.color];
+                            return { ...t, color: mapped.color, textColor: mapped.textColor || chooseTextColor(mapped.color) };
+                        }
+                        return t;
+                    });
                     this.plugin.settings.swatches = newBuilt;
                     this.plugin.settings.userCustomSwatches = newCustom;
+                    this.plugin.settings.triggers = updatedTriggers;
                     await this.plugin.saveSettings();
                     const view = this.plugin.getCalendarView();
                     if (view) {
@@ -3309,6 +3332,9 @@ class DaybleSettingTab extends PluginSettingTab {
                         } else {
                             view.render();
                         }
+                    }
+                    if (typeof renderTriggers === 'function') {
+                        renderTriggers();
                     }
                 };
                 textPicker.onchange = updateAll;
@@ -3621,7 +3647,7 @@ class DaybleSettingTab extends PluginSettingTab {
                 });
                 row.addDropdown(d => {
                     d.addOption('', 'Default Color');
-                    swatches.forEach(s => d.addOption(s.color, s.name));
+                    swatches.forEach(s => d.addOption(s.color, 'Color'));
                     d.setValue(tr.color || '');
                     d.onChange(async v => {
                         if (!v) {
@@ -3714,9 +3740,16 @@ class DaybleSettingTab extends PluginSettingTab {
             row.style.alignItems = 'flex-start';
             row.style.marginBottom = '16px';
             row.style.flexWrap = 'wrap';
-            const built = (this.plugin.settings.swatches || []).map(s => ({ name: s.name, color: s.color, source: 'built' as const }));
-            const customs = (this.plugin.settings.userCustomSwatches || []).map(s => ({ name: s.name || '', color: s.color || '#ff0000', source: 'custom' as const }));
-            const combined: { name: string, color: string, source: 'built'|'custom' }[] = [...built, ...customs];
+            
+            // Store the old swatches to detect changes
+            const oldBuilt = (this.plugin.settings.swatches || []).map(s => ({ name: s.name, color: s.color, source: 'built' as const }));
+            const oldCustoms = (this.plugin.settings.userCustomSwatches || []).map(s => ({ name: s.name || '', color: s.color || '#ff0000', source: 'custom' as const }));
+            const oldCombined: { name: string, color: string, source: 'built'|'custom' }[] = [...oldBuilt, ...oldCustoms];
+            
+            const built = oldBuilt;
+            const customs = oldCustoms;
+            const combined = oldCombined;
+            
             const makeItem = (entry: { name: string, color: string, source: 'built'|'custom' }, idx: number) => {
                 const wrap = row.createDiv();
                 wrap.style.display = 'flex';
@@ -3729,6 +3762,7 @@ class DaybleSettingTab extends PluginSettingTab {
                 const input = wrap.createEl('input', { type: 'color' });
                 input.value = entry.color;
                 input.onchange = async () => {
+                    const oldColor = entry.color; // Store the old color before collecting new ones
                     const newBuilt: { name: string, color: string }[] = [];
                     const newCustom: { name: string, color: string }[] = [];
                     row.querySelectorAll('div[draggable="true"]').forEach((w: any) => {
@@ -3738,9 +3772,48 @@ class DaybleSettingTab extends PluginSettingTab {
                         if (src === 'built') newBuilt.push({ name: nm, color: val });
                         else newCustom.push({ name: '', color: val });
                     });
+                    
+                    // Create color mapping from old to new based on position
+                    const colorMap: { [oldColor: string]: string } = {};
+                    
+                    // Map built swatches
+                    for (let i = 0; i < oldBuilt.length && i < newBuilt.length; i++) {
+                        if (oldBuilt[i].color !== newBuilt[i].color) {
+                            colorMap[oldBuilt[i].color] = newBuilt[i].color;
+                        }
+                    }
+                    
+                    // Map custom swatches
+                    for (let i = 0; i < oldCustoms.length && i < newCustom.length; i++) {
+                        if (oldCustoms[i].color !== newCustom[i].color) {
+                            colorMap[oldCustoms[i].color] = newCustom[i].color;
+                        }
+                    }
+                    
+                    // Update any triggers using colors that changed
+                    const triggers = (this.plugin.settings.triggers || []).slice();
+                    triggers.forEach(t => {
+                        if (t.color && colorMap[t.color]) {
+                            const newColorValue = colorMap[t.color];
+                            // Also update the textColor
+                            const allSwatches = [...newBuilt, ...newCustom];
+                            const foundSwatch = allSwatches.find(s => s.color === newColorValue);
+                            t.color = newColorValue;
+                            if (foundSwatch) {
+                                // Find the textColor from original settings
+                                const originalSwatch = [...(this.plugin.settings.swatches || []), ...(this.plugin.settings.userCustomSwatches || [])].find(s => s.color === newColorValue);
+                                if (originalSwatch) {
+                                    t.textColor = (originalSwatch as any).textColor;
+                                }
+                            }
+                        }
+                    });
+                    
                     this.plugin.settings.swatches = newBuilt;
                     this.plugin.settings.userCustomSwatches = newCustom;
+                    this.plugin.settings.triggers = triggers;
                     await this.plugin.saveSettings();
+                    renderTriggers();
                 };
                 const del = wrap.createEl('button', { cls: 'dayble-btn db-color-del' });
                 (del as HTMLButtonElement).style.background = 'none';
@@ -3807,6 +3880,7 @@ class DaybleSettingTab extends PluginSettingTab {
                         this.plugin.settings.userCustomSwatches = [];
                         await this.plugin.saveSettings();
                         renderColors();
+                        renderTriggers();
                     });
                     modal.open();
                 });
@@ -3818,6 +3892,7 @@ class DaybleSettingTab extends PluginSettingTab {
                     this.plugin.settings.userCustomSwatches = newCustom;
                     await this.plugin.saveSettings();
                     renderColors();
+                    renderTriggers();
                 });
                 (b.buttonEl as HTMLButtonElement).style.marginLeft = 'auto';
             });
