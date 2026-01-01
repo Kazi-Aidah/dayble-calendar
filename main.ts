@@ -114,8 +114,8 @@ export default class DaybleCalendarPlugin extends Plugin {
     async onload() {
         await this.loadSettings();
         this.registerView(VIEW_TYPE, leaf => new DaybleCalendarView(leaf, this));
-        this.addCommand({ id: 'open-calendar', name: 'Open calendar', callback: () => this.openDayble() });
-        this.addCommand({ id: 'focus-today', name: 'Focus on today', callback: () => this.focusToday() });
+        this.addCommand({ id: 'open-calendar', name: 'Open calendar', callback: () => void this.openDayble() });
+        this.addCommand({ id: 'focus-today', name: 'Focus on today', callback: () => void this.focusToday() });
         this.addCommand({ 
             id: 'open-weekly-view', 
             name: 'Open weekly view', 
@@ -244,7 +244,7 @@ class DaybleCalendarView extends ItemView {
         this.plugin = plugin;
         this.currentDate = new Date();
         this.plugin.registerDomEvent(window, 'resize', () => {
-            this.render();
+            void this.render();
         });
     }
 
@@ -254,7 +254,7 @@ class DaybleCalendarView extends ItemView {
     }
 
     getViewType() { return VIEW_TYPE; }
-    getDisplayText() { return 'Dayble Calendar'; }
+    getDisplayText() { return 'Dayble calendar'; }
     getIcon() { return 'calendar'; }
     
     getMonthDataFilePath(): string {
@@ -323,7 +323,7 @@ class DaybleCalendarView extends ItemView {
         const holderHeader = this.holderEl.createDiv({ cls: 'dayble-holder-header', text: 'Holder' });
         const holderAdd = holderHeader.createEl('button', { cls: 'dayble-btn dayble-holder-add-btn' });
         setIcon(holderAdd, 'plus');
-        holderAdd.onclick = () => this.openEventModal();
+        holderAdd.onclick = () => void this.openEventModal();
         
         // Add resize handle to holder
         const resizeHandle = holderHeader.createDiv({ cls: 'dayble-holder-resize-handle' });
@@ -342,8 +342,8 @@ class DaybleCalendarView extends ItemView {
         this._boundHolderMouseUp = async (e: MouseEvent) => {
             if (this.isResizingHolder) {
                 this.isResizingHolder = false;
-                document.removeEventListener('mousemove', this._boundHolderMouseMove!);
-                document.removeEventListener('mouseup', this._boundHolderMouseUp!);
+                document.removeEventListener('mousemove', this._boundHolderMouseMove);
+                document.removeEventListener('mouseup', this._boundHolderMouseUp);
                 this.plugin.settings.holderWidth = this.holderEl.offsetWidth;
                 await this.plugin.saveSettings();
             }
@@ -355,8 +355,8 @@ class DaybleCalendarView extends ItemView {
             this.isResizingHolder = true;
             this.holderResizeStartX = e.clientX;
             this.holderResizeStartWidth = this.holderEl.offsetWidth;
-            document.addEventListener('mousemove', this._boundHolderMouseMove!);
-            document.addEventListener('mouseup', this._boundHolderMouseUp!);
+            document.addEventListener('mousemove', this._boundHolderMouseMove);
+            document.addEventListener('mouseup', this._boundHolderMouseUp);
         };
         
         const holderList = this.holderEl.createDiv({ cls: 'dayble-holder-list' });
@@ -367,8 +367,7 @@ class DaybleCalendarView extends ItemView {
             e.preventDefault();
             this.holderEl.removeClass('dayble-drag-over');
             const id = e.dataTransfer?.getData('text/plain');
-            const src = e.dataTransfer?.getData('dayble-source');
-            if (!id || src === 'holder') return; // Don't drop holder events on holder
+            if (!id || e.dataTransfer?.getData('dayble-source') === 'holder') return; // Don't drop holder events on holder
             try {
                 const idx = this.events.findIndex(ev => ev.id === id);
                 if (idx !== -1) {
@@ -411,14 +410,14 @@ class DaybleCalendarView extends ItemView {
         }
         // Disconnect long event ResizeObserver and remove overlay to prevent leaks
         if (this._longRO) {
-            try { this._longRO.disconnect(); } catch {}
+            try { this._longRO.disconnect(); } catch (e) { console.debug('[Dayble] ResizeObserver disconnect error:', e); }
             this._longRO = undefined;
         }
         if (this._longOverlayEl && this._longOverlayEl.isConnected) {
-            try { this._longOverlayEl.remove(); } catch {}
+            try { this._longOverlayEl.remove(); } catch (e) { console.debug('[Dayble] Overlay remove error:', e); }
         }
         this._longEls.forEach(el => {
-            try { if (el && el.parentElement) el.remove(); } catch {}
+            try { if (el && el.parentElement) el.remove(); } catch (e) { console.debug('[Dayble] Long event remove error:', e); }
         });
         this._longEls.clear();
         if (this._boundWeeklyNotesMouseMove) {
@@ -639,7 +638,7 @@ class DaybleCalendarView extends ItemView {
 
     focusToday() {
         this.currentDate = new Date();
-        void this.loadAllEntries().then(() => this.render());
+        void this.loadAllEntries().then(() => { this.render(); });
     }
 
     shiftMonth(delta: number) {
@@ -650,7 +649,7 @@ class DaybleCalendarView extends ItemView {
             d.setMonth(d.getMonth() + delta);
             this.currentDate = d;
         }
-        void this.loadAllEntries().then(() => this.render());
+        void this.loadAllEntries().then(() => { this.render(); });
     }
 
     async render(titleEl?: HTMLElement) {
@@ -658,22 +657,18 @@ class DaybleCalendarView extends ItemView {
             this.weeklyNotesEl.remove();
             this.weeklyNotesEl = undefined;
         }
-        // Reset grid style
-        this.gridEl.style.flex = '1 1 auto';
-        this.gridEl.style.minHeight = '';
+        // Reset grid style is handled by CSS classes and inline elements
 
         if (this.plugin.settings.calendarWeekActive) {
             this.gridEl.addClass('dayble-week-mode');
             await this.renderWeekView(titleEl);
         } else {
             this.gridEl.removeClass('dayble-week-mode');
-            this.renderMonthView(titleEl);
+            await this.renderMonthView(titleEl);
         }
     }
 
-    async renderWeekView(titleEl?: HTMLElement) {
-        const y = this.currentDate.getFullYear();
-        const m = this.currentDate.getMonth();
+    async renderWeekView(titleEl?: HTMLElement): Promise<void> {
         const monthLabel = this.currentDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
         if (this.monthTitleEl) this.monthTitleEl.setText(monthLabel);
         
@@ -705,8 +700,8 @@ class DaybleCalendarView extends ItemView {
         const countsByDate: Record<string, number> = {};
         const longEventsPreset = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
         longEventsPreset.forEach(ev => {
-            const start = new Date(ev.startDate!);
-            const end = new Date(ev.endDate!);
+            const start = new Date(ev.startDate);
+            const end = new Date(ev.endDate);
             for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
                 const yy = d.getFullYear();
                 const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -731,7 +726,7 @@ class DaybleCalendarView extends ItemView {
             cell.setAttr('data-date', fullDate);
             
             const dayHeader = cell.createDiv({ cls: 'dayble-day-header' });
-            const num = dayHeader.createDiv({ cls: 'dayble-day-number', text: String(d.getDate()) });
+            dayHeader.createDiv({ cls: 'dayble-day-number', text: String(d.getDate()) });
             
             const t = new Date();
             const isToday = d.getDate() === t.getDate() && d.getMonth() === t.getMonth() && d.getFullYear() === t.getFullYear();
@@ -768,7 +763,7 @@ class DaybleCalendarView extends ItemView {
             // Drag and Drop (reused optimized logic from month view)
             container.ondragover = (e) => { 
                 e.preventDefault();
-                const targetEvent = (e.target as HTMLElement).closest('.dayble-event') as HTMLElement | null;
+                const targetEvent = (e.target as HTMLElement).closest('.dayble-event');
                 const eventCount = container.querySelectorAll('.dayble-event').length;
                 if (targetEvent && targetEvent.parentElement === container && eventCount > 1) {
                     const rect = targetEvent.getBoundingClientRect();
@@ -799,16 +794,15 @@ class DaybleCalendarView extends ItemView {
                 container.querySelectorAll('.dayble-drop-indicator').forEach(el => el.remove());
                 
                 const id = e.dataTransfer?.getData('text/plain');
-                const src = e.dataTransfer?.getData('dayble-source');
-                if (!id || src !== 'calendar') return;
+                if (!id || e.dataTransfer?.getData('dayble-source') !== 'calendar') return;
                 
-                const draggedEl = document.querySelector(`[data-id="${id}"]`) as HTMLElement | null;
+                const draggedEl = document.querySelector(`[data-id="${id}"]`);
                 if (!draggedEl) return;
                 
-                const draggedContainer = draggedEl.closest('.dayble-event-container') as HTMLElement | null;
+                const draggedContainer = draggedEl.closest('.dayble-event-container');
                 if (draggedContainer !== container) return;
                 
-                const targetEvent = (e.target as HTMLElement).closest('.dayble-event') as HTMLElement | null;
+                const targetEvent = (e.target as HTMLElement).closest('.dayble-event');
                 if (!targetEvent || targetEvent === draggedEl) return;
                 
                 const rect = targetEvent.getBoundingClientRect();
@@ -822,7 +816,7 @@ class DaybleCalendarView extends ItemView {
                 
                 // Reorder logic
                 const allEventEls = Array.from(container.querySelectorAll('.dayble-event'));
-                const newOrder = allEventEls.map(el => (el as HTMLElement).dataset.id).filter(Boolean) as string[];
+                const newOrder = allEventEls.map(el => (el as HTMLElement).dataset.id).filter(Boolean);
                 
                 const dayDate = fullDate;
                 const dayEventIndices: number[] = [];
@@ -901,7 +895,7 @@ class DaybleCalendarView extends ItemView {
             };
             
             cell.onmousedown = (ev) => {
-                if ((ev as MouseEvent).button !== 0) return;
+                if ((ev).button !== 0) return;
                 const target = ev.target as HTMLElement;
                 if (target.closest('.dayble-event')) return;
                 if (this.isDragging) return;
@@ -1066,7 +1060,7 @@ class DaybleCalendarView extends ItemView {
         await Promise.resolve();
     }
 
-    renderMonthView(titleEl?: HTMLElement) {
+    async renderMonthView(titleEl?: HTMLElement): Promise<void> {
         const y = this.currentDate.getFullYear();
         const m = this.currentDate.getMonth();
         const monthLabel = new Date(y, m).toLocaleString('en-US', { month: 'long', year: 'numeric' });
@@ -1086,8 +1080,8 @@ class DaybleCalendarView extends ItemView {
         const countsByDate: Record<string, number> = {};
         const longEventsPreset = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
         longEventsPreset.forEach(ev => {
-            const start = new Date(ev.startDate!);
-            const end = new Date(ev.endDate!);
+            const start = new Date(ev.startDate);
+            const end = new Date(ev.endDate);
             for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
                 const yy = d.getFullYear();
                 const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -1105,7 +1099,7 @@ class DaybleCalendarView extends ItemView {
             const cell = this.gridEl.createDiv({ cls: 'dayble-day' });
             cell.setAttr('data-date', fullDate);
             const dayHeader = cell.createDiv({ cls: 'dayble-day-header' });
-            const num = dayHeader.createDiv({ cls: 'dayble-day-number', text: String(day) });
+            dayHeader.createDiv({ cls: 'dayble-day-number', text: String(day) });
             const t = new Date();
             const isToday = day === t.getDate() && m === t.getMonth() && y === t.getFullYear();
             if (isToday) {
@@ -1137,7 +1131,7 @@ class DaybleCalendarView extends ItemView {
                 e.preventDefault();
                 
                 // Show drop position indicator only if there are multiple events
-                const targetEvent = (e.target as HTMLElement).closest('.dayble-event') as HTMLElement | null;
+                const targetEvent = (e.target as HTMLElement).closest('.dayble-event');
                 const eventCount = container.querySelectorAll('.dayble-event').length;
                 if (targetEvent && targetEvent.parentElement === container && eventCount > 1) {
                     // Get the vertical position within the target event
@@ -1177,15 +1171,15 @@ class DaybleCalendarView extends ItemView {
                 if (!id || src !== 'calendar') return; // Only reorder calendar events, not from holder
                 
                 // Find the event being dragged by ID
-                const draggedEl = document.querySelector(`[data-id="${id}"]`) as HTMLElement | null;
+                const draggedEl = document.querySelector(`[data-id="${id}"]`);
                 if (!draggedEl) return;
                 
                 // Check if dragged event is from this container
-                const draggedContainer = draggedEl.closest('.dayble-event-container') as HTMLElement | null;
+                const draggedContainer = draggedEl.closest('.dayble-event-container');
                 if (draggedContainer !== container) return;
                 
                 // Find target event to insert before/after
-                const targetEvent = (e.target as HTMLElement).closest('.dayble-event') as HTMLElement | null;
+                const targetEvent = (e.target as HTMLElement).closest('.dayble-event');
                 if (!targetEvent || targetEvent === draggedEl) return;
                 
                 const rect = targetEvent.getBoundingClientRect();
@@ -1202,7 +1196,7 @@ class DaybleCalendarView extends ItemView {
                 
                 // Update the underlying events array to match the new DOM order
                 const allEventEls = Array.from(container.querySelectorAll('.dayble-event'));
-                const newOrder = allEventEls.map(el => (el as HTMLElement).dataset.id).filter(Boolean) as string[];
+                const newOrder = allEventEls.map(el => (el as HTMLElement).dataset.id).filter(Boolean);
                 
                 // Rebuild events array for this date to match new order
                 const dayDate = fullDate; // fullDate from outer scope
@@ -1253,7 +1247,7 @@ class DaybleCalendarView extends ItemView {
                 }
             };
             cell.onmousedown = (ev) => {
-                if ((ev as MouseEvent).button !== 0) return;
+                if ((ev).button !== 0) return;
                 const target = ev.target as HTMLElement;
                 // Don't start selection if clicking on an event
                 if (target.closest('.dayble-event')) return;
@@ -1364,11 +1358,10 @@ class DaybleCalendarView extends ItemView {
         this.clearSelection();
     }
     highlightSelectionRange() {
-        const s = new Date(this.selectionStartDate! + 'T00:00:00');
-        const e = new Date(this.selectionEndDate! + 'T00:00:00');
+        const s = new Date(this.selectionStartDate + 'T00:00:00');
+        const e = new Date(this.selectionEndDate + 'T00:00:00');
         const [min, max] = s <= e ? [s, e] : [e, s];
         const cells = Array.from(this.gridEl.children) as HTMLElement[];
-        let selectedCount = 0;
         cells.forEach(c => {
             c.removeClass('dayble-selected');
             const d = c.getAttr('data-date');
@@ -1377,7 +1370,6 @@ class DaybleCalendarView extends ItemView {
             // Include both start and end dates (use >= and <= for inclusive range)
             if (dt >= min && dt <= max) {
                 c.addClass('dayble-selected');
-                selectedCount++;
             }
         });
     }
@@ -1421,20 +1413,20 @@ class DaybleCalendarView extends ItemView {
         }
         const cells = Array.from(this.gridEl.children).filter(el => (el as HTMLElement).hasClass?.('dayble-day')) as HTMLElement[];
         const todayNum = (el: HTMLElement) => {
-            const n = el.querySelector('.dayble-day-number') as HTMLElement | null;
+            const n = el.querySelector('.dayble-day-number');
             return n ? n.getBoundingClientRect().height + parseFloat(getComputedStyle(n).marginBottom || '0') : 24;
         };
         const segmentHeight = 28;
         const segmentGap = 4;
         const getCellWidth = () => {
             if (cells.length === 0) return 100;
-            return (cells[0] as HTMLElement).offsetWidth || 100;
+            return (cells[0]).offsetWidth || 100;
         };
         const countsByDate: Record<string, number> = {};
         const longEvents = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
         longEvents.forEach(ev => {
-            const start = new Date(ev.startDate!);
-            const end = new Date(ev.endDate!);
+            const start = new Date(ev.startDate);
+            const end = new Date(ev.endDate);
             for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
                 const y = d.getFullYear();
                 const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -1447,13 +1439,13 @@ class DaybleCalendarView extends ItemView {
         longEvents.forEach(ev => {
             const startIdx = cells.findIndex(c => c.getAttr('data-date') === ev.startDate);
             if (startIdx === -1) return;
-            const start = new Date(ev.startDate!);
-            const end = new Date(ev.endDate!);
+            const start = new Date(ev.startDate);
+            const end = new Date(ev.endDate);
             const overlap = longEvents
-                .filter(e => e.startDate && e.endDate && e.startDate !== e.endDate && new Date(e.startDate!) <= start && new Date(e.endDate!) >= start)
+                .filter(e => e.startDate && e.endDate && e.startDate !== e.endDate && new Date(e.startDate) <= start && new Date(e.endDate) >= start)
                 .sort((a,b) => {
-                    const ad = (new Date(a.endDate!).getTime() - new Date(a.startDate!).getTime());
-                    const bd = (new Date(b.endDate!).getTime() - new Date(b.startDate!).getTime());
+                    const ad = (new Date(a.endDate).getTime() - new Date(a.startDate).getTime());
+                    const bd = (new Date(b.endDate).getTime() - new Date(b.startDate).getTime());
                     if (ad !== bd) return bd - ad; // longer first (on top)
                     return a.id.localeCompare(b.id);
                 });
@@ -1463,16 +1455,15 @@ class DaybleCalendarView extends ItemView {
             const startRow = Math.floor(startIdx / cellsPerRow);
             const endIdx = startIdx + span - 1;
             const endRow = Math.floor(endIdx / cellsPerRow);
-            const cellWidth = getCellWidth();
             const styleSig = `${ev.categoryId || ''}|${ev.color || ''}|${ev.textColor || ''}|${this.plugin.settings.eventBgOpacity}|${this.plugin.settings.iconPlacement}|${this.plugin.settings.onlyAnimateToday}|${this.plugin.settings.eventBorderWidth}|${this.plugin.settings.eventBorderRadius}|${this.plugin.settings.eventBorderOpacity}`;
             const contentSig = `${ev.title || ''}|${ev.description || ''}|${ev.icon || ''}|${ev.time || ''}`;
             if (startRow === endRow) {
                 const first = cells[startIdx];
                 const last = cells[endIdx];
                 if (!first || !last) return;
-                const frLeft = (first as HTMLElement).offsetLeft;
-                const frTop = (first as HTMLElement).offsetTop;
-                const lrRight = (last as HTMLElement).offsetLeft + (last as HTMLElement).offsetWidth;
+                const frLeft = (first).offsetLeft;
+                const frTop = (first).offsetTop;
+                const lrRight = (last).offsetLeft + (last).offsetWidth;
                 const topOffset = todayNum(first) + 14 + stackIndex * (segmentHeight + segmentGap);
                 const left = frLeft - 2;
                 const top = frTop + topOffset;
@@ -1484,38 +1475,38 @@ class DaybleCalendarView extends ItemView {
                     item = this.createEventItem(ev);
                     item.addClass('dayble-long-event');
                     item.addClass('dayble-long-event-single');
-                    (item as HTMLElement).dataset.longKey = key;
-                    (item as HTMLElement).dataset.styleSig = styleSig;
-                    (item as HTMLElement).dataset.contentSig = contentSig;
+                    (item).dataset.longKey = key;
+                    (item).dataset.styleSig = styleSig;
+                    (item).dataset.contentSig = contentSig;
                     item.style.position = 'absolute';
                     item.style.boxSizing = 'border-box';
-                    item.onclick = (e) => { e.stopPropagation(); this.openEventModal(ev.id!, ev.startDate!, ev.endDate!); };
-                    this.gridEl!.appendChild(item);
+                    item.onclick = (e) => { e.stopPropagation(); this.openEventModal(ev.id, ev.startDate, ev.endDate); };
+                    this.gridEl.appendChild(item);
                     this._longEls.set(key, item);
                 }
                 else {
                     const sig = styleSig;
                     const csig = contentSig;
-                    if ((item as HTMLElement).dataset.styleSig !== sig || (item as HTMLElement).dataset.contentSig !== csig) {
+                    if ((item).dataset.styleSig !== sig || (item).dataset.contentSig !== csig) {
                         const newItem = this.createEventItem(ev);
                         newItem.addClass('dayble-long-event');
                         newItem.addClass('dayble-long-event-single');
-                        (newItem as HTMLElement).dataset.longKey = key;
-                        (newItem as HTMLElement).dataset.styleSig = sig;
-                        (newItem as HTMLElement).dataset.contentSig = csig;
+                        (newItem).dataset.longKey = key;
+                        (newItem).dataset.styleSig = sig;
+                        (newItem).dataset.contentSig = csig;
                         newItem.style.position = 'absolute';
                         newItem.style.boxSizing = 'border-box';
-                        newItem.onclick = (e) => { e.stopPropagation(); this.openEventModal(ev.id!, ev.startDate!, ev.endDate!); };
+                        newItem.onclick = (e) => { e.stopPropagation(); this.openEventModal(ev.id, ev.startDate, ev.endDate); };
                         if (item.parentElement) item.replaceWith(newItem);
                         item = newItem;
                         this._longEls.set(key, item);
                     }
                 }
                 if (!item.isConnected || item.parentElement !== this.gridEl) {
-                    this.gridEl!.appendChild(item);
+                    this.gridEl.appendChild(item);
                 }
-                (item as HTMLElement).style.setProperty('--event-border-width', `${this.plugin.settings.eventBorderWidth ?? 2}px`);
-                (item as HTMLElement).style.setProperty('--event-border-radius', `${this.plugin.settings.eventBorderRadius ?? 6}px`);
+                (item).style.setProperty('--event-border-width', `${this.plugin.settings.eventBorderWidth ?? 2}px`);
+                (item).style.setProperty('--event-border-radius', `${this.plugin.settings.eventBorderRadius ?? 6}px`);
                 item.style.left = `${left}px`;
                 item.style.top = `${top}px`;
                 item.style.width = `${width}px`;
@@ -1530,9 +1521,9 @@ class DaybleCalendarView extends ItemView {
                     const first = cells[eventStartInRow];
                     const last = cells[eventEndInRow];
                     if (!first || !last) continue;
-                    const frLeft = (first as HTMLElement).offsetLeft;
-                    const frTop = (first as HTMLElement).offsetTop;
-                    const lrRight = (last as HTMLElement).offsetLeft + (last as HTMLElement).offsetWidth;
+                    const frLeft = (first).offsetLeft;
+                    const frTop = (first).offsetTop;
+                    const lrRight = (last).offsetLeft + (last).offsetWidth;
                     const topOffset = todayNum(first) + 14 + stackIndex * (segmentHeight + segmentGap);
                     const left = frLeft - 2;
                     const top = frTop + topOffset;
@@ -1545,39 +1536,39 @@ class DaybleCalendarView extends ItemView {
                         item.addClass('dayble-long-event');
                         if (row === startRow) item.addClass('dayble-long-event-start');
                         if (row === endRow) item.addClass('dayble-long-event-end');
-                        (item as HTMLElement).dataset.longKey = key;
-                        (item as HTMLElement).dataset.styleSig = styleSig;
-                        (item as HTMLElement).dataset.contentSig = contentSig;
+                        (item).dataset.longKey = key;
+                        (item).dataset.styleSig = styleSig;
+                        (item).dataset.contentSig = contentSig;
                         item.style.position = 'absolute';
                         item.style.boxSizing = 'border-box';
-                        item.onclick = (e) => { e.stopPropagation(); this.openEventModal(ev.id!, ev.startDate!, ev.endDate!); };
-                        this.gridEl!.appendChild(item);
+                        item.onclick = (e) => { e.stopPropagation(); this.openEventModal(ev.id, ev.startDate, ev.endDate); };
+                        this.gridEl.appendChild(item);
                         this._longEls.set(key, item);
                     }
                     else {
                         const sig = styleSig;
                         const csig = contentSig;
-                        if ((item as HTMLElement).dataset.styleSig !== sig || (item as HTMLElement).dataset.contentSig !== csig) {
+                        if ((item).dataset.styleSig !== sig || (item).dataset.contentSig !== csig) {
                             const newItem = this.createEventItem(ev);
                             newItem.addClass('dayble-long-event');
                             if (row === startRow) newItem.addClass('dayble-long-event-start');
                             if (row === endRow) newItem.addClass('dayble-long-event-end');
-                            (newItem as HTMLElement).dataset.longKey = key;
-                            (newItem as HTMLElement).dataset.styleSig = sig;
-                            (newItem as HTMLElement).dataset.contentSig = csig;
+                            (newItem).dataset.longKey = key;
+                            (newItem).dataset.styleSig = sig;
+                            (newItem).dataset.contentSig = csig;
                             newItem.style.position = 'absolute';
                             newItem.style.boxSizing = 'border-box';
-                            newItem.onclick = (e) => { e.stopPropagation(); this.openEventModal(ev.id!, ev.startDate!, ev.endDate!); };
+                            newItem.onclick = (e) => { e.stopPropagation(); this.openEventModal(ev.id, ev.startDate, ev.endDate); };
                             if (item.parentElement) item.replaceWith(newItem);
                             item = newItem;
                             this._longEls.set(key, item);
                         }
                     }
                     if (!item.isConnected || item.parentElement !== this.gridEl) {
-                        this.gridEl!.appendChild(item);
+                        this.gridEl.appendChild(item);
                     }
-                    (item as HTMLElement).style.setProperty('--event-border-width', `${this.plugin.settings.eventBorderWidth ?? 2}px`);
-                    (item as HTMLElement).style.setProperty('--event-border-radius', `${this.plugin.settings.eventBorderRadius ?? 6}px`);
+                    (item).style.setProperty('--event-border-width', `${this.plugin.settings.eventBorderWidth ?? 2}px`);
+                    (item).style.setProperty('--event-border-radius', `${this.plugin.settings.eventBorderRadius ?? 6}px`);
                     item.style.left = `${left}px`;
                     item.style.top = `${top}px`;
                     item.style.width = `${width}px`;
@@ -1588,20 +1579,20 @@ class DaybleCalendarView extends ItemView {
         // Remove any stale long items
         Array.from(this._longEls.keys()).forEach(key => {
             if (!requiredKeys.has(key)) {
-                const el = this._longEls.get(key)!;
+                const el = this._longEls.get(key);
                 if (el && el.parentElement) el.remove();
                 this._longEls.delete(key);
             }
         });
         cells.forEach(cell => {
-            const date = cell.getAttr('data-date')!;
+            const date = cell.getAttr('data-date');
             const count = countsByDate[date] || 0;
-            const container = cell.querySelector('.dayble-event-container') as HTMLElement | null;
+            const container = cell.querySelector('.dayble-event-container');
             if (container) {
                 const baseMt = count > 0 ? (count * segmentHeight) + (Math.max(0, count - 1) * segmentGap) + 2 : 0;
                 const isTodayCell = cell.classList.contains('dayble-current-day');
                 const mt = isTodayCell ? Math.max(0, baseMt - 4) : baseMt; // gappy
-                container.style.marginTop = mt ? `${mt}px` : '';
+                (container as HTMLElement).style.marginTop = mt ? `${mt}px` : '';
             }
         });
     }
@@ -1624,7 +1615,6 @@ class DaybleCalendarView extends ItemView {
         
         // Determine which colors to use: user-set or category
         const category = this.plugin.settings.eventCategories?.find(c => c.id === ev.categoryId);
-        const isDefaultCategory = !ev.categoryId || ev.categoryId === 'default';
         
         let bgColor = '';
         let textColor = '';
@@ -1711,7 +1701,7 @@ class DaybleCalendarView extends ItemView {
             else if (behavior === 'hide') item.addClass('dayble-event-hidden');
         }
         item.addEventListener('click', (evt) => {
-            const a = (evt.target as HTMLElement).closest('a') as HTMLAnchorElement | null;
+            const a = (evt.target as HTMLElement).closest('a');
             if (!a) return;
             const wiki = a.getAttribute('data-href');
             if (wiki) {
@@ -1730,7 +1720,7 @@ class DaybleCalendarView extends ItemView {
             this.isDragging = true;
             this.clearSelection();
             e.dataTransfer?.setData('text/plain', ev.id);
-            (e.dataTransfer as DataTransfer)?.setData('dayble-source','calendar');
+            (e.dataTransfer)?.setData('dayble-source','calendar');
             try {
                 const dragImg = item.cloneNode(true) as HTMLElement;
                 dragImg.style.position = 'fixed';
@@ -1747,7 +1737,7 @@ class DaybleCalendarView extends ItemView {
                 document.body.appendChild(dragImg);
                 e.dataTransfer?.setDragImage(dragImg, Math.min(8, rect.width / 4), Math.min(8, rect.height / 4));
                 (item as any).__dragImg = dragImg;
-            } catch {}
+            } catch (e) { console.debug('[Dayble] Drag image setup error:', e); }
             item.addClass('dayble-dragging');
         };
         item.ondragend = () => {
@@ -1796,8 +1786,8 @@ class DaybleCalendarView extends ItemView {
         return false;
     }
 
-    renderHolder() {
-        const list = this.holderEl?.querySelector('.dayble-holder-list') as HTMLElement | null;
+    async renderHolder() {
+        const list = this.holderEl?.querySelector('.dayble-holder-list');
         if (!list) return;
         list.empty();
         this.holderEvents.forEach(ev => {
@@ -1808,7 +1798,7 @@ class DaybleCalendarView extends ItemView {
                 this.isSelecting = false;
                 this.clearSelection();
                 e.dataTransfer?.setData('text/plain', ev.id);
-                (e.dataTransfer as DataTransfer)?.setData('dayble-source','holder');
+                (e.dataTransfer)?.setData('dayble-source','holder');
                 try {
                     const dragImg = item.cloneNode(true) as HTMLElement;
                     dragImg.style.position = 'fixed';
@@ -1825,7 +1815,7 @@ class DaybleCalendarView extends ItemView {
                     document.body.appendChild(dragImg);
                     e.dataTransfer?.setDragImage(dragImg, Math.min(8, rect.width / 4), Math.min(8, rect.height / 4));
                     (item as any).__dragImg = dragImg;
-                } catch {}
+                } catch (e) { console.debug('[Dayble] Drag image setup error:', e); }
                 item.addClass('dayble-dragging');
             };
             item.ondragend = () => {
@@ -1838,9 +1828,9 @@ class DaybleCalendarView extends ItemView {
             list.appendChild(item);
         });
         // Enable reordering inside holder list with drop indicators
-        list.ondragover = (e) => {
+        (list as any).ondragover = (e: DragEvent) => {
             e.preventDefault();
-            const targetEvent = (e.target as HTMLElement).closest('.dayble-event') as HTMLElement | null;
+            const targetEvent = (e.target as HTMLElement).closest('.dayble-event');
             const eventCount = list.querySelectorAll('.dayble-event').length;
             if (targetEvent && targetEvent.parentElement === list && eventCount > 1) {
                 const rect = targetEvent.getBoundingClientRect();
@@ -1856,20 +1846,20 @@ class DaybleCalendarView extends ItemView {
                 }
             }
         };
-        list.ondragleave = (e) => {
+        (list as any).ondragleave = (e: DragEvent) => {
             if (e.target === list) list.querySelectorAll('.dayble-drop-indicator').forEach(el => el.remove());
         };
-        list.ondrop = async (e) => {
+        (list as any).ondrop = async (e: DragEvent) => {
             e.preventDefault();
             list.querySelectorAll('.dayble-drop-indicator').forEach(el => el.remove());
             const id = e.dataTransfer?.getData('text/plain');
             const src = e.dataTransfer?.getData('dayble-source');
             if (!id || src !== 'holder') return;
-            const draggedEl = document.querySelector(`[data-id="${id}"]`) as HTMLElement | null;
+            const draggedEl = document.querySelector(`[data-id="${id}"]`);
             if (!draggedEl) return;
-            const draggedContainer = draggedEl.closest('.dayble-holder-list') as HTMLElement | null;
+            const draggedContainer = draggedEl.closest('.dayble-holder-list');
             if (draggedContainer !== list) return;
-            const targetEvent = (e.target as HTMLElement).closest('.dayble-event') as HTMLElement | null;
+            const targetEvent = (e.target as HTMLElement).closest('.dayble-event');
             if (targetEvent === draggedEl) return;
             if (!targetEvent) { 
                 list.appendChild(draggedEl); 
@@ -1883,7 +1873,7 @@ class DaybleCalendarView extends ItemView {
             // Persist new holder order
             const reordered: DaybleEvent[] = [];
             list.querySelectorAll('.dayble-event').forEach(el => {
-                const eid = (el as HTMLElement).dataset.id!;
+                const eid = (el as HTMLElement).dataset.id;
                 const found = this.holderEvents.find(ev => ev.id === eid);
                 if (found) reordered.push(found);
             });
@@ -1892,7 +1882,7 @@ class DaybleCalendarView extends ItemView {
         };
     }
 
-    async openEventModal(id?: string, date?: string, endDate?: string) {
+    async openEventModal(id?: string, date?: string, endDate?: string): Promise<void> {
         const folder = this.plugin.settings.entriesFolder?.trim();
         if (!folder) { new StorageFolderNotSetModal(this.app).open(); return; }
         try { await this.app.vault.adapter.stat(folder); }
@@ -1953,7 +1943,7 @@ class DaybleCalendarView extends ItemView {
         const modal = new TodayModal(this.app, date, this.events, this);
         this.currentTodayModal = modal;
         modal.onClose = () => { this.currentTodayModal = undefined; };
-        modal.open();
+        void modal.open();
     }
 }
 
@@ -1990,7 +1980,7 @@ class EventModal extends Modal {
         const heading = c.createEl('h3', { cls: 'dayble-modal-title' });
         c.addClass('db-modal');
         heading.addClass('db-modal-title');
-        heading.textContent = this.ev ? 'Edit Event' : 'Add New Event';
+        heading.textContent = this.ev ? 'Edit event' : 'Add new event';
         const row1 = c.createDiv({ cls: 'dayble-modal-row' });
         row1.addClass('db-modal-row');
         const iconBtn = row1.createEl('button', { cls: 'dayble-btn dayble-icon-add' });
@@ -2001,7 +1991,7 @@ class EventModal extends Modal {
         const titleInput = row1.createEl('input', { type: 'text', cls: 'dayble-input', attr: { placeholder: 'Event title', autofocus: 'true' } });
         titleInput.addClass('db-input');
         titleInput.value = this.ev?.title ?? '';
-        const focusTitle = () => { try { titleInput.focus({ preventScroll: true }); } catch {} };
+        const focusTitle = () => { try { titleInput.focus({ preventScroll: true }); } catch (e) { console.debug('[Dayble] Focus title:', e); } };
         focusTitle();
         requestAnimationFrame(focusTitle);
         setTimeout(focusTitle, 0);
@@ -2033,9 +2023,9 @@ class EventModal extends Modal {
             suggestionContainer.style.overflowY = 'auto';
             suggestionContainer.style.zIndex = '10000';
             suggestionContainer.style.minWidth = '200px';
-            files.forEach((file: any, i: number) => {
+            files.forEach((file: unknown, i: number) => {
                 const item = document.createElement('div');
-                item.textContent = file.name;
+                item.textContent = (file as any).name;
                 item.style.padding = '8px';
                 item.style.cursor = 'pointer';
                 item.style.borderBottom = '1px solid var(--background-modifier-border)';
@@ -2047,10 +2037,10 @@ class EventModal extends Modal {
                     e.stopPropagation();
                     const text = target.value;
                     const beforeMatch = text.substring(0, text.lastIndexOf('[['));
-                    target.value = beforeMatch + '[[' + file.name + ']]';
+                    target.value = beforeMatch + '[[' + (file as any).name + ']]';
                     closeSuggestions();
                 };
-                suggestionContainer!.appendChild(item);
+                suggestionContainer.appendChild(item);
             });
             document.body.appendChild(suggestionContainer);
             const rect = target.getBoundingClientRect();
@@ -2131,10 +2121,9 @@ class EventModal extends Modal {
         };
         
         // Add color swatches under title if setting says so
-        let colorRow: HTMLElement | undefined;
         const colorSwatchPos = (this as any).plugin?.settings?.colorSwatchPosition ?? 'under-title';
         if (colorSwatchPos === 'under-title') {
-            colorRow = createColorRow();
+            createColorRow();
         }
         
         const ruleRow = c.createDiv({ cls: 'dayble-modal-row dayble-modal-row-center' });
@@ -2189,7 +2178,7 @@ class EventModal extends Modal {
         
         // Add color swatches under description if setting says so
         if (colorSwatchPos === 'under-description') {
-            colorRow = createColorRow();
+            createColorRow();
         }
         
         const footer = c.createDiv({ cls: 'dayble-modal-footer' });
@@ -2212,7 +2201,7 @@ class EventModal extends Modal {
         cancel.onclick = () => this.close();
         const ok = rightButtons.createEl('button', { cls: 'dayble-btn dayble-save mod-cta' });
         ok.addClass('db-btn');
-        ok.textContent = 'Save Event';
+        ok.textContent = 'Save event';
         ok.onclick = () => {
             const payload: Partial<DaybleEvent> = {
                 title: titleInput.value,
@@ -2262,7 +2251,7 @@ class EventModal extends Modal {
         };
         // Prevent modal open when clicking markdown links inside event items; open note in new tab
         this.contentEl.addEventListener('click', (ev) => {
-            const a = (ev.target as HTMLElement).closest('a') as HTMLAnchorElement | null;
+            const a = (ev.target as HTMLElement).closest('a');
             if (!a) return;
             const wiki = a.getAttribute('data-href');
             if (wiki) {
@@ -2314,7 +2303,7 @@ class IconPickerModal extends Modal {
         footer.style.marginTop = 'auto';
         footer.style.paddingTop = '8px';
         footer.style.borderTop = '1px solid var(--background-modifier-border)';
-        const removeBtn = footer.createEl('button', { cls: 'dayble-btn', text: 'Remove Icon' });
+        const removeBtn = footer.createEl('button', { cls: 'dayble-btn', text: 'Remove icon' });
         removeBtn.addClass('db-btn');
         removeBtn.style.display = 'flex';
         removeBtn.style.alignItems = 'center';
@@ -2374,7 +2363,7 @@ class PromptSearchModal extends Modal {
             if (this.contentEl && this.contentEl.parentElement === this.modalEl) {
                 this.contentEl.remove();
             }
-        } catch {}
+        } catch (e) { console.debug('[Dayble] PromptSearchModal init:', e); }
     }
     onOpen() {
         const root = this.modalEl;
@@ -2429,7 +2418,7 @@ class PromptSearchModal extends Modal {
                         // Skip current month file as it's already in memory
                         const currentFile = this.view.getMonthDataFilePath();
                         if (f === currentFile) continue;
-                        if (f.endsWith(currentFile.split('/').pop()!)) continue;
+                        if (f.endsWith(currentFile.split('/').pop())) continue;
                         
                         try {
                             const txt = await this.app.vault.adapter.read(f);
@@ -2485,7 +2474,7 @@ class PromptSearchModal extends Modal {
             await this.view.loadAllEntries();
             this.view.render();
             setTimeout(() => {
-                const nodes = Array.from(this.view.containerEl.querySelectorAll(`.dayble-event[data-id="${ev.id}"]`)) as HTMLElement[];
+                const nodes = Array.from(this.view.containerEl.querySelectorAll(`.dayble-event[data-id="${ev.id}"]`));
                 nodes.forEach(n => n.classList.add('dayble-event-highlight'));
                 setTimeout(() => { nodes.forEach(n => n.classList.remove('dayble-event-highlight')); }, 2000);
             }, 0);
@@ -2634,7 +2623,7 @@ class TodayModal extends Modal {
                 // Drag handlers for reordering
                 row.ondragstart = e => {
                     e.dataTransfer?.setData('text/plain', ev.id);
-                    (e.dataTransfer as DataTransfer)?.setData('dayble-source','today');
+                    (e.dataTransfer)?.setData('dayble-source','today');
                     try {
                         const dragImg = row.cloneNode(true) as HTMLElement;
                         dragImg.style.position = 'fixed';
@@ -2651,7 +2640,7 @@ class TodayModal extends Modal {
                         document.body.appendChild(dragImg);
                         e.dataTransfer?.setDragImage(dragImg, Math.min(8, rect.width / 4), Math.min(8, rect.height / 4));
                         (row as any).__dragImg = dragImg;
-                    } catch {}
+                    } catch (e) { console.debug('[Dayble] Drag image setup:', e); }
                     row.addClass('dayble-dragging');
                 };
                 row.ondragend = () => {
@@ -2693,7 +2682,7 @@ class TodayModal extends Modal {
             // Enable reordering in today modal
             eventsContainer.ondragover = (e) => {
                 e.preventDefault();
-                const targetRow = (e.target as HTMLElement).closest('.dayble-today-event-row') as HTMLElement | null;
+                const targetRow = (e.target as HTMLElement).closest('.dayble-today-event-row');
                 const rowsCount = eventsContainer.querySelectorAll('.dayble-today-event-row').length;
                 if (targetRow && rowsCount > 1) {
                     const rect = targetRow.getBoundingClientRect();
@@ -2718,9 +2707,9 @@ class TodayModal extends Modal {
                 const id = e.dataTransfer?.getData('text/plain');
                 const src = e.dataTransfer?.getData('dayble-source');
                 if (!id) return;
-                const draggedEl = eventsContainer.querySelector(`[data-id="${id}"]`) as HTMLElement | null;
+                const draggedEl = eventsContainer.querySelector(`[data-id="${id}"]`);
                 if (!draggedEl) return;
-                const targetRow = (e.target as HTMLElement).closest('.dayble-today-event-row') as HTMLElement | null;
+                const targetRow = (e.target as HTMLElement).closest('.dayble-today-event-row');
                 if (!targetRow || targetRow === draggedEl) return;
                 const rect = targetRow.getBoundingClientRect();
                 const relativeY = e.clientY - rect.top;
@@ -2738,12 +2727,12 @@ class TodayModal extends Modal {
                     const date = this.date;
                     const dayIds: string[] = [];
                     eventsContainer.querySelectorAll('.dayble-today-event-row').forEach(el => {
-                        const eid = (el as HTMLElement).dataset.id!;
+                        const eid = (el as HTMLElement).dataset.id;
                         dayIds.push(eid);
                     });
                     const original = this.view.events.filter(ev => ev.date === date);
                     const others = this.view.events.filter(ev => ev.date !== date);
-                    const reorderedDay = dayIds.map(id => original.find(e => e.id === id)!).filter(Boolean);
+                    const reorderedDay = dayIds.map(id => original.find(e => e.id === id)).filter(Boolean);
                     this.view.events = others.concat(reorderedDay);
                     await this.view.saveAllEntries();
                     this.view.render();
@@ -2752,7 +2741,7 @@ class TodayModal extends Modal {
         }
         
         // Fixed +Add Event button at bottom
-        const addBtn = c.createEl('button', { cls: 'dayble-today-add-btn', text: '+ Add Event' });
+        const addBtn = c.createEl('button', { cls: 'dayble-today-add-btn', text: '+ add event' });
         addBtn.addClass('db-btn');
         addBtn.style.width = '100%';
         addBtn.style.padding = '10px';
@@ -2768,7 +2757,7 @@ class TodayModal extends Modal {
         
         // Enable internal link clicks inside today modal content
         this.contentEl.addEventListener('click', (ev) => {
-            const a = (ev.target as HTMLElement).closest('a') as HTMLAnchorElement | null;
+            const a = (ev.target as HTMLElement).closest('a');
             if (!a) return;
             const wiki = a.getAttribute('data-href');
             if (wiki) {
@@ -2800,13 +2789,13 @@ class StorageFolderNotSetModal extends Modal {
         btns.style.justifyContent = 'flex-end';
         btns.style.marginTop = '12px';
         const openSettingsBtn = btns.createEl('button', { cls: 'dayble-btn' });
-        openSettingsBtn.setText('Open Settings');
+        openSettingsBtn.setText('Open settings');
         openSettingsBtn.onclick = () => {
             try { 
                 const s = (this.app as any).setting;
                 s?.open?.();
                 s?.openTabById?.('dayble-calendar');
-            } catch {}
+            } catch (e) { console.debug('[Dayble] Open settings:', e); }
             this.close();
         };
         const closeBtn = btns.createEl('button', { cls: 'dayble-btn' });
@@ -2981,7 +2970,7 @@ class DaybleSettingTab extends PluginSettingTab {
     display(): void {
         const { containerEl } = this;
         containerEl.empty();
-        new Setting(containerEl).setName('Dayble calendar').setHeading();
+        ;
         // containerEl.createEl('h3', { text: 'General' });
         new Setting(containerEl)
             .setName('Week start day')
@@ -3042,7 +3031,7 @@ class DaybleSettingTab extends PluginSettingTab {
                     .addOption('12h', '12-hour')
                     .setValue(this.plugin.settings.timeFormat ?? '24h')
                     .onChange(async v => {
-                        this.plugin.settings.timeFormat = v as any;
+                        this.plugin.settings.timeFormat = v as "24h" | "12h" | undefined;
                         await this.plugin.saveSettings();
                         const view = this.plugin.getCalendarView();
                         view?.render();
@@ -3063,7 +3052,7 @@ class DaybleSettingTab extends PluginSettingTab {
                     .addOption('top-right', 'Top right')
                     .setValue(this.plugin.settings.iconPlacement ?? 'left')
                     .onChange(async v => {
-                        this.plugin.settings.iconPlacement = v as any;
+                        this.plugin.settings.iconPlacement = v as "none" | "left" | "top" | "right" | "top-left" | "top-right" | undefined;
                         await this.plugin.saveSettings();
                         const view = this.plugin.getCalendarView();
                         view?.render();
@@ -3079,7 +3068,7 @@ class DaybleSettingTab extends PluginSettingTab {
                     .addOption('right', 'Right')
                     .setValue(this.plugin.settings.eventTitleAlign ?? 'left')
                     .onChange(async v => {
-                        this.plugin.settings.eventTitleAlign = v as any;
+                        this.plugin.settings.eventTitleAlign = v as "center" | "left" | "right" | undefined;
                         await this.plugin.saveSettings();
                         const view = this.plugin.getCalendarView();
                         view?.render();
@@ -3094,7 +3083,7 @@ class DaybleSettingTab extends PluginSettingTab {
                     .addOption('right', 'Right')
                     .setValue(this.plugin.settings.eventDescAlign ?? 'left')
                     .onChange(async v => {
-                        this.plugin.settings.eventDescAlign = v as any;
+                        this.plugin.settings.eventDescAlign = v as "center" | "left" | "right" | undefined;
                         await this.plugin.saveSettings();
                         const view = this.plugin.getCalendarView();
                         view?.render();
@@ -3168,7 +3157,7 @@ class DaybleSettingTab extends PluginSettingTab {
                         .addOption('hide', 'Hide')
                         .setValue(this.plugin.settings.completeBehavior ?? 'none')
                         .onChange(async v => {
-                            this.plugin.settings.completeBehavior = v as any;
+                            this.plugin.settings.completeBehavior = v as "none" | "hide" | "dim" | "strikethrough" | undefined;
                             await this.plugin.saveSettings();
                             const view = this.plugin.getCalendarView();
                             view?.render();
@@ -3196,7 +3185,7 @@ class DaybleSettingTab extends PluginSettingTab {
                  .addOption('hidden', 'Hidden')
                  .setValue(this.plugin.settings.holderPlacement ?? 'left')
                  .onChange(async v => {
-                    this.plugin.settings.holderPlacement = v as any;
+                    this.plugin.settings.holderPlacement = v as "left" | "right" | "hidden" | undefined;
                     await this.plugin.saveSettings();
                     const view = this.plugin.getCalendarView();
                     if (view) {
@@ -3208,8 +3197,8 @@ class DaybleSettingTab extends PluginSettingTab {
             });
 
         new Setting(containerEl)
-            .setName('Enable Weekly Notes')
-            .setDesc('Show a markdown notes section below the calendar in weekly view')
+            .setName('Enable weekly notes')
+            .setDesc('Show a Markdown notes section below the calendar in weekly view')
             .addToggle(t => {
                 t.setValue(this.plugin.settings.weeklyNotesEnabled ?? false)
                     .onChange(async v => {
@@ -3233,8 +3222,8 @@ class DaybleSettingTab extends PluginSettingTab {
                     const view = this.plugin.getCalendarView();
                     view?.render();
                 });
-                (t.inputEl as HTMLInputElement).type = 'number';
-                (t.inputEl as HTMLInputElement).min = '0';
+                (t.inputEl).type = 'number';
+                (t.inputEl).min = '0';
             });
             new Setting(containerEl)
                 .setName('Color swatch position')
@@ -3245,7 +3234,7 @@ class DaybleSettingTab extends PluginSettingTab {
                         .addOption('none', 'Do not show')
                         .setValue(this.plugin.settings.colorSwatchPosition ?? 'under-title')
                         .onChange(async v => {
-                            this.plugin.settings.colorSwatchPosition = v as any;
+                            this.plugin.settings.colorSwatchPosition = v as "none" | "under-title" | "under-description" | undefined;
                             await this.plugin.saveSettings();
                         });
                 });
@@ -3283,11 +3272,11 @@ class DaybleSettingTab extends PluginSettingTab {
                     const prevCustomArr = (this.plugin.settings.userCustomSwatches || []).map(s => ({ name: s.name || '', color: s.color || '#ff0000', textColor: s.textColor || '' }));
                     const newBuilt: { name: string, color: string, textColor?: string }[] = [];
                     const newCustom: { name: string, color: string, textColor?: string }[] = [];
-                    row.querySelectorAll('div[draggable="true"]').forEach((w: any) => {
+                    row.querySelectorAll('div[draggable="true"]').forEach((w: unknown) => {
                         const src = (w as HTMLElement).dataset.source;
                         const nm = (w as HTMLElement).dataset.name || '';
-                        const bg = (w.querySelectorAll('input[type="color"]')[1] as HTMLInputElement).value;
-                        const tx = (w.querySelectorAll('input[type="color"]')[0] as HTMLInputElement).value;
+                        const bg = ((w as any).querySelectorAll('input[type="color"]')[1] as HTMLInputElement).value;
+                        const tx = ((w as any).querySelectorAll('input[type="color"]')[0] as HTMLInputElement).value;
                         if (src === 'built') newBuilt.push({ name: nm, color: bg, textColor: tx });
                         else newCustom.push({ name: '', color: bg, textColor: tx });
                     });
@@ -3365,10 +3354,10 @@ class DaybleSettingTab extends PluginSettingTab {
                 textPicker.onchange = updateAll;
                 bgPicker.onchange = updateAll;
                 const del = wrap.createEl('button', { cls: 'dayble-btn db-color-del' });
-                (del as HTMLButtonElement).style.background = 'none';
-                (del as HTMLButtonElement).style.boxShadow = 'none';
-                (del as HTMLButtonElement).style.border = 'none';
-                (del as HTMLButtonElement).style.padding = '2px 4px';
+                (del).style.background = 'none';
+                (del).style.boxShadow = 'none';
+                (del).style.border = 'none';
+                (del).style.padding = '2px 4px';
                 setIcon(del, 'x');
                 del.setAttr('draggable','false');
                 del.onmousedown = (e) => { e.stopPropagation(); };
@@ -3382,12 +3371,12 @@ class DaybleSettingTab extends PluginSettingTab {
                 };
                 wrap.ondragstart = e => {
                     e.dataTransfer?.setData('text/plain', 'drag');
-                    (e.dataTransfer as DataTransfer).effectAllowed = 'move';
+                    (e.dataTransfer).effectAllowed = 'move';
                 };
                 row.ondragover = e => { e.preventDefault(); };
                 row.ondrop = async e => {
                     e.preventDefault();
-                    const target = (e.target as HTMLElement).closest('div[draggable="true"]') as HTMLElement | null;
+                    const target = (e.target as HTMLElement).closest('div[draggable="true"]');
                     if (!target || target.parentElement !== row) return;
                     const rect = target.getBoundingClientRect();
                     const before = (e.clientX - rect.left) < rect.width / 2;
@@ -3401,10 +3390,10 @@ class DaybleSettingTab extends PluginSettingTab {
             const controlsBottom = new Setting(colorsListTop);
             controlsBottom.settingEl.addClass('dayble-colors-controls');
             controlsBottom.settingEl.style.display = 'flex';
-            (controlsBottom.settingEl as HTMLElement).style.alignItems = 'center';
-            (controlsBottom.settingEl as HTMLElement).style.gap = '8px';
-            (controlsBottom.settingEl as HTMLElement).style.width = '100%';
-            (controlsBottom.settingEl as HTMLElement).style.justifyContent = 'flex-start';
+            (controlsBottom.settingEl).style.alignItems = 'center';
+            (controlsBottom.settingEl).style.gap = '8px';
+            (controlsBottom.settingEl).style.width = '100%';
+            (controlsBottom.settingEl).style.justifyContent = 'flex-start';
             controlsBottom.addButton(b => {
                 b.setButtonText('Reset to default colors').onClick(async () => {
                     const modal = new ConfirmModal(this.app, 'Reset color swatches to default?', async () => {
@@ -3417,7 +3406,7 @@ class DaybleSettingTab extends PluginSettingTab {
                 });
             });
             controlsBottom.addButton(b => {
-                b.setButtonText('+ Add color').onClick(async () => {
+                b.setButtonText('+ add color').onClick(async () => {
                     const wrap = row.createDiv();
                     wrap.style.display = 'flex';
                     wrap.style.alignItems = 'center';
@@ -3430,10 +3419,10 @@ class DaybleSettingTab extends PluginSettingTab {
                     const bgPicker = wrap.createEl('input', { type: 'color' });
                     bgPicker.value = '#ff0000';
                     const del = wrap.createEl('button', { cls: 'dayble-btn db-color-del' });
-                    (del as HTMLButtonElement).style.background = 'none';
-                    (del as HTMLButtonElement).style.boxShadow = 'none';
-                    (del as HTMLButtonElement).style.border = 'none';
-                    (del as HTMLButtonElement).style.padding = '2px 4px';
+                    (del).style.background = 'none';
+                    (del).style.boxShadow = 'none';
+                    (del).style.border = 'none';
+                    (del).style.padding = '2px 4px';
                     setIcon(del, 'x');
                     del.setAttr('draggable','false');
                     del.onmousedown = (e) => { e.stopPropagation(); };
@@ -3442,11 +3431,11 @@ class DaybleSettingTab extends PluginSettingTab {
                         const prevBuiltArr = (this.plugin.settings.swatches || []).map(s => ({ name: s.name, color: s.color, textColor: s.textColor }));
                         const newBuilt: { name: string, color: string, textColor?: string }[] = [];
                         const newCustom: { name: string, color: string, textColor?: string }[] = [];
-                        colorsListTop.querySelectorAll('div[draggable="true"]').forEach((w: any) => {
+                        colorsListTop.querySelectorAll('div[draggable="true"]').forEach((w: unknown) => {
                             const src = (w as HTMLElement).dataset.source;
                             const nm = (w as HTMLElement).dataset.name || '';
-                            const bg = (w.querySelectorAll('input[type="color"]')[1] as HTMLInputElement).value;
-                            const tx = (w.querySelectorAll('input[type="color"]')[0] as HTMLInputElement).value;
+                            const bg = ((w as any).querySelectorAll('input[type="color"]')[1] as HTMLInputElement).value;
+                            const tx = ((w as any).querySelectorAll('input[type="color"]')[0] as HTMLInputElement).value;
                             if (src === 'built') newBuilt.push({ name: nm, color: bg, textColor: tx });
                             else newCustom.push({ name: '', color: bg, textColor: tx });
                         });
@@ -3514,14 +3503,14 @@ class DaybleSettingTab extends PluginSettingTab {
                 // Remove the left-side setting title element
                 row.settingEl.querySelector('.setting-item-name')?.remove();
                 row.settingEl.style.display = 'flex';
-                (row.settingEl as HTMLElement).style.gridTemplateColumns = 'unset';
+                (row.settingEl).style.gridTemplateColumns = 'unset';
                 row.controlEl.style.display = 'flex';
-                (row.controlEl as HTMLElement).style.gap = '8px';
+                (row.controlEl).style.gap = '8px';
                 row.controlEl.style.flex = '1';
                 row.settingEl.classList.add('db-category-row');
                 // Icon button
                 row.addButton(b => {
-                    (b.buttonEl as HTMLButtonElement).classList.add('dayble-btn','dayble-icon-add','db-btn');
+                    (b.buttonEl).classList.add('dayble-btn','dayble-icon-add','db-btn');
                     setIcon(b.buttonEl, category.icon ?? 'plus');
                     b.onClick(() => {
                         const picker = new IconPickerModal(this.app, async (icon) => {
@@ -3541,7 +3530,7 @@ class DaybleSettingTab extends PluginSettingTab {
                     });
                 });
                 // Category name input
-                row.addText(t => { t.setValue(category.name).onChange(v => { category.name = v; }); (t.inputEl as HTMLInputElement).classList.add('db-input','db-category-name'); });
+                row.addText(t => { t.setValue(category.name).onChange(v => { category.name = v; }); (t.inputEl).classList.add('db-input','db-category-name'); });
                 // Text color first
                 row.addColorPicker(cp => { cp.setValue(category.textColor).onChange(v => { 
                     category.textColor = v; 
@@ -3580,7 +3569,7 @@ class DaybleSettingTab extends PluginSettingTab {
                         const view = this.plugin.getCalendarView();
                         if (view) view.render();
                     });
-                }); (d.selectEl as HTMLSelectElement).classList.add('db-select','db-effect'); });
+                }); (d.selectEl).classList.add('db-select','db-effect'); });
                 row.addDropdown(d => { d.addOptions({
                     '': 'No animation',
                     'move-horizontally': 'Move horizontally',
@@ -3596,7 +3585,7 @@ class DaybleSettingTab extends PluginSettingTab {
                         const view = this.plugin.getCalendarView();
                         if (view) view.render();
                     });
-                }); (d.selectEl as HTMLSelectElement).classList.add('db-select','db-animation'); });
+                }); (d.selectEl).classList.add('db-select','db-animation'); });
                 row.addDropdown(d => { d.addOptions({
                     '': 'No animation',
                     'move-horizontally': 'Move horizontally',
@@ -3612,13 +3601,13 @@ class DaybleSettingTab extends PluginSettingTab {
                         const view = this.plugin.getCalendarView();
                         if (view) view.render();
                     });
-                }); (d.selectEl as HTMLSelectElement).classList.add('db-select','db-animation2'); });
+                }); (d.selectEl).classList.add('db-select','db-animation2'); });
                 row.addExtraButton(btn => { btn.setIcon('x').setTooltip('Delete').onClick(() => { this.plugin.settings.eventCategories = (this.plugin.settings.eventCategories || []).filter(c => c.id !== category.id); renderRules(); }); (btn as any).extraButtonEl?.classList?.add('db-btn','db-delete-category'); });
             });
         };
         new Setting(containerEl).addButton(b => {
-            b.setButtonText('+ Add category');
-            (b.buttonEl as HTMLButtonElement).addClass('mod-cta');
+            b.setButtonText('+ add category');
+            (b.buttonEl).addClass('mod-cta');
             b.onClick(async () => {
                 const category: EventCategory = { id: randomId(), name: 'New category', bgColor: '#8392a4', textColor: '#ffffff', effect: 'embossed', animation: '', animation2: '', icon: undefined };
                 this.plugin.settings.eventCategories = (this.plugin.settings.eventCategories || []).concat(category);
@@ -3642,8 +3631,8 @@ class DaybleSettingTab extends PluginSettingTab {
                 row.settingEl.querySelector('.setting-item-name')?.remove();
                 row.settingEl.classList.add('db-triggers-row');
                 row.controlEl.style.display = 'flex';
-                (row.controlEl as HTMLElement).style.gap = '8px';
-                (row.controlEl as HTMLElement).style.flex = '1';
+                (row.controlEl).style.gap = '8px';
+                (row.controlEl).style.flex = '1';
                 row.addText(t => {
                     t.setPlaceholder('Text in title or description');
                     t.setValue(tr.pattern);
@@ -3652,8 +3641,8 @@ class DaybleSettingTab extends PluginSettingTab {
                         this.plugin.settings.triggers = items;
                         await this.plugin.saveSettings();
                     });
-                    (t.inputEl as HTMLInputElement).classList.add('db-input');
-                    (t.inputEl as HTMLInputElement).style.flex = '1';
+                    (t.inputEl).classList.add('db-input');
+                    (t.inputEl).style.flex = '1';
                 });
                 row.addDropdown(d => {
                     const cats = this.plugin.settings.eventCategories || [];
@@ -3667,8 +3656,8 @@ class DaybleSettingTab extends PluginSettingTab {
                         const view = this.plugin.getCalendarView();
                         view?.render();
                     });
-                    (d.selectEl as HTMLSelectElement).classList.add('db-select');
-                    (d.selectEl as HTMLSelectElement).style.width = '90px';
+                    (d.selectEl).classList.add('db-select');
+                    (d.selectEl).style.width = '90px';
                 });
                 row.addDropdown(d => {
                     d.addOption('', 'Default color');
@@ -3689,7 +3678,7 @@ class DaybleSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                         applyColorStyles();
                     });
-                    (d.selectEl as HTMLSelectElement).classList.add('db-select');
+                    (d.selectEl).classList.add('db-select');
                     
                     // Style the dropdown
                     const applyColorStyles = () => {
@@ -3698,11 +3687,11 @@ class DaybleSettingTab extends PluginSettingTab {
                         
                         // Style the select element itself
                         if (selectedSwatch) {
-                            (d.selectEl as HTMLSelectElement).style.backgroundColor = selectedSwatch.color;
-                            (d.selectEl as HTMLSelectElement).style.color = selectedSwatch.textColor || '#000';
+                            (d.selectEl).style.backgroundColor = selectedSwatch.color;
+                            (d.selectEl).style.color = selectedSwatch.textColor || '#000';
                         } else {
-                            (d.selectEl as HTMLSelectElement).style.backgroundColor = '';
-                            (d.selectEl as HTMLSelectElement).style.color = '';
+                            (d.selectEl).style.backgroundColor = '';
+                            (d.selectEl).style.color = '';
                         }
                         
                         // Style the options
@@ -3718,7 +3707,7 @@ class DaybleSettingTab extends PluginSettingTab {
                     // Apply initially
                     applyColorStyles();
                     
-                    (d.selectEl as HTMLSelectElement).style.maxWidth = '120px';
+                    (d.selectEl).style.maxWidth = '120px';
                 });
                 row.addExtraButton(btn => {
                     btn.setIcon('x').setTooltip('Delete').onClick(async () => {
@@ -3730,7 +3719,7 @@ class DaybleSettingTab extends PluginSettingTab {
                 });
             });
             new Setting(triggersWrap).addButton(b => {
-                b.setButtonText('+ Add trigger').onClick(async () => {
+                b.setButtonText('+ add trigger').onClick(async () => {
                     const items2 = (this.plugin.settings.triggers || []).slice();
                     items2.push({ pattern: '', categoryId: '' });
                     this.plugin.settings.triggers = items2;
@@ -3769,11 +3758,7 @@ class DaybleSettingTab extends PluginSettingTab {
             // Store the old swatches to detect changes
             const oldBuilt = (this.plugin.settings.swatches || []).map(s => ({ name: s.name, color: s.color, source: 'built' as const }));
             const oldCustoms = (this.plugin.settings.userCustomSwatches || []).map(s => ({ name: s.name || '', color: s.color || '#ff0000', source: 'custom' as const }));
-            const oldCombined: { name: string, color: string, source: 'built'|'custom' }[] = [...oldBuilt, ...oldCustoms];
-            
-            const built = oldBuilt;
-            const customs = oldCustoms;
-            const combined = oldCombined;
+            const combined: { name: string, color: string, source: 'built'|'custom' }[] = [...oldBuilt, ...oldCustoms];
             
             const makeItem = (entry: { name: string, color: string, source: 'built'|'custom' }, idx: number) => {
                 const wrap = row.createDiv();
@@ -3789,10 +3774,10 @@ class DaybleSettingTab extends PluginSettingTab {
                 input.onchange = async () => {
                     const newBuilt: { name: string, color: string }[] = [];
                     const newCustom: { name: string, color: string }[] = [];
-                    row.querySelectorAll('div[draggable="true"]').forEach((w: any) => {
+                    row.querySelectorAll('div[draggable="true"]').forEach((w: unknown) => {
                         const src = (w as HTMLElement).dataset.source;
                         const nm = (w as HTMLElement).dataset.name || '';
-                        const val = (w.querySelector('input[type="color"]') as HTMLInputElement).value;
+                        const val = ((w as HTMLElement).querySelector('input[type="color"]') as HTMLInputElement).value;
                         if (src === 'built') newBuilt.push({ name: nm, color: val });
                         else newCustom.push({ name: '', color: val });
                     });
@@ -3840,10 +3825,10 @@ class DaybleSettingTab extends PluginSettingTab {
                     renderTriggers();
                 };
                 const del = wrap.createEl('button', { cls: 'dayble-btn db-color-del' });
-                (del as HTMLButtonElement).style.background = 'none';
-                (del as HTMLButtonElement).style.boxShadow = 'none';
-                (del as HTMLButtonElement).style.border = 'none';
-                (del as HTMLButtonElement).style.padding = '2px 4px';
+                (del).style.background = 'none';
+                (del).style.boxShadow = 'none';
+                (del).style.border = 'none';
+                (del).style.padding = '2px 4px';
                 setIcon(del, 'x');
                 del.setAttr('draggable','false');
                 del.onmousedown = (e) => { e.stopPropagation(); };
@@ -3853,10 +3838,10 @@ class DaybleSettingTab extends PluginSettingTab {
                         wrap.remove();
                         const newBuilt: { name: string, color: string }[] = [];
                         const newCustom: { name: string, color: string }[] = [];
-                        row.querySelectorAll('div[draggable="true"]').forEach((w: any) => {
+                        row.querySelectorAll('div[draggable="true"]').forEach((w: unknown) => {
                             const src = (w as HTMLElement).dataset.source;
                             const nm = (w as HTMLElement).dataset.name || '';
-                            const val = (w.querySelector('input[type="color"]') as HTMLInputElement).value;
+                            const val = ((w as any).querySelector('input[type="color"]') as HTMLInputElement).value;
                             if (src === 'built') newBuilt.push({ name: nm, color: val });
                             else newCustom.push({ name: '', color: val });
                         });
@@ -3868,12 +3853,12 @@ class DaybleSettingTab extends PluginSettingTab {
                 };
                 wrap.ondragstart = e => {
                     e.dataTransfer?.setData('text/plain', 'drag');
-                    (e.dataTransfer as DataTransfer).effectAllowed = 'move';
+                    (e.dataTransfer).effectAllowed = 'move';
                 };
                 row.ondragover = e => { e.preventDefault(); };
                 row.ondrop = async e => {
                     e.preventDefault();
-                    const target = (e.target as HTMLElement).closest('div[draggable="true"]') as HTMLElement | null;
+                    const target = (e.target as HTMLElement).closest('div[draggable="true"]');
                     if (!target || target.parentElement !== row) return;
                     const rect = target.getBoundingClientRect();
                     const before = (e.clientX - rect.left) < rect.width / 2;
@@ -3881,10 +3866,10 @@ class DaybleSettingTab extends PluginSettingTab {
                     else target.after(wrap);
                     const newBuilt: { name: string, color: string }[] = [];
                     const newCustom: { name: string, color: string }[] = [];
-                    row.querySelectorAll('div[draggable="true"]').forEach((w: any) => {
+                    row.querySelectorAll('div[draggable="true"]').forEach((w: unknown) => {
                         const src = (w as HTMLElement).dataset.source;
                         const nm = (w as HTMLElement).dataset.name || '';
-                        const val = (w.querySelector('input[type="color"]') as HTMLInputElement).value;
+                        const val = ((w as HTMLElement).querySelector('input[type="color"]') as HTMLInputElement).value;
                         if (src === 'built') newBuilt.push({ name: nm, color: val });
                         else newCustom.push({ name: '', color: val });
                     });
@@ -3910,7 +3895,7 @@ class DaybleSettingTab extends PluginSettingTab {
                 });
             });
             controlsBottom.addButton(b => {
-                b.setButtonText('+ Add color').onClick(async () => {
+                b.setButtonText('+ add color').onClick(async () => {
                     const newCustom = (this.plugin.settings.userCustomSwatches || []).slice();
                     newCustom.push({ name: '', color: '#ff0000' });
                     this.plugin.settings.userCustomSwatches = newCustom;
@@ -3918,7 +3903,7 @@ class DaybleSettingTab extends PluginSettingTab {
                     renderColors();
                     renderTriggers();
                 });
-                (b.buttonEl as HTMLButtonElement).style.marginLeft = 'auto';
+                (b.buttonEl).style.marginLeft = 'auto';
             });
         };
         ;
@@ -3933,11 +3918,11 @@ class DaybleSettingTab extends PluginSettingTab {
                         const vaultName = (this.app.vault as any)?.getName?.() 
                             || (this.app.vault.adapter as any)?.basePath?.split(/[\\/]/).filter(Boolean).pop() 
                             || 'Vault';
-                        const exportObj: any = {
+                        const exportObj: unknown = {
                             vaultName,
                             exportedAt: new Date().toISOString(),
                             settings: this.plugin.settings,
-                            months: [] as Array<{ file: string, data: any }>
+                            months: [] as Array<{ file: string, data: unknown }>
                         };
                         const folder = this.plugin.settings.entriesFolder || 'DaybleCalendar';
                         let files: string[] = [];
@@ -3951,7 +3936,7 @@ class DaybleSettingTab extends PluginSettingTab {
                             try {
                                 const txt = await this.app.vault.adapter.read(f);
                                 const data = JSON.parse(txt);
-                                exportObj.months.push({ file: f, data });
+                                (exportObj as any).months.push({ file: f, data });
                             } catch (e) {}
                         }
                         
@@ -3995,7 +3980,7 @@ class DaybleSettingTab extends PluginSettingTab {
                             }
                             if (Array.isArray(obj?.months)) {
                                 const folder = this.plugin.settings.entriesFolder || 'DaybleCalendar';
-                                try { await this.app.vault.adapter.stat(folder); } catch { try { await this.app.vault.createFolder(folder); } catch {} }
+                                try { await this.app.vault.adapter.stat(folder); } catch { try { await this.app.vault.createFolder(folder); } catch (e) { console.debug('[Dayble] Create folder:', e); } }
                                 for (const m of obj.months) {
                                     const path = typeof m.file === 'string' ? m.file : `${folder}/Imported_${Date.now()}.json`;
                                     await this.app.vault.adapter.write(path, JSON.stringify(m.data ?? {}, null, 2));
