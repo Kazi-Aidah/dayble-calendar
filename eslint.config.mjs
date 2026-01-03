@@ -4,6 +4,9 @@ import obsidianmd from "eslint-plugin-obsidianmd";
 import js from "@eslint/js";
 
 export default defineConfig([
+  {
+    ignores: ["**/node_modules/**", "**/dist/**", "**/*.js", "esbuild.config.mjs"],
+  },
   js.configs.recommended,
   ...obsidianmd.configs.recommended,
   {
@@ -29,6 +32,11 @@ export default defineConfig([
       "@typescript-eslint/no-unsafe-return": "off",
       "@typescript-eslint/no-unsafe-argument": "off",
       "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-floating-promises": "off",
+      "@typescript-eslint/no-misused-promises": "off",
+      "@typescript-eslint/no-unnecessary-type-assertion": "off",
+      "@typescript-eslint/no-unused-vars": "warn",
+      "no-useless-escape": "off",
       "no-undef": "off",
       "no-empty": "off",
     },

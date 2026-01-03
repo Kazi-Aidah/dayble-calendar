@@ -89,14 +89,14 @@
     display: flex;
     flex: 1;
     gap: 0px;
-    overflow: auto;
+    overflow: hidden;
 }
 
 .dayble-calendar {
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: auto;
+    overflow: hidden;
 }
 
 /* Sidebar/holder */
@@ -241,7 +241,7 @@
     border-radius: 8px;
     background: var(--background-primary);
     margin-top: -6px;
-    overflow: visible;
+    overflow: auto;
 }
 
 .dayble-weekdays {
@@ -458,9 +458,9 @@
     order: -1;
 }
 
-.dayble-root .status-bar {
+/* .dayble-root .status-bar {
     display: none !important;
-}
+} */
 
 .dayble-long-event {
     background: var(--background-primary);
@@ -1278,32 +1278,33 @@ margin-top: 6px !important;
    display: none !important;
 }
 
-/* MOBILE LAYOUT */
-.dayble-event {
-   min-width: 150px;
+/* New classes added for standardization */
+.dayble-icon-select { width: 90px; }
+.dayble-trigger-input { flex: 1; }
+.dayble-inline-flex { display: inline-flex; }
+.dayble-textarea-auto { height: auto; }
+.dayble-absolute-box { position: absolute; box-sizing: border-box; }
+.dayble-suggestion-container { position: fixed; background-color: var(--background-primary); border: 1px solid var(--background-modifier-border); border-radius: 4px; max-height: 180px; overflow-y: auto; z-index: 10000; min-width: 200px; }
+.dayble-category-label { text-align: center; }
+.dayble-time-el-style { min-width: 60px; font-weight: 600; }
+.dayble-drag-image-style { position: fixed; top: -10000px; left: -10000px; opacity: 1; box-shadow: none; box-sizing: border-box; transform: none; }
+.dayble-flex-center-gap { display: flex; align-items: center; gap: 6px; }
+.dayble-flex-gap-8 { display: flex; gap: 8px; flex: 1; }
+.dayble-settings-row-wrap { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; }
+.dayble-drag-ghost { position: absolute; top: -1000px; left: -1000px; z-index: 10000; opacity: 0.8; pointer-events: none; }
+.dayble-add-btn-full { width: 100%; padding: 10px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: auto; }
+.dayble-no-border-top { border-top: none !important; }
+.dayble-ml-auto {
+    margin-left: auto !important;
 }
 
-@media (max-width: 720px) {
-   .dayble-header {
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      padding: 12px;
-   }
-   .dayble-month-title {
-      position: static;
-      left: auto;
-      transform: none;
-      margin: 0 0 8px 0;
-      padding: 4px 0;
-      white-space: normal;
-   }
-   .dayble-nav-left,
-   .dayble-nav-right {
-      margin-left: 0;
-      width: 100%;
-      justify-content: center;
-      gap: 6px;
-      flex-wrap: wrap;
-   }
+.dayble-select-max-width {
+    max-width: 120px;
+}
+
+.dayble-color-del-btn {
+    background: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 2px 4px !important;
 }
