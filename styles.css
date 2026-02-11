@@ -508,7 +508,7 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
 .dayble-focus-grid-container {
     display: flex;
     gap: 20px;
-    padding: 10px;
+    /* padding: 10px; */
     position: relative; /* Add this to make it the offset parent for overlay */
 }
 
@@ -1403,7 +1403,45 @@ margin-top: 6px !important;
     opacity: 0.3;
     pointer-events: none;
 }
-.dayble-focus-cell.dayble-selected { background: var(--background-primary-alt); outline: 2px dashed var(--color-accent); outline-offset: -2px; }
+.dayble-focus-cell.dayble-selected { background: var(--background-primary-alt); }
+.dayble-focus-cell { position: relative; }
+.dayble-focus-cell::before, .dayble-focus-cell::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 50%;
+    pointer-events: none;
+    box-sizing: border-box;
+}
+.dayble-focus-cell::before { top: 0; }
+.dayble-focus-cell::after { bottom: 0; }
+.dayble-focus-cell.sel-top::before { outline: 1px dashed var(--interactive-accent); outline-offset: -1px; z-index: 1; opacity: 0.3; }
+.dayble-focus-cell.sel-bottom::after { outline: 1px dashed var(--interactive-accent); outline-offset: -1px; z-index: 1; opacity: 0.3; }
+.dayble-focus-selection-mirror {
+    background-color: hsla(var(--interactive-accent-hsl), 0.2) !important;
+    border: 2px solid var(--interactive-accent) !important;
+    color: var(--text-normal) !important;
+    font-weight: bold;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 0.85em;
+    z-index: 30;
+    opacity: 1 !important; /* Ensure the element itself is fully opaque so children are visible */
+}
+.dayble-focus-selection-mirror .dayble-focus-event-inner {
+    opacity: 1 !important;
+    color: var(--text-normal) !important;
+}
+.dayble-focus-selection-mirror .dayble-selection-duration {
+    font-size: 0.8em;
+    opacity: 1 !important;
+    color: var(--text-muted) !important;
+    font-weight: normal;
+}
 .dayble-focus-event { margin: 4px 6px; padding: 4px 6px; border: 1px solid var(--background-modifier-border); border-radius: 4px; font-size: 0.9em; line-height: 1.2; }
 .dayble-focus-event-span { grid-column: 2; margin: 2px 6px; padding: 6px 8px; border: 1px solid var(--background-modifier-border); border-radius: 6px; box-sizing: border-box; align-self: stretch; display: flex; align-items: center; }
 .dayble-focus-overlay {

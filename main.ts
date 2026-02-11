@@ -2553,61 +2553,108 @@ class TodayModal extends Modal {
             gridContainer.querySelectorAll('.dayble-focus-cell.drop-target').forEach(el => el.removeClass('drop-target'));
         };
         // snapping via pxPer15 computed per dragover/drop
-        const sel: { active: boolean, start: number, end: number, start15?: number, end15?: number } = { active: false, start: -1, end: -1 };
-        const clearSelection = () => { 
-            gridContainer.querySelectorAll('.dayble-focus-cell').forEach(el => el.removeClass('dayble-selected')); 
+        const sel: { active: boolean, start15?: number, end15?: number } = { active: false };
+        const clearSelection = (resetData = true) => { 
+            gridContainer.querySelectorAll('.dayble-focus-cell').forEach(el => {
+                el.removeClass('sel-top');
+                el.removeClass('sel-bottom');
+            });
+            if (resetData) {
+                sel.active = false;
+                sel.start15 = undefined;
+                sel.end15 = undefined;
+            }
             if (selectionMirror) { selectionMirror.remove(); selectionMirror = null; }
         };
         const applySelection = () => {
-            if (sel.active && sel.start >= 0 && sel.end >= 0) {
-                const s = Math.min(sel.start, sel.end);
-                const e = Math.max(sel.start, sel.end);
+            if (sel.active && typeof sel.start15 === 'number' && typeof sel.end15 === 'number') {
+                const s15 = Math.min(sel.start15, sel.end15);
+                const e15 = Math.max(sel.start15, sel.end15);
                 
-                // Visual Highlight on cells (30-min blocks)
-                for (let i = s; i <= e; i++) {
-                    const cell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${i}"]`) as HTMLElement;
-                    if (cell) cell.addClass('dayble-selected');
+                // Visual Highlight on cells (15-min precision)
+                for (let i = s15; i <= e15; i++) {
+                    const slotIdx = Math.floor(i / 2);
+                    const cell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${slotIdx}"]`) as HTMLElement;
+                    if (cell) {
+                        if (i % 2 === 0) cell.addClass('sel-top');
+                        else cell.addClass('sel-bottom');
+                    }
                 }
 
                 // Selection Mirror (Ghost Event) with 15-min precision
-                if (typeof sel.start15 === 'number' && typeof sel.end15 === 'number') {
-                    const s15 = Math.min(sel.start15, sel.end15);
-                    const e15 = Math.max(sel.start15, sel.end15);
+                const startSlotIdx = Math.floor(s15 / 2);
+                const endSlotIdx = Math.floor(e15 / 2);
+                
+                const startCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${startSlotIdx}"]`) as HTMLElement;
+                const endCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${endSlotIdx}"]`) as HTMLElement;
+                
+                if (startCell && endCell) {
+                    const gRect = gridContainer.getBoundingClientRect();
+                    const sRect = startCell.getBoundingClientRect();
                     
-                    // Find start cell and end cell for coordinates
-                    // s15 / 2 gives the 30-min slot index
-                    const startSlotIdx = Math.floor(s15 / 2);
-                    const endSlotIdx = Math.floor(e15 / 2);
+                    const rowHeight = startCell.offsetHeight || 60;
+                    const pxPer15 = rowHeight / 2;
                     
-                    const startCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${startSlotIdx}"]`) as HTMLElement;
-                    const endCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${endSlotIdx}"]`) as HTMLElement;
-                    
-                    if (startCell && endCell) {
-                        const gRect = gridContainer.getBoundingClientRect();
-                        const sRect = startCell.getBoundingClientRect();
-                        const eRect = endCell.getBoundingClientRect();
+                    if (!selectionMirror) {
+                        selectionMirror = document.createElement('div');
+                        selectionMirror.className = 'dayble-focus-event-abs dayble-focus-selection-mirror';
+                        overlay.appendChild(selectionMirror);
                         
-                        const rowHeight = startCell.offsetHeight || 60;
-                        const pxPer15 = rowHeight / 2;
-                        
-                        if (!selectionMirror) {
-                            selectionMirror = document.createElement('div');
-                            selectionMirror.className = 'dayble-focus-event-abs dayble-focus-selection-mirror';
-                            selectionMirror.innerHTML = '<div class="dayble-focus-event-inner">New Event</div>';
-                            overlay.appendChild(selectionMirror);
-                        }
-                        
-                        // Positioning relative to gridContainer (which is now the offset parent of overlay)
-                        const left = sRect.left - gRect.left;
-                        const top = (sRect.top - gRect.top) + (s15 % 2 === 0 ? 0 : pxPer15);
-                        const width = sRect.width;
-                        const height = ((e15 - s15) + 1) * pxPer15;
-                        
-                        selectionMirror.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
-                        selectionMirror.style.setProperty('--focus-item-top', `${Math.round(top)}px`);
-                        selectionMirror.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
-                        selectionMirror.style.setProperty('--focus-item-height', `${Math.round(height)}px`);
+                        // Handle mouseup/click on the mirror itself since it has pointer-events: auto
+                        selectionMirror.onmouseup = async (e) => {
+                            if (!sel.active) return;
+                            e.stopPropagation();
+                            sel.active = false;
+                            await finalizeSelection();
+                            clearSelection();
+                        };
+                        selectionMirror.onclick = (e) => {
+                            e.stopPropagation();
+                        };
                     }
+                    
+                    const left = sRect.left - gRect.left;
+                    const top = (sRect.top - gRect.top) + (s15 % 2 === 0 ? 0 : pxPer15);
+                    const width = sRect.width;
+                    const height = Math.max(pxPer15, ((e15 - s15) + 1) * pxPer15);
+                    
+                    selectionMirror.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
+                    selectionMirror.style.setProperty('--focus-item-top', `${Math.round(top)}px`);
+                    selectionMirror.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
+                    selectionMirror.style.setProperty('--focus-item-height', `${Math.round(height)}px`);
+                    
+                    // Show time range in the mirror
+                    const sTotal = s15 * 15;
+                    const eTotal = (e15 + 1) * 15;
+                    const sh_m = Math.floor(sTotal / 60);
+                    const sm_m = sTotal % 60;
+                    const eh_m = Math.floor(eTotal / 60);
+                    const em_m = eTotal % 60;
+                    const formatHM = (h: number, m: number) => {
+                        const ampm = h >= 12 ? 'pm' : 'am';
+                        return `${h % 12 || 12}:${m.toString().padStart(2, '0')}${ampm}`;
+                    };
+
+                    const durationTotalMin = (e15 - s15 + 1) * 15;
+                    let durationText = '';
+                    if (durationTotalMin < 60) {
+                        durationText = `${durationTotalMin} mins`;
+                    } else {
+                        const h = Math.floor(durationTotalMin / 60);
+                        const m = durationTotalMin % 60;
+                        if (m === 0) {
+                            durationText = `${h} hour${h > 1 ? 's' : ''}`;
+                        } else {
+                            durationText = `${h} hour${h > 1 ? 's' : ''} & ${m} min${m > 1 ? 's' : ''}`;
+                        }
+                    }
+
+                    selectionMirror.innerHTML = `
+                        <div class="dayble-focus-event-inner">
+                            <div>${formatHM(sh_m, sm_m)} - ${formatHM(eh_m, em_m)}</div>
+                            <div class="dayble-selection-duration">${durationText}</div>
+                        </div>
+                    `;
                 }
             }
         };
@@ -2642,18 +2689,17 @@ class TodayModal extends Modal {
             time.textContent = labelFor(slot.hour, slot.minute);
             const cell = row.createDiv({ cls: 'dayble-focus-cell' });
             cell.setAttr('data-idx', String(idx));
+            
             cell.onmousedown = (e) => {
                 if ((e as MouseEvent).button !== 0) return;
                 const info = getSlotInfo(e.clientX, e.clientY);
                 if (!info) return;
                 
                 sel.active = true; 
-                sel.start = idx; 
-                sel.end = idx;
                 sel.start15 = info.isAfternoon ? (24*2 + (info.n % 48)) : info.n;
                 sel.end15 = sel.start15;
 
-                clearSelection(); 
+                clearSelection(false); 
                 applySelection();
             };
             cell.onmouseover = (e) => {
@@ -2662,20 +2708,38 @@ class TodayModal extends Modal {
                 const info = getSlotInfo(e.clientX, e.clientY);
                 if (!info) return;
 
-                // Determine if we should snap to the first or second half of the slot
-                const snappedIdx = info.isSecondHalf ? idx + 0.5 : idx;
-                
-                // For selection we still use whole indices for highlighting cells,
-                // but the ghost event will use the 15-min snapping.
-                sel.end = idx; 
                 sel.end15 = info.isAfternoon ? (24*2 + (info.n % 48)) : info.n;
                 
-                clearSelection(); 
+                clearSelection(false); 
                 applySelection();
             };
-            cell.onmouseup = async () => {
+            cell.onmouseup = async (e) => {
                 if (!sel.active) return;
+                e.stopPropagation();
+                
+                const isSingleClick = (sel.start15 === sel.end15);
+                if (isSingleClick) {
+                    const info = getSlotInfo(e.clientX, e.clientY);
+                    if (info) {
+                        sel.start15 = info.isAfternoon ? (24*2 + (info.n % 48)) : info.n;
+                        sel.end15 = sel.start15;
+                    }
+                }
+
                 sel.active = false;
+                await finalizeSelection();
+                clearSelection();
+            };
+            // Use click only as a fallback for mobile or when mousedown/mouseup are interrupted
+            cell.onclick = async (e) => {
+                e.stopPropagation();
+                if (sel.start15 !== undefined) return; // already handled or in progress
+                
+                const info = getSlotInfo(e.clientX, e.clientY);
+                if (!info) return;
+                
+                sel.start15 = info.isAfternoon ? (24*2 + (info.n % 48)) : info.n;
+                sel.end15 = sel.start15;
                 await finalizeSelection();
                 clearSelection();
             };
@@ -2726,36 +2790,78 @@ class TodayModal extends Modal {
         // Render existing events for this date spanning above the grid
         try {
             const toIdx = (hh: number, mm: number) => (hh * 2) + (mm >= 30 ? 1 : 0);
+            const parseHM = (s: string) => {
+                const [h, m] = s.split(':').map(n => parseInt(n || '0', 10));
+                return (h * 60) + m;
+            };
+
             const dayEvents = (this.events || []).filter(e => (e.date === this.date) || (e.startDate === this.date));
-            dayEvents.forEach(ev => {
+            
+            // Overlap detection and column calculation
+            const processedEvents = dayEvents.map(ev => {
                 const range = String(ev.time || '');
                 const parts = range.split('-');
                 const startStr = parts[0] || '';
                 const endStr = parts[1] || '';
-                if (!startStr) return;
-                const [sh, sm] = startStr.split(':').map(n => parseInt(n || '0', 10));
+                if (!startStr) return null;
+                const startTotal = parseHM(startStr);
+                let endTotal = startTotal + 30;
+                if (endStr) endTotal = parseHM(endStr);
+                return { ev, startTotal, endTotal, column: 0, totalColumns: 1 };
+            }).filter(item => item !== null) as { ev: DaybleEvent, startTotal: number, endTotal: number, column: number, totalColumns: number }[];
+
+            // Simple greedy column assignment
+            processedEvents.sort((a, b) => a.startTotal - b.startTotal || (b.endTotal - b.startTotal) - (a.endTotal - a.startTotal));
+            
+            const columns: { endTotal: number }[][] = [];
+            processedEvents.forEach(item => {
+                let colIdx = columns.findIndex(col => col.every(placed => placed.endTotal <= item.startTotal));
+                if (colIdx === -1) {
+                    colIdx = columns.length;
+                    columns.push([]);
+                }
+                item.column = colIdx;
+                columns[colIdx].push(item);
+            });
+
+            // Calculate total columns for each overlapping group
+            processedEvents.forEach(item => {
+                const overlaps = processedEvents.filter(other => 
+                    (item.startTotal < other.endTotal && item.endTotal > other.startTotal)
+                );
+                const maxCol = Math.max(...overlaps.map(o => o.column));
+                overlaps.forEach(o => o.totalColumns = Math.max(o.totalColumns, maxCol + 1));
+            });
+
+            processedEvents.forEach(data => {
+                const { ev, startTotal, endTotal, column, totalColumns } = data;
+                const range = String(ev.time || '');
+                const parts = range.split('-');
+                const startStr = parts[0] || '';
+                const endStr = parts[1] || '';
+                
+                const sh = Math.floor(startTotal / 60);
+                const sm = startTotal % 60;
                 let startIdx = toIdx(sh, sm);
                 const startCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${startIdx}"]`) as HTMLElement;
                 if (!startCell) return;
                 const sRect = startCell.getBoundingClientRect();
                 const gRect = gridContainer.getBoundingClientRect();
-                const left = sRect.left - gRect.left;
-                const width = startCell.offsetWidth;
+                
                 const rowHeight = startCell.offsetHeight || 60;
                 const pxPer15 = rowHeight / 2;
                 const withinMin = (sm % 30);
                 
-                // Use actual cell rect for positioning relative to gridContainer
                 const top = (sRect.top - gRect.top) + ((withinMin % 30) / 15) * pxPer15;
-                
-                let durationMin = 30;
-                if (endStr) {
-                    const [eh, em] = endStr.split(':').map(n => parseInt(n || '0', 10));
-                    const startTotal = (sh * 60) + sm;
-                    const endTotal = (eh * 60) + em;
-                    durationMin = Math.max(15, endTotal - startTotal);
-                }
+                const durationMin = endTotal - startTotal;
                 const height = Math.max(pxPer15, Math.round((durationMin / 15) * pxPer15));
+
+                // Calculate width and left based on columns
+                const fullWidth = startCell.offsetWidth;
+                const colWidth = fullWidth / totalColumns;
+                const left = (sRect.left - gRect.left) + (column * colWidth);
+                const width = colWidth;
+
                 const item = this.view?.createEventItem(ev) || document.createElement('div');
                 item.addClass('dayble-focus-event-abs');
                 
@@ -2821,19 +2927,8 @@ class TodayModal extends Modal {
                         img.width = 1; img.height = 1;
                         dt.setDragImage(img, 0, 0);
                     } catch {}
-                    const parseHM = (s: string) => {
-                        const [h, m] = s.split(':').map(n => parseInt(n || '0', 10));
-                        return (h * 60) + m;
-                    };
-                    const parts = String(ev.time || '').split('-');
-                    const startStr = parts[0] || '';
-                    const endStr = parts[1] || '';
-                    const startMin = startStr ? parseHM(startStr) : 0;
-                    let duration = 30;
-                    if (endStr) {
-                        const endMin = parseHM(endStr);
-                        duration = Math.max(15, endMin - startMin);
-                    }
+                    const startMin = startTotal;
+                    let duration = durationMin;
                     this.dragDuration = duration;
                 };
                 item.ondragend = () => { if (dropIndicator) { dropIndicator.remove(); dropIndicator = null; } clearTargets(); item.removeClass('dragging'); this.dragId = undefined; this.dragDuration = undefined; this.dragEl = undefined; };
