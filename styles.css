@@ -42,6 +42,24 @@
     color: var(--text-muted);
 }
 
+.dayble-view-select {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--button-radius);
+    padding: 2px 4px;
+    font-size: 0.85em;
+    cursor: pointer;
+    margin-right: 4px;
+    text-align: center;
+    text-align-last: center;
+}
+
+.dayble-view-select:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
 .dayble-nav-left {
     display: flex;
     align-items: center;
@@ -62,6 +80,7 @@
 .dayble-title {
     font-weight: 600;
     color: var(--text-normal);
+    text-overflow: ellipsis;
 }
 
 /* Buttons */
@@ -338,6 +357,46 @@
     margin: 2px 0;
     border-radius: 1px;
     box-shadow: 0 0 4px var(--interactive-accent);
+}
+
+.dayble-agenda-date-header {
+    font-size: 0.9em;
+    color: var(--text-accent);
+    margin-top: 15px;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.dayble-agenda-container .dayble-event {
+    /* min-height: 28px; */
+    height: auto !important;
+    max-height: none !important;
+    align-items: flex-start;
+    display: flex !important;
+    flex-direction: column;
+    text-overflow: ellipsis;
+}
+
+.dayble-agenda-long-events {
+   min-height: 28px;
+}
+
+.dayble-agenda-container .dayble-event-title {
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+    max-height: none !important;
+    display: block !important;
+    width: 100%;
+}
+
+.dayble-agenda-container .dayble-event-desc {
+    display: none !important;
+}
+
+.dayble-agenda-long-events {
+    /* Special styling for multi-day events in agenda view */
 }
 
 .dayble-event {
@@ -1404,7 +1463,7 @@ margin-top: 6px !important;
 .dayble-scroll-x-hidden { overflow-x: hidden; }
 .dayble-overflow-visible { overflow: visible; }
 
-.dayble-focus-scroll { position: relative; max-height: 60vh; overflow-y: auto; overflow-x: hidden; border: 1px solid var(--background-modifier-border); border-radius: var(--input-radius); }
+.dayble-focus-scroll { position: relative; max-height: 100% !important; overflow-y: auto; overflow-x: hidden; border: 1px solid var(--background-modifier-border); border-radius: var(--input-radius); }
 .dayble-focus-grid { display: grid; grid-template-columns: auto 1fr; }
 .dayble-focus-row { display: contents; }
 .dayble-focus-time { text-align: center !important; padding: 6px 10px; border-bottom: 1px solid var(--background-modifier-border); border-right: 1px solid var(--background-modifier-border); color: var(--text-muted); }

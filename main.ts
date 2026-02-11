@@ -30,6 +30,7 @@ interface DaybleSettings {
     dayCellMaxHeight?: number;
     holderPlacement?: 'left' | 'right' | 'hidden';
     calendarWeekActive?: boolean;
+    calendarView?: 'Month' | 'Week' | 'Day' | 'Agenda';
     triggers?: { pattern: string, categoryId: string, color?: string, textColor?: string }[];
     weeklyNotesEnabled?: boolean;
     todayModalSplitView?: boolean;
@@ -62,6 +63,7 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     dayCellMaxHeight: 0,
     holderPlacement: 'left',
     calendarWeekActive: false,
+    calendarView: 'Month',
     weeklyNotesEnabled: false,
     todayModalSplitView: true,
     tooltipEnabled: true,
@@ -240,13 +242,13 @@ class DaybleCalendarView extends ItemView {
     currentTodayModal?: TodayModal;
     weekToggleBtn?: HTMLElement;
     weeklyNotesEl?: HTMLElement;
-    draggedEvent: HTMLElement | null = null;
-    saveTimeout: ReturnType<typeof setTimeout> | undefined;
-    isResizingWeeklyNotes = false;
-    weeklyNotesResizeStartY = 0;
-    weeklyNotesResizeStartHeight = 0;
-    _boundWeeklyNotesMouseMove?: (e: MouseEvent) => void;
-    _boundWeeklyNotesMouseUp?: (e: MouseEvent) => void;
+    dragId?: string;
+    dragDuration?: number;
+    dragEl?: HTMLElement;
+    dragOffsetY?: number;
+    lastScrollTop?: number;
+    dayModeTodayModal?: TodayModal;
+    _dayModeRO?: ResizeObserver;
 
     constructor(leaf: WorkspaceLeaf, plugin: DaybleCalendarPlugin) {
         super(leaf);
@@ -289,6 +291,7 @@ class DaybleCalendarView extends ItemView {
         setIcon(searchBtn, 'search');
         searchBtn.onclick = () => { const modal = new PromptSearchModal(this.app, this); void modal.open(); };
 
+        /*
         const weekToggle = document.createElement('button');
         weekToggle.className = 'dayble-btn dayble-header-buttons dayble-week-toggle';
         setIcon(weekToggle, 'calendar-range');
@@ -299,6 +302,35 @@ class DaybleCalendarView extends ItemView {
              void this.render();
         };
         this.weekToggleBtn = weekToggle;
+        */
+
+        const viewSelect = document.createElement('select');
+        viewSelect.className = 'dayble-view-select';
+        ['Month', 'Week', 'Day', 'Agenda'].forEach(mode => {
+            const opt = viewSelect.createEl('option', { text: mode, value: mode });
+            if (this.plugin.settings.calendarView === mode) opt.selected = true;
+        });
+        viewSelect.onchange = async () => {
+            this.plugin.settings.calendarView = viewSelect.value as any;
+            this.plugin.settings.calendarWeekActive = viewSelect.value === 'Week';
+            await this.plugin.saveSettings();
+            void this.render();
+        };
+
+        viewSelect.onwheel = async (e) => {
+            e.preventDefault();
+            const direction = e.deltaY > 0 ? 1 : -1;
+            const currentIndex = viewSelect.selectedIndex;
+            const newIndex = Math.max(0, Math.min(viewSelect.options.length - 1, currentIndex + direction));
+            
+            if (newIndex !== currentIndex) {
+                viewSelect.selectedIndex = newIndex;
+                this.plugin.settings.calendarView = viewSelect.value as any;
+                this.plugin.settings.calendarWeekActive = viewSelect.value === 'Week';
+                await this.plugin.saveSettings();
+                void this.render();
+            }
+        };
 
         this.monthTitleEl = this.headerEl.createEl('h1', { cls: 'dayble-month-title' });
         const right = this.headerEl.createDiv({ cls: 'dayble-nav-right' });
@@ -318,8 +350,9 @@ class DaybleCalendarView extends ItemView {
         left.appendChild(prevBtn);
         left.appendChild(todayBtn);
         left.appendChild(nextBtn);
-        left.appendChild(weekToggle);
+        // left.appendChild(weekToggle);
         
+        right.appendChild(viewSelect);
         right.appendChild(searchBtn);
         if (placement === 'right') right.appendChild(holderToggle);
         this.bodyEl = this.rootEl.createDiv({ cls: 'dayble-body' });
@@ -652,8 +685,13 @@ class DaybleCalendarView extends ItemView {
     }
 
     shiftMonth(delta: number) {
-        if (this.plugin.settings.calendarWeekActive) {
+        const view = this.plugin.settings.calendarView || (this.plugin.settings.calendarWeekActive ? 'Week' : 'Month');
+        if (view === 'Week') {
             this.currentDate.setDate(this.currentDate.getDate() + (delta * 7));
+        } else if (view === 'Day') {
+            this.currentDate.setDate(this.currentDate.getDate() + delta);
+        } else if (view === 'Agenda') {
+            this.currentDate.setDate(this.currentDate.getDate() + (delta * 7)); // Agenda shifts by week? Or maybe month? Let's say week.
         } else {
             const d = new Date(this.currentDate);
             d.setMonth(d.getMonth() + delta);
@@ -663,6 +701,10 @@ class DaybleCalendarView extends ItemView {
     }
 
     async render(titleEl?: HTMLElement) {
+        if (this._dayModeRO) {
+            this._dayModeRO.disconnect();
+            this._dayModeRO = undefined;
+        }
         if (this.rootEl) {
             this.rootEl.style.setProperty('--event-border-radius', `${this.plugin.settings.eventBorderRadius ?? 6}px`);
         }
@@ -672,11 +714,22 @@ class DaybleCalendarView extends ItemView {
         }
         // Reset grid style is handled by CSS classes and inline elements
 
-        if (this.plugin.settings.calendarWeekActive) {
+        const view = this.plugin.settings.calendarView || (this.plugin.settings.calendarWeekActive ? 'Week' : 'Month');
+
+        this.gridEl.removeClass('dayble-week-mode');
+        this.gridEl.removeClass('dayble-day-mode');
+        this.gridEl.removeClass('dayble-agenda-mode');
+
+        if (view === 'Week') {
             this.gridEl.addClass('dayble-week-mode');
             await this.renderWeekView(titleEl);
+        } else if (view === 'Day') {
+            this.gridEl.addClass('dayble-day-mode');
+            await this.renderDayView(titleEl);
+        } else if (view === 'Agenda') {
+            this.gridEl.addClass('dayble-agenda-mode');
+            await this.renderAgendaView(titleEl);
         } else {
-            this.gridEl.removeClass('dayble-week-mode');
             await this.renderMonthView(titleEl);
         }
     }
@@ -1316,6 +1369,147 @@ class DaybleCalendarView extends ItemView {
             });
             if (this._longRO && this.gridEl) this._longRO.observe(this.gridEl);
         }
+    }
+
+    async renderDayView(titleEl?: HTMLElement): Promise<void> {
+        this.gridEl.empty();
+        this.weekHeaderEl.empty();
+        
+        const d = new Date(this.currentDate);
+        const yy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const fullDate = `${yy}-${mm}-${dd}`;
+
+        const dayContainer = this.gridEl.createDiv({ cls: 'dayble-day-mode-container' });
+        dayContainer.style.gridColumn = '1 / span 7';
+        dayContainer.style.height = '100%';
+        dayContainer.style.display = 'flex';
+        dayContainer.style.flexDirection = 'column';
+
+        // Instantiate TodayModal but don't open it as a modal.
+        // We will use its contentEl directly.
+        const dayModeModal = new TodayModal(this.app, fullDate, this.events, this);
+        this.dayModeTodayModal = dayModeModal;
+        
+        // Mock contentEl to our dayContainer
+        // @ts-ignore - overriding internal contentEl for day mode
+        dayModeModal.contentEl = dayContainer;
+        // @ts-ignore - also need to mock modalEl for some CSS classes
+        dayModeModal.modalEl = dayContainer;
+        
+        dayModeModal.onOpen();
+
+        // Use ResizeObserver to keep events correctly positioned if the view size changes
+        const ro = new ResizeObserver(() => {
+            dayModeModal.renderEvents();
+        });
+        ro.observe(dayContainer);
+        // Store the observer on the view so we can disconnect it if needed, though mostly it will be cleaned up with the DOM
+        this._dayModeRO = ro;
+        
+        // Fix jumble by re-triggering the rendering part of TodayModal after layout is stable
+        requestAnimationFrame(() => {
+            dayModeModal.renderEvents();
+            
+            // Re-adjust scroller height just in case
+            const scroller = dayContainer.querySelector('.dayble-focus-scroll') as HTMLElement;
+            if (scroller) {
+                scroller.style.height = '100%';
+                scroller.style.flex = '1';
+            }
+        });
+        
+        // Remove the default title added by TodayModal if we want to use the main title
+        const modalTitle = dayContainer.querySelector('.dayble-modal-title');
+        if (modalTitle) modalTitle.remove();
+
+        const [year, month, dayNum] = fullDate.split('-').map(Number);
+        const dateObj = new Date(year, month - 1, dayNum);
+        const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        if (this.monthTitleEl) this.monthTitleEl.setText(`${monthNames[dateObj.getMonth()]} ${dayNum}, ${year}`);
+
+        // Adjust heights to be 100%
+        const scroller = dayContainer.querySelector('.dayble-focus-scroll') as HTMLElement;
+        if (scroller) {
+            scroller.style.height = '100%';
+            scroller.style.flex = '1';
+        }
+
+        await this.renderHolder();
+    }
+
+    async renderAgendaView(titleEl?: HTMLElement): Promise<void> {
+        const monthLabel = this.currentDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+        if (this.monthTitleEl) this.monthTitleEl.setText(`Agenda: ${monthLabel}`);
+        
+        this.gridEl.empty();
+        this.weekHeaderEl.empty();
+        
+        const agendaContainer = this.gridEl.createDiv({ cls: 'dayble-agenda-container' });
+        agendaContainer.style.gridColumn = '1 / span 7';
+        agendaContainer.style.display = 'flex';
+        agendaContainer.style.flexDirection = 'column';
+        agendaContainer.style.gap = '15px';
+        agendaContainer.style.padding = '15px';
+        agendaContainer.style.overflowY = 'auto';
+
+        // Filter and sort all events by their dates (including each day of multi-day events)
+        const dayMap = new Map<string, DaybleEvent[]>();
+        
+        this.events.forEach(ev => {
+            if (ev.date) {
+                if (!dayMap.has(ev.date)) dayMap.set(ev.date, []);
+                dayMap.get(ev.date)?.push(ev);
+            } else if (ev.startDate && ev.endDate) {
+                // For multi-day events, add them to each day in the range
+                let curr = new Date(ev.startDate + 'T00:00:00');
+                const end = new Date(ev.endDate + 'T00:00:00');
+                while (curr <= end) {
+                    const dStr = curr.toISOString().split('T')[0];
+                    if (!dayMap.has(dStr)) dayMap.set(dStr, []);
+                    dayMap.get(dStr)?.push(ev);
+                    curr.setDate(curr.getDate() + 1);
+                }
+            }
+        });
+
+        const sortedDates = Array.from(dayMap.keys()).sort();
+
+        if (sortedDates.length === 0) {
+            agendaContainer.createDiv({ text: 'No events scheduled.', cls: 'dayble-no-events' });
+        } else {
+            sortedDates.forEach(dateStr => {
+                const dateHeader = agendaContainer.createDiv({ cls: 'dayble-agenda-date-header' });
+                dateHeader.style.fontWeight = 'bold';
+                dateHeader.style.borderBottom = '1px solid var(--background-modifier-border)';
+                dateHeader.style.paddingBottom = '5px';
+                dateHeader.style.marginTop = '10px';
+                dateHeader.setText(new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }));
+
+                const dayEvents = dayMap.get(dateStr) || [];
+                // Sort day events: multi-day first, then by time
+                dayEvents.sort((a, b) => {
+                    const isMultiA = a.startDate && a.endDate && a.startDate !== a.endDate ? 0 : 1;
+                    const isMultiB = b.startDate && b.endDate && b.startDate !== b.endDate ? 0 : 1;
+                    if (isMultiA !== isMultiB) return isMultiA - isMultiB;
+                    return (a.time || '').localeCompare(b.time || '');
+                });
+
+                dayEvents.forEach(ev => {
+                    const item = agendaContainer.appendChild(this.createEventItem(ev));
+                    const itemEl = item as HTMLElement;
+                    itemEl.style.width = '100%';
+                    
+                    // Add special class for long (multi-day) events
+                    if (ev.startDate && ev.endDate && ev.startDate !== ev.endDate) {
+                        itemEl.addClass('dayble-agenda-long-events');
+                    }
+                });
+            });
+        }
+
+        await this.renderHolder();
     }
 
     startSelection(date: string, el: HTMLElement) {
@@ -2559,6 +2753,12 @@ class TodayModal extends Modal {
     dragOffsetY?: number;
     lastScrollTop?: number;
     
+    gridContainer: HTMLElement;
+    morningGrid: HTMLElement;
+    afternoonGrid: HTMLElement;
+    overlay: HTMLElement;
+    scroller: HTMLElement;
+
     constructor(app: App, date: string, events: DaybleEvent[], view?: DaybleCalendarView) {
         super(app);
         this.date = date;
@@ -2604,9 +2804,11 @@ class TodayModal extends Modal {
         }
 
         const scroller = c.createDiv({ cls: 'dayble-focus-scroll' });
+        this.scroller = scroller;
         scroller.style.setProperty('--event-border-radius', `${this.view?.plugin?.settings?.eventBorderRadius ?? 6}px`);
         // Container for grids
         const gridContainer = scroller.createDiv({ cls: 'dayble-focus-grid-container' });
+        this.gridContainer = gridContainer;
         let morningGrid: HTMLElement, afternoonGrid: HTMLElement;
         if (split) {
             morningGrid = gridContainer.createDiv({ cls: 'dayble-focus-grid morning' });
@@ -2615,8 +2817,11 @@ class TodayModal extends Modal {
             morningGrid = gridContainer.createDiv({ cls: 'dayble-focus-grid' });
             afternoonGrid = morningGrid; // both point to same in single mode
         }
+        this.morningGrid = morningGrid;
+        this.afternoonGrid = afternoonGrid;
         
         const overlay = gridContainer.createDiv({ cls: 'dayble-focus-overlay' });
+        this.overlay = overlay;
         let dropIndicator: HTMLElement | null = null;
         let selectionMirror: HTMLElement | null = null;
         
@@ -2918,131 +3123,6 @@ class TodayModal extends Modal {
             }
         }, { capture: true });
 
-        // Render existing events for this date spanning above the grid
-        try {
-            const toIdx = (hh: number, mm: number) => (hh * 2) + (mm >= 30 ? 1 : 0);
-            const parseHM = (s: string) => {
-                const [h, m] = s.split(':').map(n => parseInt(n || '0', 10));
-                return (h * 60) + m;
-            };
-
-            const dayEvents = (this.events || []).filter(e => (e.date === this.date) || (e.startDate === this.date));
-            
-            // Overlap detection and column calculation
-            const processedEvents = dayEvents.map(ev => {
-                const range = String(ev.time || '');
-                const parts = range.split('-');
-                const startStr = parts[0] || '';
-                const endStr = parts[1] || '';
-                if (!startStr) return null;
-                const startTotal = parseHM(startStr);
-                let endTotal = startTotal + 30;
-                if (endStr) endTotal = parseHM(endStr);
-                return { ev, startTotal, endTotal, column: 0, totalColumns: 1 };
-            }).filter(item => item !== null) as { ev: DaybleEvent, startTotal: number, endTotal: number, column: number, totalColumns: number }[];
-
-            // Simple greedy column assignment
-            processedEvents.sort((a, b) => a.startTotal - b.startTotal || (b.endTotal - b.startTotal) - (a.endTotal - a.startTotal));
-            
-            const columns: { endTotal: number }[][] = [];
-            processedEvents.forEach(item => {
-                let colIdx = columns.findIndex(col => col.every(placed => placed.endTotal <= item.startTotal));
-                if (colIdx === -1) {
-                    colIdx = columns.length;
-                    columns.push([]);
-                }
-                item.column = colIdx;
-                columns[colIdx].push(item);
-            });
-
-            // Calculate total columns for each overlapping group
-            processedEvents.forEach(item => {
-                const overlaps = processedEvents.filter(other => 
-                    (item.startTotal < other.endTotal && item.endTotal > other.startTotal)
-                );
-                const maxCol = Math.max(...overlaps.map(o => o.column));
-                overlaps.forEach(o => o.totalColumns = Math.max(o.totalColumns, maxCol + 1));
-            });
-
-            processedEvents.forEach(data => {
-                const { ev, startTotal, endTotal, column, totalColumns } = data;
-                const range = String(ev.time || '');
-                const parts = range.split('-');
-                const startStr = parts[0] || '';
-                const endStr = parts[1] || '';
-                
-                const sh = Math.floor(startTotal / 60);
-                const sm = startTotal % 60;
-                let startIdx = toIdx(sh, sm);
-                const startCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${startIdx}"]`) as HTMLElement;
-                if (!startCell) return;
-                const sRect = startCell.getBoundingClientRect();
-                const gRect = gridContainer.getBoundingClientRect();
-                
-                const rowHeight = startCell.offsetHeight || 60;
-                const pxPer15 = rowHeight / 2;
-                const withinMin = (sm % 30);
-                
-                const top = (sRect.top - gRect.top) + ((withinMin % 30) / 15) * pxPer15;
-                const durationMin = endTotal - startTotal;
-                const height = Math.max(pxPer15, Math.round((durationMin / 15) * pxPer15));
-
-                // Calculate width and left based on columns
-                const fullWidth = startCell.offsetWidth;
-                const colWidth = fullWidth / totalColumns;
-                const left = (sRect.left - gRect.left) + (column * colWidth);
-                const width = colWidth;
-
-                const item = this.view?.createEventItem(ev) || document.createElement('div');
-                item.addClass('dayble-focus-event-abs');
-                
-                // Override background-color to use the variable set by createEventItem
-                item.style.backgroundColor = 'var(--event-bg-color, var(--background-primary))';
-                item.style.color = 'var(--event-text-color, var(--text-normal))';
-                item.style.borderColor = 'var(--event-border-color, var(--background-modifier-border))';
-                
-                // For events <= 30 mins, make them compact
-                if (durationMin <= 30) {
-                    item.addClass('dayble-event-compact');
-                }
-
-                // Add rich tooltip
-                if (this.view && this.view.plugin.settings.tooltipEnabled) {
-                    setTooltip(item, this.view.getEventTooltipText(ev));
-                }
-
-                item.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
-                item.style.setProperty('--focus-item-top', `${Math.round(top)}px`);
-                item.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
-                item.style.setProperty('--focus-item-height', `${Math.round(height)}px`);
-                item.style.pointerEvents = 'auto'; // Explicitly enable for absolute elements
-                item.onclick = async (e) => { e.stopPropagation(); await this.view?.openEventModal(ev.id, ev.date || ev.startDate, ev.endDate); };
-                // Drag to reposition within today modal (15-min granularity)
-                item.ondragstart = (e) => {
-                    const dt = e.dataTransfer;
-                    if (!dt) return;
-                    this.dragId = ev.id;
-                    this.dragEl = item;
-                    
-                    // Capture EXACT distance from mouse to top of event
-                    const itemRect = item.getBoundingClientRect();
-                    this.dragOffsetY = e.clientY - itemRect.top;
-
-                    item.addClass('dragging');
-                    try {
-                        const img = new Image();
-                        img.width = 1; img.height = 1;
-                        dt.setDragImage(img, 0, 0);
-                    } catch {}
-                    const startMin = startTotal;
-                    let duration = durationMin;
-                    this.dragDuration = duration;
-                };
-                item.ondragend = () => { if (dropIndicator) { dropIndicator.remove(); dropIndicator = null; } clearTargets(); item.removeClass('dragging'); this.dragId = undefined; this.dragDuration = undefined; this.dragEl = undefined; };
-                overlay.appendChild(item);
-            });
-        } catch (e) { console.debug('[Dayble] Focus grid event render:', e); }
-        
         // Handle drop on scroller to reposition event by 15-min increments, with magnetic indicator
         scroller.ondragover = (e) => {
             e.preventDefault();
@@ -3157,6 +3237,144 @@ class TodayModal extends Modal {
             this.dragId = undefined; this.dragDuration = undefined; this.dragEl = undefined;
             clearTargets();
         };
+
+        this.renderEvents();
+    }
+
+    renderEvents() {
+        const gridContainer = this.gridContainer;
+        const overlay = this.overlay;
+        if (!gridContainer || !overlay) return;
+        overlay.empty();
+
+        // Render existing events for this date spanning above the grid
+        try {
+            const toIdx = (hh: number, mm: number) => (hh * 2) + (mm >= 30 ? 1 : 0);
+            const parseHM = (s: string) => {
+                const [h, m] = s.split(':').map(n => parseInt(n || '0', 10));
+                return (h * 60) + m;
+            };
+
+            const dayEvents = (this.events || []).filter(e => (e.date === this.date) || (e.startDate === this.date));
+            
+            // Overlap detection and column calculation
+            const processedEvents = dayEvents.map(ev => {
+                const range = String(ev.time || '');
+                const parts = range.split('-');
+                const startStr = parts[0] || '';
+                const endStr = parts[1] || '';
+                if (!startStr) return null;
+                const startTotal = parseHM(startStr);
+                let endTotal = startTotal + 30;
+                if (endStr) endTotal = parseHM(endStr);
+                return { ev, startTotal, endTotal, column: 0, totalColumns: 1 };
+            }).filter(item => item !== null) as { ev: DaybleEvent, startTotal: number, endTotal: number, column: number, totalColumns: number }[];
+
+            // Simple greedy column assignment
+            processedEvents.sort((a, b) => a.startTotal - b.startTotal || (b.endTotal - b.startTotal) - (a.endTotal - a.startTotal));
+            
+            const columns: { endTotal: number }[][] = [];
+            processedEvents.forEach(item => {
+                let colIdx = columns.findIndex(col => col.every(placed => placed.endTotal <= item.startTotal));
+                if (colIdx === -1) {
+                    colIdx = columns.length;
+                    columns.push([]);
+                }
+                item.column = colIdx;
+                columns[colIdx].push(item);
+            });
+
+            // Calculate total columns for each overlapping group
+            processedEvents.forEach(item => {
+                const overlaps = processedEvents.filter(other => 
+                    (item.startTotal < other.endTotal && item.endTotal > other.startTotal)
+                );
+                const maxCol = Math.max(...overlaps.map(o => o.column));
+                overlaps.forEach(o => o.totalColumns = Math.max(o.totalColumns, maxCol + 1));
+            });
+
+            processedEvents.forEach(data => {
+                const { ev, startTotal, endTotal, column, totalColumns } = data;
+                
+                const sh = Math.floor(startTotal / 60);
+                const sm = startTotal % 60;
+                let startIdx = toIdx(sh, sm);
+                const startCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${startIdx}"]`) as HTMLElement;
+                if (!startCell) return;
+                const sRect = startCell.getBoundingClientRect();
+                const gRect = gridContainer.getBoundingClientRect();
+                
+                const rowHeight = startCell.offsetHeight || 60;
+                const pxPer15 = rowHeight / 2;
+                const withinMin = (sm % 30);
+                
+                const top = (sRect.top - gRect.top) + (withinMin / 15) * pxPer15;
+                const durationMin = endTotal - startTotal;
+                const height = Math.max(pxPer15, Math.round((durationMin / 15) * pxPer15));
+
+                // Calculate width and left based on columns
+                const fullWidth = startCell.offsetWidth;
+                const colWidth = fullWidth / totalColumns;
+                const left = (sRect.left - gRect.left) + (column * colWidth);
+                const width = colWidth;
+
+                const item = this.view?.createEventItem(ev) || document.createElement('div');
+                item.addClass('dayble-focus-event-abs');
+                
+                // Override background-color to use the variable set by createEventItem
+                item.style.backgroundColor = 'var(--event-bg-color, var(--background-primary))';
+                item.style.color = 'var(--event-text-color, var(--text-normal))';
+                item.style.borderColor = 'var(--event-border-color, var(--background-modifier-border))';
+                
+                // For events <= 30 mins, make them compact
+                if (durationMin <= 30) {
+                    item.addClass('dayble-event-compact');
+                }
+
+                // Add rich tooltip
+                if (this.view && this.view.plugin.settings.tooltipEnabled) {
+                    setTooltip(item, this.view.getEventTooltipText(ev));
+                }
+
+                item.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
+                item.style.setProperty('--focus-item-top', `${Math.round(top)}px`);
+                item.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
+                item.style.setProperty('--focus-item-height', `${Math.round(height)}px`);
+                item.style.pointerEvents = 'auto'; // Explicitly enable for absolute elements
+                item.onclick = async (e) => { e.stopPropagation(); await this.view?.openEventModal(ev.id, ev.date || ev.startDate, ev.endDate); };
+                // Drag to reposition within today modal (15-min granularity)
+                item.ondragstart = (e) => {
+                    const dt = e.dataTransfer;
+                    if (!dt) return;
+                    this.dragId = ev.id;
+                    this.dragEl = item;
+                    
+                    // Capture EXACT distance from mouse to top of event
+                    const itemRect = item.getBoundingClientRect();
+                    this.dragOffsetY = e.clientY - itemRect.top;
+
+                    item.addClass('dragging');
+                    try {
+                        const img = new Image();
+                        img.width = 1; img.height = 1;
+                        dt.setDragImage(img, 0, 0);
+                    } catch {}
+                    const startMin = startTotal;
+                    let duration = durationMin;
+                    this.dragDuration = duration;
+                };
+                item.ondragend = () => { 
+                    const currentIndicator = this.contentEl.querySelector('.dayble-focus-drop');
+                    if (currentIndicator) currentIndicator.remove();
+                    this.gridContainer.querySelectorAll('.dayble-focus-cell.drop-target').forEach(el => el.removeClass('drop-target'));
+                    item.removeClass('dragging'); 
+                    this.dragId = undefined; 
+                    this.dragDuration = undefined; 
+                    this.dragEl = undefined; 
+                };
+                overlay.appendChild(item);
+            });
+        } catch (e) { console.debug('[Dayble] Focus grid event render:', e); }
     }
 }
 
