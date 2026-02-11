@@ -270,7 +270,8 @@
 
 /* Days */
 .dayble-day {
-    min-height: 120px;
+    /* min-height: 120px; */
+    min-width: 0;
     border: 2px solid transparent;
     background: var(--background-primary-alt);
     border-radius: 8px;
@@ -327,6 +328,8 @@
 .dayble-event-container {
     position: relative;
     transition: none !important;
+    width: 100%;
+    overflow: hidden;
 }
 
 .dayble-drop-indicator {
@@ -353,6 +356,8 @@
     gap: 5px;
     filter: brightness(1);
     transition: filter 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .dayble-event.dayble-event-colored {
@@ -462,6 +467,15 @@
     display: none !important;
 } */
 
+/* body:has(.workspace-leaf.mod-active .view-content[data-type="dayble-calendar"]) .status-bar {
+    display: none !important;
+} */
+
+.workspace-leaf.mod-active:has(.workspace-leaf-content[data-type="dayble-calendar-view"]) ~ .status-bar,
+body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-calendar-view"]) .status-bar {
+    display: none !important;
+}
+
 .dayble-long-event {
     background: var(--background-primary);
     border-width: var(--event-border-width, 1px);
@@ -483,6 +497,32 @@
 
 .dayble-long-event-end {
     border-radius: 0 6px 6px 0;
+}
+
+/* Split-grid layout for TodayModal on desktop */
+.dayble-modal-wide {
+    width: 80vw !important;
+    max-width: 1000px !important;
+}
+
+.dayble-focus-grid-container {
+    display: flex;
+    gap: 20px;
+    padding: 10px;
+}
+
+.dayble-focus-grid {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Ensure mobile view stays single column */
+@media screen and (max-width: 600px) {
+    .dayble-focus-grid-container {
+        flex-direction: column;
+        gap: 0;
+    }
 }
 
 .dayble-long-event-start.dayble-long-event-end {
@@ -911,6 +951,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     }
 }
 
+
+/* TODO: better the snow anim */
 .dayble-anim-snow-falling {
     position: relative;
     overflow: hidden;
@@ -1218,7 +1260,7 @@ margin-top: 6px !important;
     width: 100%;
 }
 
-.workspace-left-content[data-type="dayble-calendar"], .status-bar {
+.workspace-left-content[data-type="dayble-calendar"] {
     display: none !important;
 }
 
@@ -1308,3 +1350,34 @@ margin-top: 6px !important;
     border: none !important;
     padding: 2px 4px !important;
 }
+
+.dayble-long-overlay-box { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+.dayble-cell-max { max-height: var(--dayble-cell-max-height); }
+.dayble-scroll-y { overflow-y: auto; }
+.dayble-scroll-x-hidden { overflow-x: hidden; }
+.dayble-overflow-visible { overflow: visible; }
+
+.dayble-focus-scroll { position: relative; max-height: 60vh; overflow-y: auto; overflow-x: hidden; border: 1px solid var(--background-modifier-border); border-radius: 6px; }
+.dayble-focus-grid { display: grid; grid-template-columns: auto 1fr; }
+.dayble-focus-row { display: contents; }
+.dayble-focus-time { text-align: center !important; padding: 6px 10px; border-bottom: 1px solid var(--background-modifier-border); border-right: 1px solid var(--background-modifier-border); color: var(--text-muted); }
+.dayble-focus-cell { min-height: 28px; border-bottom: 1px solid var(--background-modifier-border); }
+.dayble-focus-cell.dayble-selected { background: var(--background-primary-alt); outline: 2px dashed var(--color-accent); outline-offset: -2px; }
+.dayble-focus-event { margin: 4px 6px; padding: 4px 6px; border: 1px solid var(--background-modifier-border); border-radius: 4px; font-size: 0.9em; line-height: 1.2; }
+.dayble-focus-event-span { grid-column: 2; margin: 2px 6px; padding: 6px 8px; border: 1px solid var(--background-modifier-border); border-radius: 6px; box-sizing: border-box; align-self: stretch; display: flex; align-items: center; }
+.dayble-focus-overlay { position: absolute; inset: 0; pointer-events: auto; }
+.dayble-quarter-lines { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.dayble-quarter-line { position: absolute; left: 0; right: 0; top: var(--quarter-line-top); border-top: 1px dashed var(--background-modifier-border); opacity: 0.2; }
+.dayble-focus-event-abs { position: absolute; box-sizing: border-box; pointer-events: auto; left: var(--focus-item-left); top: var(--focus-item-top); width: var(--focus-item-width); height: var(--focus-item-height); }
+.dayble-focus-drop { border: 2px dashed var(--color-accent); position: absolute; box-sizing: border-box; pointer-events: none; left: var(--focus-item-left); top: var(--focus-item-top); width: var(--focus-item-width); height: var(--focus-item-height); background: var(--background-primary-alt); opacity: 0.6; border-radius: 0px; }
+.dayble-focus-event-abs.dragging { opacity: 1 !important; transform: none !important; z-index: 9999 !important; box-shadow: 0 8px 25px rgba(0,0,0,0.3) !important; filter: brightness(1.1) saturate(1.2) !important; transition: box-shadow 0.15s ease !important; cursor: grabbing !important; }
+.dayble-focus-cell.drop-target { transition: background-color 0.15s ease !important; }
+.dayble-grid-col-2 { grid-column: 2; }
+
+
+/* .dayble-day {
+    min-width: 200px;
+    max-width: 400px;
+} */
+
+

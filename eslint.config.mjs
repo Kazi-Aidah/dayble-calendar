@@ -5,7 +5,7 @@ import js from "@eslint/js";
 
 export default defineConfig([
   {
-    ignores: ["**/node_modules/**", "**/dist/**", "**/*.js", "esbuild.config.mjs"],
+    ignores: ["**/node_modules/**", "**/dist/**", "**/*.js", "esbuild.config.mjs", "**/.history/**"],
   },
   js.configs.recommended,
   ...obsidianmd.configs.recommended,

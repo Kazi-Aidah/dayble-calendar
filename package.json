@@ -4,13 +4,16 @@
   "description": "Dayble Calendar for Obsidian",
   "main": "main.js",
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc -w",
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production",
+    "version": "node version-bump.mjs && git add manifest.json versions.json",
     "lint": "eslint main.ts"
   },
   "devDependencies": {
     "@types/node": "^18.0.0",
     "@typescript-eslint/parser": "^8.51.0",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "0.21.5",
     "eslint": "^9.39.2",
     "eslint-plugin-obsidianmd": "^0.1.9",
     "obsidian": "^1.10.3",
