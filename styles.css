@@ -43,8 +43,8 @@
 }
 
 .dayble-view-select {
-    background: transparent;
-    color: var(--text-muted);
+    background: var(--background-primary);
+    color: var(--text-normal);
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--button-radius);
     padding: 2px 4px;
@@ -53,6 +53,11 @@
     margin-right: 4px;
     text-align: center;
     text-align-last: center;
+}
+
+.dayble-view-select option {
+    background: var(--background-primary);
+    color: var(--text-normal);
 }
 
 .dayble-view-select:hover {
@@ -369,7 +374,7 @@
 }
 
 .dayble-agenda-container .dayble-event {
-    /* min-height: 28px; */
+    min-height: 28px; /* hide this to fix text overflow */
     height: auto !important;
     max-height: none !important;
     align-items: flex-start;
@@ -774,6 +779,31 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     align-self: center;
     color: var(--text-muted);
     font-size: .9em;
+}
+
+.dayble-modal-row-end {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 20px;
+}
+
+.dayble-confirm-content {
+    padding: 10px 20px 20px 20px;
+}
+
+.dayble-confirm-message {
+    font-size: 1.1em;
+    margin-bottom: 10px;
+    color: var(--text-normal);
+}
+
+.dayble-transparent-setting {
+    background: transparent !important;
+    background-color: transparent !important;
+    border: none !important;
+   padding: 4px;
+   margin-top: 10px;
 }
 
 /* Color palette - UPDATED to stretch swatches */
@@ -1570,6 +1600,15 @@ margin-top: 6px !important;
 .dayble-scroll-x-hidden { overflow-x: hidden; }
 .dayble-overflow-visible { overflow: visible; }
 
+.dayble-drag-ghost {
+    pointer-events: none !important;
+}
+
+.drag-ghost-hidden {
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
 .dayble-focus-scroll { position: relative; max-height: 100% !important; overflow-y: auto; overflow-x: hidden; border: 1px solid var(--background-modifier-border); border-radius: var(--input-radius); }
 .dayble-focus-grid { display: grid; grid-template-columns: auto 1fr; }
 .dayble-focus-row { display: contents; }
@@ -1586,6 +1625,56 @@ margin-top: 6px !important;
     pointer-events: none;
 }
 .dayble-focus-cell.dayble-selected { background: var(--background-primary-alt); }
+/* All-day section in Day View */
+.dayble-all-day-section {
+    background-color: var(--background-primary-alt);
+}
+
+.dayble-all-day-event-item {
+    min-height: 28px;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center;
+    padding: 2px 8px !important;
+    margin-bottom: 0 !important;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--event-border-radius, 4px);
+    font-size: 0.85em;
+    gap: 4px;
+}
+
+.dayble-all-day-event-item .dayble-event-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+    grid-column: auto !important;
+    justify-self: auto !important;
+    text-align: left !important;
+    flex: 1;
+}
+
+.dayble-all-day-event-item .dayble-event-icon {
+    grid-column: auto !important;
+    justify-self: auto !important;
+    margin: 0 !important;
+    flex-shrink: 0;
+}
+
+.dayble-all-day-event-item .dayble-event-desc {
+    display: none !important;
+}
+
+.dayble-focus-time {
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.2s ease;
+}
+
+.dayble-focus-time:hover {
+    color: var(--interactive-accent);
+}
+
 .dayble-focus-cell { position: relative; }
 .dayble-focus-cell::before, .dayble-focus-cell::after {
     content: "";
@@ -1613,6 +1702,7 @@ margin-top: 6px !important;
     font-size: 0.85em;
     z-index: 30;
     opacity: 1 !important; /* Ensure the element itself is fully opaque so children are visible */
+    pointer-events: none !important;
 }
 .dayble-focus-selection-mirror .dayble-focus-event-inner {
     opacity: 1 !important;
@@ -1680,6 +1770,10 @@ margin-top: 6px !important;
     display: flex;
     flex-direction: column;
     pointer-events: auto !important;
+}
+
+.dayble-selecting .dayble-focus-event-abs {
+    pointer-events: none !important;
 }
 
 /* Compact layout for short events */
@@ -1764,4 +1858,16 @@ margin-top: 6px !important;
 
 .dayble-view-select {
    width: 70px;
+}
+
+.dayble-all-day-section {
+   background: none;
+   padding: 8px 0 !important;
+   margin: 0;
+   gap: 8px;
+}
+
+.dayble-focus-scroll {
+   border-radius: 0;
+   border: 2px solid var(--background-modifier-border);
 }

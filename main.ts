@@ -1,4 +1,4 @@
-import { App, ItemView, Modal, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, setIcon, Menu, TFile, FuzzySuggestModal, TFolder, Vault, DataAdapter, setTooltip, getIconIds } from 'obsidian';
+import { App, ItemView, Modal, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, setIcon, Menu, TFile, FuzzySuggestModal, TFolder, Vault, DataAdapter, setTooltip, getIconIds, moment } from 'obsidian';
 
 const VIEW_TYPE = 'dayble-calendar-view';
 
@@ -36,7 +36,9 @@ interface DaybleSettings {
     todayModalSplitView?: boolean;
     tooltipEnabled?: boolean;
     showCopyTextOption?: boolean;
-    onlyShowPinnedEvents?: boolean;
+    onlyShowPinnedEventsMonth?: boolean;
+    onlyShowPinnedEventsWeek?: boolean;
+    defaultEventColorName?: string;
 } 
 
 const DEFAULT_SETTINGS: DaybleSettings = {
@@ -68,7 +70,9 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     todayModalSplitView: true,
     tooltipEnabled: true,
     showCopyTextOption: false,
-    onlyShowPinnedEvents: false,
+    onlyShowPinnedEventsMonth: false,
+    onlyShowPinnedEventsWeek: false,
+    defaultEventColorName: '',
     swatches: [
         // { name: 'Red', color: '#eb3b5a', textColor: '#f9c6d0' },
         // { name: 'Orange', color: '#fa8231', textColor: '#fed8be' },
@@ -76,12 +80,12 @@ const DEFAULT_SETTINGS: DaybleSettings = {
         // { name: 'Green', color: '#20bf6b', textColor: '#c4eeda' },
         // { name: 'Teal', color: '#0fb9b1', textColor: '#bdecea' },
         // { name: 'Blue', color: '#2d98da', textColor: '#c5e3f8' },
-        // { name: 'Cornflower', color: '#3867d6', textColor: '#c9d5f8' },
+        // { name: 'Dark Blue', color: '#3867d6', textColor: '#c9d5f8' },
         // { name: 'Indigo', color: '#5454d0', textColor: '#d2d2f8' },
         // { name: 'Purple', color: '#8854d0', textColor: '#e2d2f8' },
-        // { name: 'Magenta', color: '#b554d0', textColor: '#edd2f8' },
-        // { name: 'Pink', color: '#e832c1', textColor: '#f8c2ef' },
-        // { name: 'Rose', color: '#e83289', textColor: '#f8c2e0' },
+        // { name: 'Violet', color: '#b554d0', textColor: '#edd2f8' },
+        // { name: 'Magenta', color: '#e832c1', textColor: '#f8c2ef' },
+        // { name: 'Hot Pink', color: '#e83289', textColor: '#f8c2e0' },
         // { name: 'Brown', color: '#965b3b', textColor: '#e5d4c9' },
         // { name: 'Gray', color: '#8392a4', textColor: '#e3e6ea' }
 
@@ -91,12 +95,12 @@ const DEFAULT_SETTINGS: DaybleSettings = {
         { name: 'Green',      color: '#1d9356', textColor: '#b2dbc8' },
         { name: 'Teal',       color: '#1d9993', textColor: '#a9d9d6' },
         { name: 'Blue',       color: '#24709f', textColor: '#b2d2ea' },
-        { name: 'Cornflower', color: '#25499d', textColor: '#b7c4ea' },
+        { name: 'Dark Blue', color: '#25499d', textColor: '#b7c4ea' },
         { name: 'Indigo',     color: '#353597', textColor: '#c1c1ea' },
         { name: 'Purple',     color: '#5d33a1', textColor: '#d4c4ea' },
-        { name: 'Magenta',    color: '#77328e', textColor: '#e0c4ea' },
-        { name: 'Pink',       color: '#9d2383', textColor: '#eab3de' },
-        { name: 'Rose',       color: '#a42661', textColor: '#eab3cc' },
+        { name: 'Violet',    color: '#77328e', textColor: '#e0c4ea' },
+        { name: 'Magenta',       color: '#9d2383', textColor: '#eab3de' },
+        { name: 'Hot Pink',       color: '#a42661', textColor: '#eab3cc' },
         { name: 'Brown',      color: '#653c26', textColor: '#d8c6bb' },
         { name: 'Gray',       color: '#515d6b', textColor: '#d5d9de' }
 
@@ -141,9 +145,55 @@ export default class DaybleCalendarPlugin extends Plugin {
 
     async onload() {
         await this.loadSettings();
-        this.updateSwatchStyles();
+        
         this.registerView(VIEW_TYPE, leaf => new DaybleCalendarView(leaf, this));
+
+        this.addRibbonIcon('calendar-heart', 'Dayble calendar', () => {
+            void this.openDayble();
+        });
+
         this.addCommand({ id: 'open-calendar', name: 'Open calendar', callback: () => void this.openDayble() });
+        this.addCommand({ 
+            id: 'open-daily-view', 
+            name: 'Open daily view', 
+            callback: async () => { 
+                await this.openDayble(); 
+                const view = this.getCalendarView();
+                if (view) {
+                    this.settings.calendarView = 'Day';
+                    this.settings.calendarWeekActive = false;
+                    await this.saveSettings();
+                    await view.loadAllEntries();
+                    try { await view.render(); } catch (e) { console.error(e); }
+                }
+            } 
+        });
+        this.addCommand({ 
+            id: 'open-agenda-view', 
+            name: 'Open agenda view', 
+            callback: async () => { 
+                await this.openDayble(); 
+                const view = this.getCalendarView();
+                if (view) {
+                    this.settings.calendarView = 'Agenda';
+                    this.settings.calendarWeekActive = false;
+                    await this.saveSettings();
+                    await view.loadAllEntries();
+                    try { await view.render(); } catch (e) { console.error(e); }
+                }
+            } 
+        });
+        this.addCommand({ 
+            id: 'add-new-event', 
+            name: 'Add new event', 
+            callback: async () => { 
+                await this.openDayble(); 
+                const view = this.getCalendarView();
+                if (view) {
+                    view.openEventModal(undefined, moment().format('YYYY-MM-DD'));
+                }
+            } 
+        });
         this.addCommand({ id: 'focus-today', name: 'Focus on today', callback: () => void this.focusToday() });
         this.addCommand({ 
             id: 'open-weekly-view', 
@@ -152,27 +202,29 @@ export default class DaybleCalendarPlugin extends Plugin {
                 await this.openDayble(); 
                 const view = this.getCalendarView();
                 if (view) {
+                    this.settings.calendarView = 'Week';
                     this.settings.calendarWeekActive = true;
                     await this.saveSettings();
                     await view.loadAllEntries();
-            try { await view.render(); } catch (e) { console.error(e); }
-        }
-    } 
-});
-this.addCommand({ 
-    id: 'open-monthly-view', 
-    name: 'Open monthly view', 
-    callback: async () => { 
-        await this.openDayble(); 
-        const view = this.getCalendarView();
-        if (view) {
-            this.settings.calendarWeekActive = false;
-            await this.saveSettings();
-            await view.loadAllEntries();
-            try { await view.render(); } catch (e) { console.error(e); }
-        }
-    } 
-});
+                    try { await view.render(); } catch (e) { console.error(e); }
+                }
+            } 
+        });
+        this.addCommand({ 
+            id: 'open-monthly-view', 
+            name: 'Open monthly view', 
+            callback: async () => { 
+                await this.openDayble(); 
+                const view = this.getCalendarView();
+                if (view) {
+                    this.settings.calendarView = 'Month';
+                    this.settings.calendarWeekActive = false;
+                    await this.saveSettings();
+                    await view.loadAllEntries();
+                    try { await view.render(); } catch (e) { console.error(e); }
+                }
+            } 
+        });
 this.addSettingTab(new DaybleSettingTab(this.app, this));
 try { await this.ensureEntriesFolder(); } catch (e) { console.error(e); }
     void this.openDayble();
@@ -183,41 +235,22 @@ try { await this.ensureEntriesFolder(); } catch (e) { console.error(e); }
     }
 
     async loadSettings() {
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+        const data = await this.loadData();
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+
+        // Migration: split onlyShowPinnedEvents into Month and Week settings
+        if (data && data.onlyShowPinnedEvents !== undefined) {
+            if (data.onlyShowPinnedEventsMonth === undefined) {
+                this.settings.onlyShowPinnedEventsMonth = data.onlyShowPinnedEvents;
+            }
+            if (data.onlyShowPinnedEventsWeek === undefined) {
+                this.settings.onlyShowPinnedEventsWeek = data.onlyShowPinnedEvents;
+            }
+        }
     }
 
     async saveSettings() {
         await this.saveData(this.settings);
-        this.updateSwatchStyles();
-    }
-
-    updateSwatchStyles() {
-        let styleEl = document.getElementById('dayble-swatch-styles');
-        if (!styleEl) {
-            styleEl = document.createElement('style');
-            styleEl.id = 'dayble-swatch-styles';
-            document.head.appendChild(styleEl);
-        }
-
-        let css = ':root {\n';
-        const swatches = this.settings.swatches || [];
-        const custom = this.settings.userCustomSwatches || [];
-        
-        [...swatches, ...custom].forEach((s, idx) => {
-                const name = s.name || `custom-${idx}`;
-                const id = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
-                css += `  --db-swatch-${id}-bg: ${s.color};\n`;
-                css += `  --db-swatch-${id}-text: ${s.textColor || chooseTextColor(s.color)};\n`;
-            });
-            css += '}\n';
-
-            [...swatches, ...custom].forEach((s, idx) => {
-                const name = s.name || `custom-${idx}`;
-                const id = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
-                css += `.dayble-swatch-${id} { --event-bg-color: var(--db-swatch-${id}-bg) !important; --event-text-color: var(--db-swatch-${id}-text) !important; }\n`;
-            });
-
-        styleEl.textContent = css;
     }
 
     async openDayble() {
@@ -297,6 +330,7 @@ class DaybleCalendarView extends ItemView {
     lastScrollTop?: number;
     dayModeTodayModal?: TodayModal;
     _dayModeRO?: ResizeObserver;
+    viewSelectEl: HTMLSelectElement;
     saveTimeout: any;
     isResizingWeeklyNotes = false;
     weeklyNotesResizeStartY = 0;
@@ -320,7 +354,7 @@ class DaybleCalendarView extends ItemView {
 
     getViewType() { return VIEW_TYPE; }
     getDisplayText() { return 'Dayble calendar'; }
-    getIcon() { return 'calendar'; }
+    getIcon() { return 'calendar-heart'; }
     
     getMonthDataFilePath(): string {
         const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
@@ -359,6 +393,7 @@ class DaybleCalendarView extends ItemView {
         */
 
         const viewSelect = document.createElement('select');
+        this.viewSelectEl = viewSelect;
         viewSelect.className = 'dayble-view-select';
         ['Month', 'Week', 'Day', 'Agenda'].forEach(mode => {
             const opt = viewSelect.createEl('option', { text: mode, value: mode });
@@ -769,6 +804,7 @@ class DaybleCalendarView extends ItemView {
         // Reset grid style is handled by CSS classes and inline elements
 
         const view = this.plugin.settings.calendarView || (this.plugin.settings.calendarWeekActive ? 'Week' : 'Month');
+        if (this.viewSelectEl) this.viewSelectEl.value = view;
 
         this.gridEl.removeClass('dayble-week-mode');
         this.gridEl.removeClass('dayble-day-mode');
@@ -819,7 +855,7 @@ class DaybleCalendarView extends ItemView {
         const segmentGap = 4; // gappy
         const countsByDate: Record<string, number> = {};
         let longEventsPreset = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
-        if (this.plugin.settings.onlyShowPinnedEvents) {
+        if (this.plugin.settings.onlyShowPinnedEventsWeek) {
             longEventsPreset = longEventsPreset.filter(ev => ev.pinned);
         }
         longEventsPreset.forEach(ev => {
@@ -881,7 +917,7 @@ class DaybleCalendarView extends ItemView {
             container.setCssProps({ 'margin-top': adjusted ? `${adjusted}px` : '' });
 
             let dayEvents = this.events.filter(e => e.date === fullDate);
-            if (this.plugin.settings.onlyShowPinnedEvents) {
+            if (this.plugin.settings.onlyShowPinnedEventsWeek) {
                 dayEvents = dayEvents.filter(e => e.pinned);
             }
             dayEvents.forEach(e => container.appendChild(this.createEventItem(e)));
@@ -1166,7 +1202,7 @@ class DaybleCalendarView extends ItemView {
         const segmentGap = 4; // gappy
         const countsByDate: Record<string, number> = {};
         let longEventsPreset = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
-        if (this.plugin.settings.onlyShowPinnedEvents) {
+        if (this.plugin.settings.onlyShowPinnedEventsMonth) {
             longEventsPreset = longEventsPreset.filter(ev => ev.pinned);
         }
         longEventsPreset.forEach(ev => {
@@ -1214,7 +1250,7 @@ class DaybleCalendarView extends ItemView {
             container.setCssProps({ 'margin-top': preMtPx ? `${preMtPx}px` : '' });
             
             let dayEvents = this.events.filter(e => e.date === fullDate);
-            if (this.plugin.settings.onlyShowPinnedEvents) {
+            if (this.plugin.settings.onlyShowPinnedEventsMonth) {
                 dayEvents = dayEvents.filter(e => e.pinned);
             }
             dayEvents.forEach(e => container.appendChild(this.createEventItem(e)));
@@ -1661,7 +1697,10 @@ class DaybleCalendarView extends ItemView {
         // getCellWidth removed as unused
         const countsByDate: Record<string, number> = {};
         let longEvents = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
-        if (this.plugin.settings.onlyShowPinnedEvents) {
+        const isMonth = this.plugin.settings.calendarView === 'Month' || (!this.plugin.settings.calendarView && !this.plugin.settings.calendarWeekActive);
+        const isWeek = this.plugin.settings.calendarView === 'Week' || (!this.plugin.settings.calendarView && this.plugin.settings.calendarWeekActive);
+        
+        if ((isMonth && this.plugin.settings.onlyShowPinnedEventsMonth) || (isWeek && this.plugin.settings.onlyShowPinnedEventsWeek)) {
             longEvents = longEvents.filter(ev => ev.pinned);
         }
         longEvents.forEach(ev => {
@@ -1953,20 +1992,24 @@ class DaybleCalendarView extends ItemView {
         
         let bgColor = '';
         let textColor = '';
-        let colorName = ev.colorName;
+        let colorName = ev.colorName || (!ev.color && !category ? this.plugin.settings.defaultEventColorName : undefined);
 
         // Color selection logic (user-set color always preferred)
         if (colorName) {
-            const swatchId = colorName.toLowerCase().replace(/[^a-z0-9]/g, '-');
-            item.addClass(`dayble-swatch-${swatchId}`);
-            item.classList.add('dayble-event-colored');
+            const allSwatches = [...(this.plugin.settings.swatches || []), ...(this.plugin.settings.userCustomSwatches || [])];
+            const swatch = allSwatches.find(s => (s.name || '').toLowerCase() === colorName.toLowerCase());
             
-            const opacity = this.plugin.settings.eventBgOpacity ?? 1;
-            const bOpacity = this.plugin.settings.eventBorderOpacity ?? 1;
-            
-            item.style.setProperty('--event-bg-color', `color-mix(in srgb, var(--db-swatch-${swatchId}-bg), transparent calc(100% - (${opacity} * 100%)))`);
-            item.style.setProperty('--event-text-color', `var(--db-swatch-${swatchId}-text)`);
-            item.style.setProperty('--event-border-color', `color-mix(in srgb, var(--db-swatch-${swatchId}-text), transparent calc(100% - (${bOpacity} * 100%)))`);
+            if (swatch) {
+                item.classList.add('dayble-event-colored');
+                const opacity = this.plugin.settings.eventBgOpacity ?? 1;
+                const bOpacity = this.plugin.settings.eventBorderOpacity ?? 1;
+                const swatchBg = swatch.color;
+                const swatchText = swatch.textColor || chooseTextColor(swatchBg);
+                
+                item.style.setProperty('--event-bg-color', hexToRgba(swatchBg, opacity));
+                item.style.setProperty('--event-text-color', swatchText);
+                item.style.setProperty('--event-border-color', hexToRgba(swatchText, bOpacity));
+            }
         } else if (ev.color) {
             bgColor = ev.color;
             textColor = ev.textColor || chooseTextColor(ev.color);
@@ -2098,7 +2141,10 @@ class DaybleCalendarView extends ItemView {
                 menu.addSeparator();
             }
 
-            if (this.plugin.settings.onlyShowPinnedEvents) {
+            const isMonth = this.plugin.settings.calendarView === 'Month' || (!this.plugin.settings.calendarView && !this.plugin.settings.calendarWeekActive);
+            const isWeek = this.plugin.settings.calendarView === 'Week' || (!this.plugin.settings.calendarView && this.plugin.settings.calendarWeekActive);
+            
+            if ((isMonth && this.plugin.settings.onlyShowPinnedEventsMonth) || (isWeek && this.plugin.settings.onlyShowPinnedEventsWeek)) {
                 menu.addItem(i => i.setTitle(ev.pinned ? 'Unpin event' : 'Pin event').setIcon('pin').onClick(async () => {
                     ev.pinned = !ev.pinned;
                     await this.saveAllEntries();
@@ -2343,7 +2389,7 @@ class EventModal extends Modal {
         const heading = c.createEl('h3', { cls: 'dayble-modal-title' });
         c.addClass('db-modal');
         heading.addClass('db-modal-title');
-        heading.textContent = this.ev ? 'Edit event' : '+ Add new event';
+        heading.textContent = this.ev ? 'Edit event' : 'Add new event';
         const row1 = c.createDiv({ cls: 'dayble-modal-row' });
         row1.addClass('db-modal-row');
         const iconBtn = row1.createEl('button', { cls: 'dayble-btn dayble-icon-add' });
@@ -2450,13 +2496,8 @@ class EventModal extends Modal {
             const settings = this.plugin.settings;
             const builtSwatches = (settings?.swatches ?? []).map((s: { name: string, color: string, textColor?: string }) => ({ name: s.name, color: s.color, textColor: s.textColor }));
             const customSwatches = (settings?.userCustomSwatches ?? []).map((s: { name: string, color: string, textColor?: string }, idx: number) => ({ name: s.name || `custom-${idx}`, color: s.color, textColor: s.textColor }));
-            let swatches: Array<{ name: string, color: string, textColor?: string }> = builtSwatches;
-            if (settings?.customSwatchesEnabled) {
-                swatches = builtSwatches.concat(customSwatches);
-            }
-            if (!swatches || swatches.length === 0) {
-                swatches = ['#eb3b5a', '#fa8231', '#e5a216', '#20bf6b', '#0fb9b1', '#2d98da', '#3867d6', '#5454d0', '#8854d0', '#b554d0', '#e832c1', '#e83289', '#965b3b', '#8392a4'].map((c, i) => ({ name: `Default ${i}`, color: c }));
-            }
+            const swatches: Array<{ name: string, color: string, textColor?: string }> = builtSwatches.concat(customSwatches);
+            
             swatches.forEach(({ name, color, textColor }) => {
                 const swatch = swatchesContainer.createEl('button', { cls: 'dayble-color-swatch' });
                 swatch.addClass('db-color-swatch');
@@ -2500,9 +2541,6 @@ class EventModal extends Modal {
             selectedCategoryId = categorySelect.value || undefined; 
         };
         
-        // Determine if this is a multi-day event
-        const isMultiDay = this.endDate && this.endDate !== this.date;
-        
         // Date row (above times)
         const rowDate = c.createDiv({ cls: 'dayble-modal-row' });
         rowDate.addClass('db-modal-row');
@@ -2510,13 +2548,10 @@ class EventModal extends Modal {
         startDate.addClass('db-input');
         startDate.value = this.ev?.date ?? this.ev?.startDate ?? this.date ?? '';
         
-        // End date in same row (only for multi-day)
-        let endDateInput: HTMLInputElement | undefined;
-        if (isMultiDay) {
-            endDateInput = rowDate.createEl('input', { type: 'date', cls: 'dayble-input' });
-            endDateInput.addClass('db-input');
-            endDateInput.value = this.endDate ?? '';
-        }
+        // End date in same row
+        const endDateInput = rowDate.createEl('input', { type: 'date', cls: 'dayble-input' });
+        endDateInput.addClass('db-input');
+        endDateInput.value = this.ev?.endDate ?? this.endDate ?? startDate.value;
         
         // Time row (start and end on same row)
         const rowTime = c.createDiv({ cls: 'dayble-modal-row' });
@@ -2587,22 +2622,24 @@ class EventModal extends Modal {
                 }
             }
             
-            if (isMultiDay && endTime && endDateInput) {
+            const finalIsMultiDay = startDate.value !== endDateInput.value;
+            
+            if (finalIsMultiDay && endTime && endDateInput) {
                 // Multi-day event
                 const startTimeVal = startTime.value || '';
                 const endTimeVal = endTime.value || '';
                 payload.time = (startTimeVal && endTimeVal) ? `${startTimeVal}-${endTimeVal}` : (startTimeVal || '');
-                payload.startDate = startDate.value || this.ev?.startDate || undefined;
-                payload.endDate = endDateInput.value || this.ev?.endDate || undefined;
+                payload.startDate = startDate.value;
+                payload.endDate = endDateInput.value;
+                payload.date = undefined;
             } else {
                 // Single day event
                 const startTimeVal = startTime.value || '';
                 const endTimeVal = endTime?.value || '';
                 payload.time = (startTimeVal && endTimeVal) ? `${startTimeVal}-${endTimeVal}` : (startTimeVal || '');
-                const fallbackDate = this.ev?.date || this.ev?.startDate || this.date || undefined;
-                payload.date = startDate.value || fallbackDate;
-                payload.startDate = startDate.value || fallbackDate;
-                payload.endDate = startDate.value || fallbackDate;
+                payload.date = startDate.value;
+                payload.startDate = startDate.value;
+                payload.endDate = startDate.value;
             }
             
             try {
@@ -2903,6 +2940,43 @@ class TodayModal extends Modal {
         const scroller = c.createDiv({ cls: 'dayble-focus-scroll' });
         this.scroller = scroller;
         scroller.style.setProperty('--event-border-radius', `${this.view?.plugin?.settings?.eventBorderRadius ?? 6}px`);
+
+        // All-day / Multi-day events section above scroll
+        const allDayEvents = (this.events || []).filter(e => {
+            const isToday = (e.date === this.date) || (e.startDate === this.date) || 
+                            (e.startDate && e.endDate && this.date >= e.startDate && this.date <= e.endDate);
+            if (!isToday) return false;
+            // It's an all-day event if it has no time OR if it's a multi-day event
+            const isMultiDay = e.startDate && e.endDate && e.startDate !== e.endDate;
+            return !e.time || isMultiDay;
+        });
+
+        if (allDayEvents.length > 0) {
+            const allDaySection = c.createDiv({ cls: 'dayble-all-day-section' });
+            allDaySection.setCssProps({
+                'padding': '8px',
+                'border-bottom': '1px solid var(--background-modifier-border)',
+                'display': 'flex',
+                'flex-direction': 'row',
+                'flex-wrap': 'wrap',
+                'gap': '4px',
+                'flex-shrink': '0'
+            });
+            allDayEvents.forEach(ev => {
+                const item = this.view?.createEventItem(ev) || document.createElement('div');
+                item.addClass('dayble-all-day-event-item');
+                item.setCssProps({
+                    'flex': '1 1 calc(50% - 4px)',
+                    'min-width': '120px',
+                    'cursor': 'pointer',
+                    'overflow': 'hidden'
+                });
+                item.onclick = (e) => { e.stopPropagation(); this.view?.openEventModal(ev.id, ev.date || ev.startDate, ev.endDate); };
+                allDaySection.appendChild(item);
+            });
+            c.appendChild(scroller);
+        }
+
         // Container for grids
         const gridContainer = scroller.createDiv({ cls: 'dayble-focus-grid-container' });
         this.gridContainer = gridContainer;
@@ -2992,6 +3066,7 @@ class TodayModal extends Modal {
                 el.removeClass('sel-top');
                 el.removeClass('sel-bottom');
             });
+            gridContainer.removeClass('dayble-selecting');
             if (resetData) {
                 sel.active = false;
                 sel.start15 = undefined;
@@ -3032,18 +3107,6 @@ class TodayModal extends Modal {
                         selectionMirror = document.createElement('div');
                         selectionMirror.className = 'dayble-focus-event-abs dayble-focus-selection-mirror';
                         overlay.appendChild(selectionMirror);
-                        
-                        // Handle mouseup/click on the mirror itself since it has pointer-events: auto
-                        selectionMirror.onmouseup = async (e) => {
-                            if (!sel.active) return;
-                            e.stopPropagation();
-                            sel.active = false;
-                            await finalizeSelection();
-                            clearSelection();
-                        };
-                        selectionMirror.onclick = (e) => {
-                            e.stopPropagation();
-                        };
                     }
                     
                     const left = sRect.left - gRect.left;
@@ -3112,12 +3175,56 @@ class TodayModal extends Modal {
             const eDate = endIsMidnightNext ? nextDateStr(this.date) : this.date;
             await this.view?.openEventModal(undefined, sDate, eDate, sTime, eTime);
         };
+        // Global mouseup to catch releases outside the specific cell
+        const onGlobalMouseUp = async (e: MouseEvent) => {
+            if (!sel.active) return;
+            e.stopPropagation();
+            
+            sel.active = false;
+            await finalizeSelection();
+            clearSelection();
+            window.removeEventListener('mouseup', onGlobalMouseUp);
+        };
+
         slots.forEach((slot, idx) => {
             const targetGrid = (split && slot.hour >= 12) ? afternoonGrid : morningGrid;
             const row = targetGrid.createDiv({ cls: 'dayble-focus-row' });
             const time = row.createDiv({ cls: 'dayble-focus-time' });
             time.addClass('dayble-time-el-style');
             time.textContent = labelFor(slot.hour, slot.minute);
+            
+            // Interaction for time labels (clicking/dragging on times creates event)
+            time.onmousedown = (e) => {
+                if ((e as MouseEvent).button !== 0) return;
+                e.preventDefault();
+                e.stopPropagation();
+                
+                sel.active = true; 
+                gridContainer.addClass('dayble-selecting');
+                sel.start15 = idx * 2; // Each slot is 30 mins, so 2x 15-min increments
+                sel.end15 = sel.start15;
+
+                clearSelection(false); 
+                applySelection();
+                window.addEventListener('mouseup', onGlobalMouseUp);
+            };
+            time.onmouseover = (e) => {
+                if (!sel.active) return;
+                e.preventDefault();
+                e.stopPropagation();
+                
+                sel.end15 = idx * 2;
+                
+                clearSelection(false); 
+                applySelection();
+            };
+            time.onmouseup = (e) => {
+                e.stopPropagation();
+            };
+            time.onclick = (e) => {
+                e.stopPropagation();
+            };
+
             const cell = row.createDiv({ cls: 'dayble-focus-cell' });
             cell.setAttr('data-idx', String(idx));
             
@@ -3127,11 +3234,13 @@ class TodayModal extends Modal {
                 if (!info) return;
                 
                 sel.active = true; 
+                gridContainer.addClass('dayble-selecting');
                 sel.start15 = info.isAfternoon ? (24*2 + (info.n % 48)) : info.n;
                 sel.end15 = sel.start15;
 
                 clearSelection(false); 
                 applySelection();
+                window.addEventListener('mouseup', onGlobalMouseUp);
             };
             cell.onmouseover = (e) => {
                 if (!sel.active) return;
@@ -3144,38 +3253,34 @@ class TodayModal extends Modal {
                 clearSelection(false); 
                 applySelection();
             };
-            cell.onmouseup = async (e) => {
-                if (!sel.active) return;
+            cell.onmouseup = (e) => {
                 e.stopPropagation();
-                
-                const isSingleClick = (sel.start15 === sel.end15);
-                if (isSingleClick) {
-                    const info = getSlotInfo(e.clientX, e.clientY);
-                    if (info) {
-                        sel.start15 = info.isAfternoon ? (24*2 + (info.n % 48)) : info.n;
-                        sel.end15 = sel.start15;
-                    }
-                }
-
-                sel.active = false;
-                await finalizeSelection();
-                clearSelection();
             };
             // Use click only as a fallback for mobile or when mousedown/mouseup are interrupted
-            cell.onclick = async (e) => {
+            cell.onclick = (e) => {
                 e.stopPropagation();
-                if (sel.start15 !== undefined) return; // already handled or in progress
-                
-                const info = getSlotInfo(e.clientX, e.clientY);
-                if (!info) return;
-                
-                sel.start15 = info.isAfternoon ? (24*2 + (info.n % 48)) : info.n;
-                sel.end15 = sel.start15;
-                await finalizeSelection();
-                clearSelection();
             };
         });
         scroller.onmouseleave = () => { if (sel.active) { sel.active = false; clearSelection(); } };
+        
+        // Dynamic mousemove tracking on scroller for selection contraction
+        scroller.onmousemove = (e) => {
+            if (!sel.active) return;
+            
+            const info = getSlotInfo(e.clientX, e.clientY);
+            if (!info) return;
+
+            const currentN = info.isAfternoon ? (24*2 + (info.n % 48)) : info.n;
+            
+            // If the time label interaction was used, info.n is already adjusted
+            // but for safety we recalculate sel.end15 whenever mouse moves
+            if (sel.end15 !== currentN) {
+                sel.end15 = currentN;
+                clearSelection(false); 
+                applySelection();
+            }
+        };
+
         if (typeof this.lastScrollTop === 'number') {
             scroller.scrollTop = this.lastScrollTop;
         }
@@ -3201,7 +3306,7 @@ class TodayModal extends Modal {
                 }
             });
         }
-        const addBtn = c.createEl('button', { cls: 'dayble-today-add-btn', text: '+ Add event' });
+        const addBtn = c.createEl('button', { cls: 'dayble-today-add-btn', text: '+ add event' });
         addBtn.addClass('db-btn');
         addBtn.addClass('dayble-add-btn-full');
         addBtn.onclick = async () => { await this.view?.openEventModal(undefined, this.date); };
@@ -3352,7 +3457,16 @@ class TodayModal extends Modal {
                 return (h * 60) + m;
             };
 
-            const dayEvents = (this.events || []).filter(e => (e.date === this.date) || (e.startDate === this.date));
+            const dayEvents = (this.events || []).filter(e => {
+                const isToday = (e.date === this.date) || (e.startDate === this.date) || 
+                                (e.startDate && e.endDate && this.date >= e.startDate && this.date <= e.endDate);
+                if (!isToday) return false;
+                
+                // If it's an all-day/multi-day event, we skip it here because it's in the all-day section
+                const isMultiDay = e.startDate && e.endDate && e.startDate !== e.endDate;
+                const isAllDay = !e.time || isMultiDay;
+                return !isAllDay;
+            });
             
             // Overlap detection and column calculation
             const processedEvents = dayEvents.map(ev => {
@@ -3514,15 +3628,18 @@ class ConfirmModal extends Modal {
         const c = this.contentEl;
         c.empty();
         c.addClass('dayble-confirm-content');
-        const msg = c.createEl('div');
+        
+        const msg = c.createEl('div', { cls: 'dayble-confirm-message' });
         msg.textContent = this.message;
-        const row = c.createDiv();
-        row.addClass('dayble-modal-row-end');
+        
+        const row = c.createDiv('dayble-modal-row-end');
+        
         const cancel = row.createEl('button', { cls: 'dayble-btn' });
         cancel.textContent = 'Cancel';
         cancel.onclick = () => this.close();
+        
         const ok = row.createEl('button', { cls: 'dayble-btn mod-cta' });
-        ok.textContent = 'Delete';
+        ok.textContent = 'Confirm';
         ok.onclick = async () => { try { await this.onConfirm(); } finally { this.close(); } };
     }
 }
@@ -3672,7 +3789,18 @@ class DaybleSettingTab extends PluginSettingTab {
         ;
         // new Setting(containerEl).setName('Dayble Calendar Settings').setHeading();
 
-        new Setting(containerEl).setName('General').setHeading();
+        ;
+
+        new Setting(containerEl)
+            .setName('Latest release notes')
+            .setDesc('View the most recent plugin release notes.')
+            .addButton(b => {
+                b.setButtonText('Open changelog')
+                    .onClick(() => {
+                        window.open('https://github.com/your-username/dayble-calendar/blob/main/CHANGELOG.md', '_blank');
+                    });
+            });
+
         new Setting(containerEl)
             .setName('Week start day')
             .setDesc('First day of the week')
@@ -3747,12 +3875,25 @@ class DaybleSettingTab extends PluginSettingTab {
             });
 
         new Setting(containerEl)
-            .setName('Only show pinned events in month & week view')
-            .setDesc('Shows only pinned events in month & week views. All events still appear in day view')
+            .setName('Only show pinned events in month view')
+            .setDesc('Shows only pinned events in month view. All events still appear in day & agenda views')
             .addToggle(t => {
-                t.setValue(this.plugin.settings.onlyShowPinnedEvents ?? false)
+                t.setValue(this.plugin.settings.onlyShowPinnedEventsMonth ?? false)
                     .onChange(async v => {
-                        this.plugin.settings.onlyShowPinnedEvents = v;
+                        this.plugin.settings.onlyShowPinnedEventsMonth = v;
+                        await this.plugin.saveSettings();
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
+                    });
+            });
+
+        new Setting(containerEl)
+            .setName('Only show pinned events in week view')
+            .setDesc('Shows only pinned events in week view. All events still appear in day & agenda views')
+            .addToggle(t => {
+                t.setValue(this.plugin.settings.onlyShowPinnedEventsWeek ?? false)
+                    .onChange(async v => {
+                        this.plugin.settings.onlyShowPinnedEventsWeek = v;
                         await this.plugin.saveSettings();
                         const view = this.plugin.getCalendarView();
                         await view?.render();
@@ -3763,6 +3904,50 @@ class DaybleSettingTab extends PluginSettingTab {
         
 
         new Setting(containerEl).setName('Event appearance').setHeading();
+
+        new Setting(containerEl)
+            .setName('Default event color')
+            .setDesc('Default color for events when no category or user color is set.')
+            .addDropdown(d => {
+                const swatches = [
+                    ...(this.plugin.settings.swatches || []),
+                    ...(this.plugin.settings.userCustomSwatches || []).map((s, idx) => ({ ...s, name: s.name || `custom-${idx}` }))
+                ];
+                d.addOption('', 'No default color');
+                swatches.forEach(s => d.addOption(s.name, s.name));
+                d.setValue(this.plugin.settings.defaultEventColorName || '');
+                d.onChange(async v => {
+                    this.plugin.settings.defaultEventColorName = v;
+                    await this.plugin.saveSettings();
+                    applyColorStyles();
+                    const view = this.plugin.getCalendarView();
+                    await view?.render();
+                });
+
+                const applyColorStyles = () => {
+                    const currentValue = d.getValue();
+                    const selectedSwatch = swatches.find(sw => sw.name === currentValue);
+                    
+                    if (selectedSwatch) {
+                        (d.selectEl).style.setProperty('background-color', selectedSwatch.color, 'important');
+                        (d.selectEl).style.setProperty('color', selectedSwatch.textColor || chooseTextColor(selectedSwatch.color), 'important');
+                    } else {
+                        (d.selectEl).style.removeProperty('background-color');
+                        (d.selectEl).style.removeProperty('color');
+                    }
+                    
+                    Array.from(d.selectEl.options).forEach(opt => {
+                        if (!opt.value) return;
+                        const s = swatches.find(sw => sw.name === opt.value);
+                        if (s) {
+                            opt.style.setProperty('background-color', s.color);
+                            opt.style.setProperty('color', s.textColor || chooseTextColor(s.color));
+                        }
+                    });
+                };
+                applyColorStyles();
+                (d.selectEl).classList.add('db-select');
+            });
 
         new Setting(containerEl)
             .setName('Event tooltips')
@@ -3957,7 +4142,7 @@ class DaybleSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Enable weekly notes')
-            .setDesc('Show a Notes section below the calendar in weekly view')
+            .setDesc('Show a notes section below the calendar in weekly view')
             .addToggle(t => {
                 t.setValue(this.plugin.settings.weeklyNotesEnabled ?? true)
                     .onChange(v => {
@@ -4004,13 +4189,13 @@ class DaybleSettingTab extends PluginSettingTab {
         
         const swatchesSectionTop = containerEl.createDiv();
         const colorsHeading = new Setting(swatchesSectionTop).setName('Colors').setHeading();
-        colorsHeading.settingEl.style.marginTop = '18px';
+        (colorsHeading.settingEl).setCssProps({ 'margin-top': '18px' });
         const colorsListTop = swatchesSectionTop.createDiv();
         const renderColorsTop = () => {
             colorsListTop.empty();
             const row = colorsListTop.createDiv();
             row.addClass('dayble-settings-colors-row');
-            row.setAttr('style', 'margin-top: -10px !important; margin-bottom: 20px; display: flex; flex-wrap: wrap;');
+            row.setAttr('style', 'margin-top: -10px !important; margin-bottom: 0px; display: flex; flex-wrap: wrap;');
 
             const built = (this.plugin.settings.swatches || []).map(s => ({ name: s.name, color: s.color, textColor: s.textColor || '', source: 'built' as const }));
             const customs = (this.plugin.settings.userCustomSwatches || []).map(s => ({ name: s.name || '', color: s.color || '#ff0000', textColor: s.textColor || '', source: 'custom' as const }));
@@ -4033,13 +4218,13 @@ class DaybleSettingTab extends PluginSettingTab {
                         'style': 'padding: 0px; border: none; background: transparent; box-shadow: none; cursor: grab; color: var(--text-muted); flex-shrink: 0; display: flex; align-items: center; justify-content: center;'
                     }
                 });
-                dragBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-menu"><path d="M4 5h16"></path><path d="M4 12h16"></path><path d="M4 19h16"></path></svg>`;
+                setIcon(dragBtn, 'menu');
 
                 // Text Color Picker
                 const textPicker = wrap.createEl('input', { 
                     type: 'color',
                     attr: {
-                        'title': 'Text Color',
+                        'title': 'Text color',
                         'style': 'width: 30px; height: 30px; border-radius: 50%; border: none; padding: 0px; overflow: hidden; background: transparent; cursor: pointer;'
                     }
                 });
@@ -4049,26 +4234,23 @@ class DaybleSettingTab extends PluginSettingTab {
                 const bgPicker = wrap.createEl('input', { 
                     type: 'color',
                     attr: {
-                        'title': 'Highlight Color',
+                        'title': 'Highlight color',
                         'style': 'width: 30px; height: 30px; border-radius: 50%; border: none; padding: 0px; overflow: hidden; background: transparent; cursor: pointer;'
                     }
                 });
                 bgPicker.value = entry.color;
 
-                // Name input for custom swatches
-                let nameInput: HTMLInputElement | undefined;
-                if (entry.source === 'custom') {
-                    nameInput = wrap.createEl('input', {
-                        type: 'text',
-                        cls: 'db-input',
-                        attr: {
-                            'placeholder': 'Name',
-                            'style': 'width: 80px; height: 30px; margin-left: 4px;'
-                        }
-                    });
-                    nameInput.value = entry.name;
-                    nameInput.onchange = () => updateAll();
-                }
+                // Name input
+                const nameInput = wrap.createEl('input', {
+                    type: 'text',
+                    cls: 'db-input',
+                    attr: {
+                        'placeholder': 'Name',
+                        'style': 'width: 80px; height: 30px; margin-left: 4px;'
+                    }
+                });
+                nameInput.value = entry.name;
+                nameInput.onchange = () => updateAll();
 
                 const updateAll = async () => {
                     const newBuilt: { name: string, color: string, textColor?: string }[] = [];
@@ -4078,12 +4260,12 @@ class DaybleSettingTab extends PluginSettingTab {
                         const src = el.dataset.source;
                         const bg = (el.querySelectorAll('input[type="color"]')[1] as HTMLInputElement).value;
                         const tx = (el.querySelectorAll('input[type="color"]')[0] as HTMLInputElement).value;
+                        const nInput = el.querySelector('input[type="text"]') as HTMLInputElement;
+                        const finalName = nInput?.value || '';
                         if (src === 'built') {
-                            const name = el.dataset.name || '';
-                            newBuilt.push({ name, color: bg, textColor: tx });
+                            newBuilt.push({ name: finalName, color: bg, textColor: tx });
                         } else {
-                            const nInput = el.querySelector('input[type="text"]') as HTMLInputElement;
-                            newCustom.push({ name: nInput?.value || '', color: bg, textColor: tx });
+                            newCustom.push({ name: finalName, color: bg, textColor: tx });
                         }
                     });
                     this.plugin.settings.swatches = newBuilt;
@@ -4097,23 +4279,29 @@ class DaybleSettingTab extends PluginSettingTab {
                         const current = select.value;
                         select.empty();
                         select.add(new Option('Default color', ''));
-                        [...newBuilt, ...newCustom].forEach((s, idx) => {
-                            const name = s.name || `custom-${idx}`;
-                            const opt = new Option('Color', name);
-                            opt.style.backgroundColor = s.color;
-                            opt.style.color = s.textColor || chooseTextColor(s.color);
+                        [...newBuilt, ...newCustom].forEach((s) => {
+                            const name = s.name;
+                            const opt = new Option(name, name);
+                            opt.setCssProps({
+                                'background-color': s.color,
+                                'color': s.textColor || chooseTextColor(s.color)
+                            });
                             select.add(opt);
                         });
                         select.value = current;
                         
                         // Update select style
-                        const selectedSwatch = [...newBuilt, ...newCustom].find((s, idx) => (s.name || `custom-${idx}`) === select.value);
+                        const selectedSwatch = [...newBuilt, ...newCustom].find((s) => s.name === select.value);
                         if (selectedSwatch) {
-                            select.style.backgroundColor = selectedSwatch.color;
-                            select.style.color = selectedSwatch.textColor || chooseTextColor(selectedSwatch.color);
+                            select.setCssProps({
+                                'background-color': selectedSwatch.color,
+                                'color': selectedSwatch.textColor || chooseTextColor(selectedSwatch.color)
+                            });
                         } else {
-                            select.style.removeProperty('background-color');
-                            select.style.removeProperty('color');
+                            select.setCssProps({
+                                'background-color': '',
+                                'color': ''
+                            });
                         }
                     });
                 };
@@ -4127,7 +4315,7 @@ class DaybleSettingTab extends PluginSettingTab {
                     attr: { 'aria-label': 'Delete color swatch' }
                 });
                 setIcon(delWrap, 'x');
-                delWrap.style.flexShrink = '0';
+                delWrap.setCssProps({ 'flex-shrink': '0' });
                 
                 delWrap.onclick = () => {
                     const modal = new ConfirmModal(this.app, 'Delete this color swatch?', async () => {
@@ -4151,9 +4339,11 @@ class DaybleSettingTab extends PluginSettingTab {
 
                     const ghost = document.body.createDiv({ cls: 'drag-reorder-ghost' });
                     const clone = wrap.cloneNode(true) as HTMLElement;
-                    clone.style.backgroundColor = 'transparent';
-                    clone.style.border = 'none';
-                    clone.style.boxShadow = 'none';
+                    clone.setCssProps({
+                        'background-color': 'transparent',
+                        'border': 'none',
+                        'box-shadow': 'none'
+                    });
                     
                     const originalInputs = wrap.querySelectorAll('input');
                     const clonedInputs = clone.querySelectorAll('input');
@@ -4162,30 +4352,33 @@ class DaybleSettingTab extends PluginSettingTab {
                     });
                     
                     ghost.appendChild(clone);
-                    ghost.style.width = `${rect.width}px`;
-                    ghost.style.height = `${rect.height}px`;
-                    ghost.style.left = `${rect.left}px`;
-                    ghost.style.top = `${rect.top}px`;
-                    ghost.style.position = 'fixed';
-                    ghost.style.zIndex = '9999';
-                    ghost.style.pointerEvents = 'none';
-                    ghost.style.opacity = '0.8';
-                    ghost.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
-                    ghost.style.backgroundColor = 'transparent';
-                    ghost.style.borderRadius = '4px';
+                    ghost.setCssProps({
+                        'width': `${rect.width}px`,
+                        'height': `${rect.height}px`,
+                        'left': `${rect.left}px`,
+                        'top': `${rect.top}px`,
+                        'position': 'fixed',
+                        'z-index': '9999',
+                        'pointer-events': 'none',
+                        'opacity': '0.8',
+                        'box-shadow': '0 4px 12px rgba(0, 0, 0, 0.2)',
+                        'background-color': 'transparent',
+                        'border-radius': '4px'
+                    });
 
                     wrap.classList.add('drag-ghost-hidden');
-                    const style = document.createElement('style');
-                    style.innerHTML = '.drag-ghost-hidden { opacity: 0 !important; pointer-events: none; }';
-                    document.head.appendChild(style);
+                    // Use CSS classes instead of dynamic style elements
+                    ghost.addClass('dayble-drag-ghost');
 
                     const onMove = (moveEvent: MouseEvent) => {
                         moveEvent.preventDefault();
                         const currentX = moveEvent.clientX;
                         const currentY = moveEvent.clientY;
 
-                        ghost.style.left = `${currentX - offsetX}px`;
-                        ghost.style.top = `${currentY - offsetY}px`;
+                        ghost.setCssProps({
+                            'left': `${currentX - offsetX}px`,
+                            'top': `${currentY - offsetY}px`
+                        });
 
                         const target = document.elementFromPoint(currentX, currentY);
                         const targetRow = target ? target.closest('.dayble-color-group') : null;
@@ -4211,7 +4404,6 @@ class DaybleSettingTab extends PluginSettingTab {
                         document.removeEventListener('mouseup', onEnd);
                         ghost.remove();
                         wrap.classList.remove('drag-ghost-hidden');
-                        style.remove();
                         await updateAll();
                     };
 
@@ -4222,6 +4414,7 @@ class DaybleSettingTab extends PluginSettingTab {
             combined.forEach((entry, idx) => { makeItem(entry, idx); });
             const controlsBottom = new Setting(colorsListTop);
             controlsBottom.settingEl.addClass('dayble-colors-controls');
+            controlsBottom.settingEl.addClass('dayble-transparent-setting');
             controlsBottom.addButton(b => {
                 b.setButtonText('Reset colors').onClick(() => {
                     const modal = new ConfirmModal(this.app, 'Reset color swatches to default?', async () => {
@@ -4234,12 +4427,14 @@ class DaybleSettingTab extends PluginSettingTab {
                 });
             });
             controlsBottom.addButton(b => {
-                b.setButtonText('+ Add color').onClick(async () => {
+                b.setButtonText('+ add color').onClick(async () => {
+                    (b.buttonEl).addClass('mod-cta');
                     if (!this.plugin.settings.userCustomSwatches) this.plugin.settings.userCustomSwatches = [];
                     this.plugin.settings.userCustomSwatches.push({ name: '', color: '#ff0000', textColor: '#ffffff' });
                     await this.plugin.saveSettings();
                     renderColorsTop();
                 });
+                (b.buttonEl).addClass('mod-cta');
             });
         };
         renderColorsTop();
@@ -4258,11 +4453,23 @@ class DaybleSettingTab extends PluginSettingTab {
                 // Drag Handle
                 const dragBtn = row.controlEl.createEl('button', {
                     attr: {
-                        'aria-label': 'Drag to reorder',
-                        'style': 'padding: 0px; border: none; background: transparent; box-shadow: none; cursor: grab; color: var(--text-muted); flex-shrink: 0; display: flex; align-items: center; justify-content: center; margin-right: 8px;'
+                        'aria-label': 'Drag to reorder'
                     }
                 });
-                dragBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-menu"><path d="M4 5h16"></path><path d="M4 12h16"></path><path d="M4 19h16"></path></svg>`;
+                dragBtn.setCssProps({
+                    'padding': '0px',
+                    'border': 'none',
+                    'background': 'transparent',
+                    'box-shadow': 'none',
+                    'cursor': 'grab',
+                    'color': 'var(--text-muted)',
+                    'flex-shrink': '0',
+                    'display': 'flex',
+                    'align-items': 'center',
+                    'justify-content': 'center',
+                    'margin-right': '8px'
+                });
+                setIcon(dragBtn, 'menu');
 
                 dragBtn.addEventListener('mousedown', (e) => {
                     e.preventDefault();
@@ -4290,30 +4497,32 @@ class DaybleSettingTab extends PluginSettingTab {
                     });
                     
                     ghost.appendChild(clone);
-                    ghost.style.width = `${rect.width}px`;
-                    ghost.style.height = `${rect.height}px`;
-                    ghost.style.left = `${rect.left}px`;
-                    ghost.style.top = `${rect.top}px`;
-                    ghost.style.position = 'fixed';
-                    ghost.style.zIndex = '9999';
-                    ghost.style.pointerEvents = 'none';
-                    ghost.style.opacity = '0.8';
-                    ghost.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
-                    ghost.style.backgroundColor = 'var(--background-primary)';
-                    ghost.style.borderRadius = '4px';
+                    ghost.setCssProps({
+                        'width': `${rect.width}px`,
+                        'height': `${rect.height}px`,
+                        'left': `${rect.left}px`,
+                        'top': `${rect.top}px`,
+                        'position': 'fixed',
+                        'z-index': '9999',
+                        'pointer-events': 'none',
+                        'opacity': '0.8',
+                        'box-shadow': '0 4px 12px rgba(0, 0, 0, 0.2)',
+                        'background-color': 'var(--background-primary)',
+                        'border-radius': '4px'
+                    });
 
                     wrap.classList.add('drag-ghost-hidden');
-                    const style = document.createElement('style');
-                    style.innerHTML = '.drag-ghost-hidden { opacity: 0 !important; pointer-events: none; }';
-                    document.head.appendChild(style);
+                    ghost.addClass('dayble-drag-ghost');
 
                     const onMove = (moveEvent: MouseEvent) => {
                         moveEvent.preventDefault();
                         const currentX = moveEvent.clientX;
                         const currentY = moveEvent.clientY;
 
-                        ghost.style.left = `${currentX - offsetX}px`;
-                        ghost.style.top = `${currentY - offsetY}px`;
+                        ghost.setCssProps({
+                            'left': `${currentX - offsetX}px`,
+                            'top': `${currentY - offsetY}px`
+                        });
 
                         const target = document.elementFromPoint(currentX, currentY);
                         const targetRow = target ? target.closest('.dayble-settings-category-row') : null;
@@ -4339,7 +4548,6 @@ class DaybleSettingTab extends PluginSettingTab {
                         document.removeEventListener('mouseup', onEnd);
                         ghost.remove();
                         wrap.classList.remove('drag-ghost-hidden');
-                        style.remove();
                         
                         // Reorder settings based on DOM order
                         const newCategories: EventCategory[] = [];
@@ -4470,8 +4678,10 @@ class DaybleSettingTab extends PluginSettingTab {
                 });
             });
         };
-        new Setting(containerEl).addButton(b => {
-            b.setButtonText('+ Add category');
+        const addCategorySetting = new Setting(containerEl);
+        addCategorySetting.settingEl.addClass('dayble-transparent-setting');
+        addCategorySetting.addButton(b => {
+            b.setButtonText('+ add category');
             (b.buttonEl).addClass('mod-cta');
             b.onClick(async () => {
                 const category: EventCategory = { id: randomId(), name: 'New category', bgColor: '#8392a4', textColor: '#ffffff', effect: 'embossed', animation: '', animation2: '', icon: undefined };
@@ -4502,11 +4712,23 @@ class DaybleSettingTab extends PluginSettingTab {
                 // Drag Handle
                 const dragBtn = row.controlEl.createEl('button', {
                     attr: {
-                        'aria-label': 'Drag to reorder',
-                        'style': 'padding: 0px; border: none; background: transparent; box-shadow: none; cursor: grab; color: var(--text-muted); flex-shrink: 0; display: flex; align-items: center; justify-content: center; margin-right: 4px;'
+                        'aria-label': 'Drag to reorder'
                     }
                 });
-                dragBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-menu"><path d="M4 5h16"></path><path d="M4 12h16"></path><path d="M4 19h16"></path></svg>`;
+                dragBtn.setCssProps({
+                    'padding': '0px',
+                    'border': 'none',
+                    'background': 'transparent',
+                    'box-shadow': 'none',
+                    'cursor': 'grab',
+                    'color': 'var(--text-muted)',
+                    'flex-shrink': '0',
+                    'display': 'flex',
+                    'align-items': 'center',
+                    'justify-content': 'center',
+                    'margin-right': '4px'
+                });
+                setIcon(dragBtn, 'menu');
 
                 dragBtn.addEventListener('mousedown', (e) => {
                     e.preventDefault();
@@ -4534,30 +4756,32 @@ class DaybleSettingTab extends PluginSettingTab {
                     });
                     
                     ghost.appendChild(clone);
-                    ghost.style.width = `${rect.width}px`;
-                    ghost.style.height = `${rect.height}px`;
-                    ghost.style.left = `${rect.left}px`;
-                    ghost.style.top = `${rect.top}px`;
-                    ghost.style.position = 'fixed';
-                    ghost.style.zIndex = '9999';
-                    ghost.style.pointerEvents = 'none';
-                    ghost.style.opacity = '0.8';
-                    ghost.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
-                    ghost.style.backgroundColor = 'var(--background-primary)';
-                    ghost.style.borderRadius = '4px';
+                    ghost.setCssProps({
+                        'width': `${rect.width}px`,
+                        'height': `${rect.height}px`,
+                        'left': `${rect.left}px`,
+                        'top': `${rect.top}px`,
+                        'position': 'fixed',
+                        'z-index': '9999',
+                        'pointer-events': 'none',
+                        'opacity': '0.8',
+                        'box-shadow': '0 4px 12px rgba(0, 0, 0, 0.2)',
+                        'background-color': 'var(--background-primary)',
+                        'border-radius': '4px'
+                    });
 
                     wrap.classList.add('drag-ghost-hidden');
-                    const style = document.createElement('style');
-                    style.innerHTML = '.drag-ghost-hidden { opacity: 0 !important; pointer-events: none; }';
-                    document.head.appendChild(style);
+                    ghost.addClass('dayble-drag-ghost');
 
                     const onMove = (moveEvent: MouseEvent) => {
                         moveEvent.preventDefault();
                         const currentX = moveEvent.clientX;
                         const currentY = moveEvent.clientY;
 
-                        ghost.style.left = `${currentX - offsetX}px`;
-                        ghost.style.top = `${currentY - offsetY}px`;
+                        ghost.setCssProps({
+                            'left': `${currentX - offsetX}px`,
+                            'top': `${currentY - offsetY}px`
+                        });
 
                         const target = document.elementFromPoint(currentX, currentY);
                         const targetRow = target ? target.closest('.db-triggers-row') : null;
@@ -4583,7 +4807,6 @@ class DaybleSettingTab extends PluginSettingTab {
                         document.removeEventListener('mouseup', onEnd);
                         ghost.remove();
                         wrap.classList.remove('drag-ghost-hidden');
-                        style.remove();
                         
                         // Reorder settings based on DOM order
                         const updatedTriggers: any[] = [];
@@ -4613,6 +4836,7 @@ class DaybleSettingTab extends PluginSettingTab {
                     });
                     (t.inputEl).classList.add('db-input');
                     (t.inputEl).addClass('dayble-trigger-input');
+                    (t.inputEl).setCssProps({ 'min-width': '200px' });
                 });
                 row.addDropdown(d => {
                     const cats = this.plugin.settings.eventCategories || [];
@@ -4631,7 +4855,7 @@ class DaybleSettingTab extends PluginSettingTab {
                 });
                 row.addDropdown(d => {
                     d.addOption('', 'Default color');
-                    swatches.forEach(s => d.addOption(s.name, 'Color'));
+                    swatches.forEach(s => d.addOption(s.name, s.name));
                     d.setValue(tr.colorName || tr.color || '');
                     d.onChange(async v => {
                         if (!v) {
@@ -4660,11 +4884,15 @@ class DaybleSettingTab extends PluginSettingTab {
                         
                         // Style the select element itself
                         if (selectedSwatch) {
-                            (d.selectEl).style.setProperty('background-color', selectedSwatch.color);
-                            (d.selectEl).style.setProperty('color', selectedSwatch.textColor || chooseTextColor(selectedSwatch.color));
+                            (d.selectEl).setCssProps({
+                                'background-color': selectedSwatch.color,
+                                'color': selectedSwatch.textColor || chooseTextColor(selectedSwatch.color)
+                            });
                         } else {
-                            (d.selectEl).style.removeProperty('background-color');
-                            (d.selectEl).style.removeProperty('color');
+                            (d.selectEl).setCssProps({
+                                'background-color': '',
+                                'color': ''
+                            });
                         }
                         
                         // Style the options
@@ -4672,8 +4900,10 @@ class DaybleSettingTab extends PluginSettingTab {
                             if (!opt.value) return; // Skip default option
                             const s = swatches.find(sw => sw.name === opt.value || sw.color === opt.value);
                             if (s) {
-                                opt.style.setProperty('background-color', s.color);
-                                opt.style.setProperty('color', s.textColor || chooseTextColor(s.color));
+                                (opt as unknown as { setCssProps: (props: any) => void }).setCssProps?.({
+                                    'background-color': s.color,
+                                    'color': s.textColor || chooseTextColor(s.color)
+                                });
                             }
                         });
                     };
@@ -4691,8 +4921,12 @@ class DaybleSettingTab extends PluginSettingTab {
                     });
                 });
             });
-            new Setting(triggersWrap).addButton(b => {
-                b.setButtonText('+ Add trigger').onClick(async () => {
+            const addTriggerSetting = new Setting(triggersWrap);
+            addTriggerSetting.settingEl.addClass('dayble-transparent-setting');
+            addTriggerSetting.addButton(b => {
+                b.setButtonText('+ add trigger');
+                (b.buttonEl).addClass('mod-cta');
+                b.onClick(async () => {
                     const items2 = (this.plugin.settings.triggers || []).slice();
                     items2.push({ id: randomId(), pattern: '', categoryId: '' });
                     this.plugin.settings.triggers = items2;
