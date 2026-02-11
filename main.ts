@@ -35,6 +35,7 @@ interface DaybleSettings {
     todayModalSplitView?: boolean;
     tooltipEnabled?: boolean;
     showCopyTextOption?: boolean;
+    onlyShowPinnedEvents?: boolean;
 } 
 
 const DEFAULT_SETTINGS: DaybleSettings = {
@@ -65,6 +66,7 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     todayModalSplitView: true,
     tooltipEnabled: true,
     showCopyTextOption: false,
+    onlyShowPinnedEvents: false,
     swatches: [
         { name: 'Red', color: '#eb3b5a', textColor: '#f9c6d0' },
         { name: 'Orange', color: '#fa8231', textColor: '#fed8be' },
@@ -96,6 +98,7 @@ interface DaybleEvent {
     description?: string;
     icon?: string;
     completed?: boolean;
+    pinned?: boolean;
     color?: string; // user-set color (hex)
     textColor?: string; // user-set text color (hex)
     categoryId?: string;
@@ -708,7 +711,10 @@ class DaybleCalendarView extends ItemView {
         const segmentHeight = 28;
         const segmentGap = 4; // gappy
         const countsByDate: Record<string, number> = {};
-        const longEventsPreset = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
+        let longEventsPreset = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
+        if (this.plugin.settings.onlyShowPinnedEvents) {
+            longEventsPreset = longEventsPreset.filter(ev => ev.pinned);
+        }
         longEventsPreset.forEach(ev => {
             const start = new Date(ev.startDate);
             const end = new Date(ev.endDate);
@@ -767,7 +773,10 @@ class DaybleCalendarView extends ItemView {
             const adjusted = Math.max(0, preMt - 6);
             container.style.marginTop = adjusted ? `${adjusted}px` : '';
 
-            const dayEvents = this.events.filter(e => e.date === fullDate);
+            let dayEvents = this.events.filter(e => e.date === fullDate);
+            if (this.plugin.settings.onlyShowPinnedEvents) {
+                dayEvents = dayEvents.filter(e => e.pinned);
+            }
             dayEvents.forEach(e => container.appendChild(this.createEventItem(e)));
             
             // Drag and Drop (reused optimized logic from month view)
@@ -1049,7 +1058,10 @@ class DaybleCalendarView extends ItemView {
         const segmentHeight = 28;
         const segmentGap = 4; // gappy
         const countsByDate: Record<string, number> = {};
-        const longEventsPreset = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
+        let longEventsPreset = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
+        if (this.plugin.settings.onlyShowPinnedEvents) {
+            longEventsPreset = longEventsPreset.filter(ev => ev.pinned);
+        }
         longEventsPreset.forEach(ev => {
             const start = new Date(ev.startDate);
             const end = new Date(ev.endDate);
@@ -1090,11 +1102,14 @@ class DaybleCalendarView extends ItemView {
             const longContainer = cell.createDiv({ cls: 'dayble-long-container' });
             longContainer.addClass('db-long-container');
             const container = cell.createDiv({ cls: 'dayble-event-container' });
-            const preCount = countsByDate[fullDate] || 0;
-            const preMt = preCount > 0 ? (preCount * segmentHeight) + (Math.max(0, preCount - 1) * segmentGap) + 2 : 0;
-            container.style.marginTop = preMt ? `${preMt}px` : '';
+            const preMt = countsByDate[fullDate] || 0;
+            const preMtPx = preMt > 0 ? (preMt * segmentHeight) + (Math.max(0, preMt - 1) * segmentGap) + 2 : 0;
+            container.style.marginTop = preMtPx ? `${preMtPx}px` : '';
             
-            const dayEvents = this.events.filter(e => e.date === fullDate);
+            let dayEvents = this.events.filter(e => e.date === fullDate);
+            if (this.plugin.settings.onlyShowPinnedEvents) {
+                dayEvents = dayEvents.filter(e => e.pinned);
+            }
             dayEvents.forEach(e => container.appendChild(this.createEventItem(e)));
             
             // Allow reordering events within the container
@@ -1387,7 +1402,10 @@ class DaybleCalendarView extends ItemView {
         const segmentGap = 4;
         // getCellWidth removed as unused
         const countsByDate: Record<string, number> = {};
-        const longEvents = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
+        let longEvents = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
+        if (this.plugin.settings.onlyShowPinnedEvents) {
+            longEvents = longEvents.filter(ev => ev.pinned);
+        }
         longEvents.forEach(ev => {
             const start = new Date(ev.startDate);
             const end = new Date(ev.endDate);
@@ -1800,6 +1818,15 @@ class DaybleCalendarView extends ItemView {
                     const text = `${ev.title || ''}${ev.description ? '\n' + ev.description : ''}`;
                     await navigator.clipboard.writeText(text);
                     new Notice('event text copied.');
+                }));
+                menu.addSeparator();
+            }
+
+            if (this.plugin.settings.onlyShowPinnedEvents) {
+                menu.addItem(i => i.setTitle(ev.pinned ? 'Unpin event' : 'Pin event').setIcon('pin').onClick(async () => {
+                    ev.pinned = !ev.pinned;
+                    await this.saveAllEntries();
+                    await this.render();
                 }));
                 menu.addSeparator();
             }
@@ -3388,6 +3415,19 @@ class DaybleSettingTab extends PluginSettingTab {
                     .onChange(async v => {
                         this.plugin.settings.showCopyTextOption = v;
                         await this.plugin.saveSettings();
+                    });
+            });
+
+        new Setting(containerEl)
+            .setName('Only show pinned events in month & week view')
+            .setDesc('Shows only pinned events in Month & Week views. All events still appear in Day view.')
+            .addToggle(t => {
+                t.setValue(this.plugin.settings.onlyShowPinnedEvents ?? false)
+                    .onChange(async v => {
+                        this.plugin.settings.onlyShowPinnedEvents = v;
+                        await this.plugin.saveSettings();
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
                     });
             });
 
