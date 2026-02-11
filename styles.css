@@ -1051,7 +1051,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 
-/* TODO: better the snow anim */
+/* 
 .dayble-anim-snow-falling {
     position: relative;
     overflow: hidden;
@@ -1075,7 +1075,114 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 @keyframes snow-fall {
     0% { background-position: 0 0, 50px 50px, 100px 100px, 150px 150px, 200px 200px, 250px 250px; }
     100% { background-position: 0 400px, 50px 450px, 100px 500px, 150px 550px, 200px 600px, 250px 650px; }
+} */
+
+
+/* ------- start of snow -------- */
+.dayble-anim-snow-falling {
+    overflow: hidden;
 }
+
+.dayble-anim-snow-falling::before,
+.dayble-anim-snow-falling::after,
+.dayble-anim-snow-falling .snow-layer-1,
+.dayble-anim-snow-falling .snow-layer-2,
+.dayble-anim-snow-falling .snow-layer-3 {
+    content: '';
+    position: absolute;
+    inset: -200px 0 0 0;
+    pointer-events: none;
+    background-repeat: repeat;
+    opacity: 0.85;
+}
+
+.dayble-anim-snow-falling::before {
+    background-image:
+        radial-gradient(circle at 20% 10%, currentColor 1.5px, transparent 3px),
+        radial-gradient(circle at 70% 30%, currentColor 1.2px, transparent 3px),
+        radial-gradient(circle at 50% 50%, currentColor 1.8px, transparent 4px),
+        radial-gradient(circle at 90% 70%, currentColor 1.3px, transparent 3px);
+    background-size: 250px 250px;
+    animation: snow-back 16s linear infinite;
+    animation-delay: 0s;
+    opacity: 0.5;
+}
+
+.dayble-anim-snow-falling::after {
+    background-image:
+        radial-gradient(circle at 30% 20%, currentColor 2.5px, transparent 5px),
+        radial-gradient(circle at 80% 40%, currentColor 2px, transparent 4px),
+        radial-gradient(circle at 60% 80%, currentColor 2.2px, transparent 4px),
+        radial-gradient(circle at 10% 60%, currentColor 2.8px, transparent 5px);
+    background-size: 200px 200px;
+    animation: snow-front 10s linear infinite;
+    animation-delay: 0s;
+}
+
+.dayble-anim-snow-falling .snow-layer-1 {
+    background-image:
+        radial-gradient(circle at 15% 25%, currentColor 1.8px, transparent 3.5px),
+        radial-gradient(circle at 65% 45%, currentColor 1.5px, transparent 3px),
+        radial-gradient(circle at 45% 75%, currentColor 2px, transparent 4px),
+        radial-gradient(circle at 85% 15%, currentColor 1.6px, transparent 3px);
+    background-size: 220px 220px;
+    animation: snow-mid 12s linear infinite;
+    animation-delay: -4s;
+    opacity: 0.6;
+}
+
+.dayble-anim-snow-falling .snow-layer-2 {
+    background-image:
+        radial-gradient(circle at 40% 35%, currentColor 2px, transparent 4px),
+        radial-gradient(circle at 75% 55%, currentColor 1.7px, transparent 3.5px),
+        radial-gradient(circle at 25% 85%, currentColor 2.2px, transparent 4.5px),
+        radial-gradient(circle at 55% 25%, currentColor 1.9px, transparent 4px);
+    background-size: 180px 180px;
+    animation: snow-mid 14s linear infinite;
+    animation-delay: -7s;
+    opacity: 0.55;
+}
+
+.dayble-anim-snow-falling .snow-layer-3 {
+    background-image:
+        radial-gradient(circle at 50% 15%, currentColor 2.2px, transparent 4.5px),
+        radial-gradient(circle at 20% 65%, currentColor 1.9px, transparent 4px),
+        radial-gradient(circle at 80% 45%, currentColor 2.4px, transparent 5px),
+        radial-gradient(circle at 35% 90%, currentColor 2.1px, transparent 4.5px);
+    background-size: 190px 190px;
+    animation: snow-front 8s linear infinite;
+    animation-delay: -2s;
+    opacity: 0.65;
+}
+
+@keyframes snow-back {
+    0% {
+        transform: translateY(0) translateX(0);
+    }
+    100% {
+        transform: translateY(400px) translateX(30px);
+    }
+}
+
+@keyframes snow-mid {
+    0% {
+        transform: translateY(0) translateX(0);
+    }
+    100% {
+        transform: translateY(450px) translateX(-20px);
+    }
+}
+
+@keyframes snow-front {
+    0% {
+        transform: translateY(0) translateX(0);
+    }
+    100% {
+        transform: translateY(500px) translateX(40px);
+    }
+}
+
+/* ------- end of snow -------- */
 
 .dayble-anim-animated-gradient {
     position: relative;
@@ -1653,4 +1760,8 @@ margin-top: 6px !important;
 
 .dayble-day.dayble-cell-max {
    padding-bottom: 0 !important;
+}
+
+.dayble-view-select {
+   width: 70px;
 }

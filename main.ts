@@ -31,7 +31,7 @@ interface DaybleSettings {
     holderPlacement?: 'left' | 'right' | 'hidden';
     calendarWeekActive?: boolean;
     calendarView?: 'Month' | 'Week' | 'Day' | 'Agenda';
-    triggers?: { pattern: string, categoryId: string, color?: string, textColor?: string }[];
+    triggers?: { id?: string, pattern: string, categoryId: string, color?: string, textColor?: string, colorName?: string }[];
     weeklyNotesEnabled?: boolean;
     todayModalSplitView?: boolean;
     tooltipEnabled?: boolean;
@@ -70,20 +70,36 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     showCopyTextOption: false,
     onlyShowPinnedEvents: false,
     swatches: [
-        { name: 'Red', color: '#eb3b5a', textColor: '#f9c6d0' },
-        { name: 'Orange', color: '#fa8231', textColor: '#fed8be' },
-        { name: 'Amber', color: '#e5a216', textColor: '#f8e5bb' },
-        { name: 'Green', color: '#20bf6b', textColor: '#c4eeda' },
-        { name: 'Teal', color: '#0fb9b1', textColor: '#bdecea' },
-        { name: 'Blue', color: '#2d98da', textColor: '#c5e3f8' },
-        { name: 'Cornflower', color: '#3867d6', textColor: '#c9d5f8' },
-        { name: 'Indigo', color: '#5454d0', textColor: '#d2d2f8' },
-        { name: 'Purple', color: '#8854d0', textColor: '#e2d2f8' },
-        { name: 'Magenta', color: '#b554d0', textColor: '#edd2f8' },
-        { name: 'Pink', color: '#e832c1', textColor: '#f8c2ef' },
-        { name: 'Rose', color: '#e83289', textColor: '#f8c2e0' },
-        { name: 'Brown', color: '#965b3b', textColor: '#e5d4c9' },
-        { name: 'Gray', color: '#8392a4', textColor: '#e3e6ea' }
+        // { name: 'Red', color: '#eb3b5a', textColor: '#f9c6d0' },
+        // { name: 'Orange', color: '#fa8231', textColor: '#fed8be' },
+        // { name: 'Amber', color: '#e5a216', textColor: '#f8e5bb' },
+        // { name: 'Green', color: '#20bf6b', textColor: '#c4eeda' },
+        // { name: 'Teal', color: '#0fb9b1', textColor: '#bdecea' },
+        // { name: 'Blue', color: '#2d98da', textColor: '#c5e3f8' },
+        // { name: 'Cornflower', color: '#3867d6', textColor: '#c9d5f8' },
+        // { name: 'Indigo', color: '#5454d0', textColor: '#d2d2f8' },
+        // { name: 'Purple', color: '#8854d0', textColor: '#e2d2f8' },
+        // { name: 'Magenta', color: '#b554d0', textColor: '#edd2f8' },
+        // { name: 'Pink', color: '#e832c1', textColor: '#f8c2ef' },
+        // { name: 'Rose', color: '#e83289', textColor: '#f8c2e0' },
+        // { name: 'Brown', color: '#965b3b', textColor: '#e5d4c9' },
+        // { name: 'Gray', color: '#8392a4', textColor: '#e3e6ea' }
+
+        { name: 'Red',        color: '#952237', textColor: '#e9b7c1' },
+        { name: 'Orange',     color: '#ae581e', textColor: '#eec7ad' },
+        { name: 'Amber',      color: '#a97714', textColor: '#e8d7ad' },
+        { name: 'Green',      color: '#1d9356', textColor: '#b2dbc8' },
+        { name: 'Teal',       color: '#1d9993', textColor: '#a9d9d6' },
+        { name: 'Blue',       color: '#24709f', textColor: '#b2d2ea' },
+        { name: 'Cornflower', color: '#25499d', textColor: '#b7c4ea' },
+        { name: 'Indigo',     color: '#353597', textColor: '#c1c1ea' },
+        { name: 'Purple',     color: '#5d33a1', textColor: '#d4c4ea' },
+        { name: 'Magenta',    color: '#77328e', textColor: '#e0c4ea' },
+        { name: 'Pink',       color: '#9d2383', textColor: '#eab3de' },
+        { name: 'Rose',       color: '#a42661', textColor: '#eab3cc' },
+        { name: 'Brown',      color: '#653c26', textColor: '#d8c6bb' },
+        { name: 'Gray',       color: '#515d6b', textColor: '#d5d9de' }
+
     ],
     userCustomSwatches: [],
     eventCategories: [],
@@ -103,6 +119,7 @@ interface DaybleEvent {
     pinned?: boolean;
     color?: string; // user-set color (hex)
     textColor?: string; // user-set text color (hex)
+    colorName?: string; // swatch name
     categoryId?: string;
     effect?: string;
     animation?: string;
@@ -124,6 +141,7 @@ export default class DaybleCalendarPlugin extends Plugin {
 
     async onload() {
         await this.loadSettings();
+        this.updateSwatchStyles();
         this.registerView(VIEW_TYPE, leaf => new DaybleCalendarView(leaf, this));
         this.addCommand({ id: 'open-calendar', name: 'Open calendar', callback: () => void this.openDayble() });
         this.addCommand({ id: 'focus-today', name: 'Focus on today', callback: () => void this.focusToday() });
@@ -170,6 +188,36 @@ try { await this.ensureEntriesFolder(); } catch (e) { console.error(e); }
 
     async saveSettings() {
         await this.saveData(this.settings);
+        this.updateSwatchStyles();
+    }
+
+    updateSwatchStyles() {
+        let styleEl = document.getElementById('dayble-swatch-styles');
+        if (!styleEl) {
+            styleEl = document.createElement('style');
+            styleEl.id = 'dayble-swatch-styles';
+            document.head.appendChild(styleEl);
+        }
+
+        let css = ':root {\n';
+        const swatches = this.settings.swatches || [];
+        const custom = this.settings.userCustomSwatches || [];
+        
+        [...swatches, ...custom].forEach((s, idx) => {
+                const name = s.name || `custom-${idx}`;
+                const id = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+                css += `  --db-swatch-${id}-bg: ${s.color};\n`;
+                css += `  --db-swatch-${id}-text: ${s.textColor || chooseTextColor(s.color)};\n`;
+            });
+            css += '}\n';
+
+            [...swatches, ...custom].forEach((s, idx) => {
+                const name = s.name || `custom-${idx}`;
+                const id = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+                css += `.dayble-swatch-${id} { --event-bg-color: var(--db-swatch-${id}-bg) !important; --event-text-color: var(--db-swatch-${id}-text) !important; }\n`;
+            });
+
+        styleEl.textContent = css;
     }
 
     async openDayble() {
@@ -249,6 +297,12 @@ class DaybleCalendarView extends ItemView {
     lastScrollTop?: number;
     dayModeTodayModal?: TodayModal;
     _dayModeRO?: ResizeObserver;
+    saveTimeout: any;
+    isResizingWeeklyNotes = false;
+    weeklyNotesResizeStartY = 0;
+    weeklyNotesResizeStartHeight = 0;
+    _boundWeeklyNotesMouseMove?: (e: MouseEvent) => void;
+    _boundWeeklyNotesMouseUp?: (e: MouseEvent) => void;
 
     constructor(leaf: WorkspaceLeaf, plugin: DaybleCalendarPlugin) {
         super(leaf);
@@ -379,7 +433,7 @@ class DaybleCalendarView extends ItemView {
                 diff = -diff;
             }
             const newWidth = Math.max(200, this.holderResizeStartWidth + diff);
-            this.holderEl.style.width = newWidth + 'px';
+            this.holderEl.setCssProps({ 'width': newWidth + 'px' });
         };
         
         this._boundHolderMouseUp = async (e: MouseEvent) => {
@@ -432,7 +486,7 @@ class DaybleCalendarView extends ItemView {
         
         // Apply saved holder width if it exists
         if (this.plugin.settings.holderWidth) {
-            this.holderEl.style.width = this.plugin.settings.holderWidth + 'px';
+            this.holderEl.setCssProps({ 'width': this.plugin.settings.holderWidth + 'px' });
         }
         
         if (this.plugin.settings.holderOpen) this.holderEl.addClass('open'); else this.holderEl.removeClass('open');
@@ -824,7 +878,7 @@ class DaybleCalendarView extends ItemView {
             const preCount = countsByDate[fullDate] || 0;
             const preMt = preCount > 0 ? (preCount * segmentHeight) + (Math.max(0, preCount - 1) * segmentGap) + 2 : 0;
             const adjusted = Math.max(0, preMt - 6);
-            container.style.marginTop = adjusted ? `${adjusted}px` : '';
+            container.setCssProps({ 'margin-top': adjusted ? `${adjusted}px` : '' });
 
             let dayEvents = this.events.filter(e => e.date === fullDate);
             if (this.plugin.settings.onlyShowPinnedEvents) {
@@ -1157,7 +1211,7 @@ class DaybleCalendarView extends ItemView {
             const container = cell.createDiv({ cls: 'dayble-event-container' });
             const preMt = countsByDate[fullDate] || 0;
             const preMtPx = preMt > 0 ? (preMt * segmentHeight) + (Math.max(0, preMt - 1) * segmentGap) + 2 : 0;
-            container.style.marginTop = preMtPx ? `${preMtPx}px` : '';
+            container.setCssProps({ 'margin-top': preMtPx ? `${preMtPx}px` : '' });
             
             let dayEvents = this.events.filter(e => e.date === fullDate);
             if (this.plugin.settings.onlyShowPinnedEvents) {
@@ -1382,10 +1436,12 @@ class DaybleCalendarView extends ItemView {
         const fullDate = `${yy}-${mm}-${dd}`;
 
         const dayContainer = this.gridEl.createDiv({ cls: 'dayble-day-mode-container' });
-        dayContainer.style.gridColumn = '1 / span 7';
-        dayContainer.style.height = '100%';
-        dayContainer.style.display = 'flex';
-        dayContainer.style.flexDirection = 'column';
+        dayContainer.setCssProps({
+            'grid-column': '1 / span 7',
+            'height': '100%',
+            'display': 'flex',
+            'flex-direction': 'column'
+        });
 
         // Instantiate TodayModal but don't open it as a modal.
         // We will use its contentEl directly.
@@ -1415,8 +1471,10 @@ class DaybleCalendarView extends ItemView {
             // Re-adjust scroller height just in case
             const scroller = dayContainer.querySelector('.dayble-focus-scroll') as HTMLElement;
             if (scroller) {
-                scroller.style.height = '100%';
-                scroller.style.flex = '1';
+                scroller.setCssProps({
+                    'height': '100%',
+                    'flex': '1'
+                });
             }
         });
         
@@ -1430,10 +1488,12 @@ class DaybleCalendarView extends ItemView {
         if (this.monthTitleEl) this.monthTitleEl.setText(`${monthNames[dateObj.getMonth()]} ${dayNum}, ${year}`);
 
         // Adjust heights to be 100%
-        const scroller = dayContainer.querySelector('.dayble-focus-scroll') as HTMLElement;
-        if (scroller) {
-            scroller.style.height = '100%';
-            scroller.style.flex = '1';
+        const scroller2 = dayContainer.querySelector('.dayble-focus-scroll') as HTMLElement;
+        if (scroller2) {
+            scroller2.setCssProps({
+                'height': '100%',
+                'flex': '1'
+            });
         }
 
         await this.renderHolder();
@@ -1447,12 +1507,14 @@ class DaybleCalendarView extends ItemView {
         this.weekHeaderEl.empty();
         
         const agendaContainer = this.gridEl.createDiv({ cls: 'dayble-agenda-container' });
-        agendaContainer.style.gridColumn = '1 / span 7';
-        agendaContainer.style.display = 'flex';
-        agendaContainer.style.flexDirection = 'column';
-        agendaContainer.style.gap = '15px';
-        agendaContainer.style.padding = '15px';
-        agendaContainer.style.overflowY = 'auto';
+        agendaContainer.setCssProps({
+            'grid-column': '1 / span 7',
+            'display': 'flex',
+            'flex-direction': 'column',
+            'gap': '15px',
+            'padding': '15px',
+            'overflow-y': 'auto'
+        });
 
         // Filter and sort all events by their dates (including each day of multi-day events)
         const dayMap = new Map<string, DaybleEvent[]>();
@@ -1481,10 +1543,12 @@ class DaybleCalendarView extends ItemView {
         } else {
             sortedDates.forEach(dateStr => {
                 const dateHeader = agendaContainer.createDiv({ cls: 'dayble-agenda-date-header' });
-                dateHeader.style.fontWeight = 'bold';
-                dateHeader.style.borderBottom = '1px solid var(--background-modifier-border)';
-                dateHeader.style.paddingBottom = '5px';
-                dateHeader.style.marginTop = '10px';
+                dateHeader.setCssProps({
+                    'font-weight': 'bold',
+                    'border-bottom': '1px solid var(--background-modifier-border)',
+                    'padding-bottom': '5px',
+                    'margin-top': '10px'
+                });
                 dateHeader.setText(new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }));
 
                 const dayEvents = dayMap.get(dateStr) || [];
@@ -1499,7 +1563,7 @@ class DaybleCalendarView extends ItemView {
                 dayEvents.forEach(ev => {
                     const item = agendaContainer.appendChild(this.createEventItem(ev));
                     const itemEl = item as HTMLElement;
-                    itemEl.style.width = '100%';
+                    itemEl.setCssProps({ 'width': '100%' });
                     
                     // Add special class for long (multi-day) events
                     if (ev.startDate && ev.endDate && ev.startDate !== ev.endDate) {
@@ -1681,10 +1745,12 @@ class DaybleCalendarView extends ItemView {
                 }
                 (item).style.setProperty('--event-border-width', `${this.plugin.settings.eventBorderWidth ?? 2}px`);
                 (item).style.setProperty('--event-border-radius', `${this.plugin.settings.eventBorderRadius ?? 6}px`);
-                item.style.left = `${left}px`;
-                item.style.top = `${top}px`;
-                item.style.width = `${width}px`;
-                item.style.height = `${segmentHeight}px`;
+                item.setCssProps({
+                    'left': `${left}px`,
+                    'top': `${top}px`,
+                    'width': `${width}px`,
+                    'height': `${segmentHeight}px`
+                });
             } else {
                 for (let row = startRow; row <= endRow; row++) {
                     const rowStartIdx = row * cellsPerRow;
@@ -1741,10 +1807,12 @@ class DaybleCalendarView extends ItemView {
                     }
                     item.style.setProperty('--event-border-width', `${this.plugin.settings.eventBorderWidth ?? 2}px`);
                     item.style.setProperty('--event-border-radius', `${this.plugin.settings.eventBorderRadius ?? 6}px`);
-                    item.style.left = `${left}px`;
-                    item.style.top = `${top}px`;
-                    item.style.width = `${width}px`;
-                    item.style.height = `${segmentHeight}px`;
+                    item.setCssProps({
+                        'left': `${left}px`,
+                        'top': `${top}px`,
+                        'width': `${width}px`,
+                        'height': `${segmentHeight}px`
+                    });
                 }
             }
         });
@@ -1764,7 +1832,7 @@ class DaybleCalendarView extends ItemView {
                 const baseMt = count > 0 ? (count * segmentHeight) + (Math.max(0, count - 1) * segmentGap) + 2 : 0;
                 const isTodayCell = cell.classList.contains('dayble-current-day');
                 const mt = isTodayCell ? Math.max(0, baseMt - 4) : baseMt; // gappy
-                (container as HTMLElement).style.marginTop = mt ? `${mt}px` : '';
+                (container as HTMLElement).setCssProps({ 'margin-top': mt ? `${mt}px` : '' });
                 const maxH = this.plugin.settings.dayCellMaxHeight ?? 0;
                 if (maxH > 0) {
                     (cell as HTMLElement).style.setProperty('--dayble-cell-max-height', `${maxH}px`);
@@ -1807,7 +1875,7 @@ class DaybleCalendarView extends ItemView {
 
         const formatDate = (dateStr?: string) => {
             if (!dateStr) return '';
-            const [y, m, d] = dateStr.split('-').map(Number);
+            const [, m, d] = dateStr.split('-').map(Number);
             const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
             return `${d} ${monthNames[m - 1]}`;
         };
@@ -1885,9 +1953,21 @@ class DaybleCalendarView extends ItemView {
         
         let bgColor = '';
         let textColor = '';
-        
+        let colorName = ev.colorName;
+
         // Color selection logic (user-set color always preferred)
-        if (ev.color) {
+        if (colorName) {
+            const swatchId = colorName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+            item.addClass(`dayble-swatch-${swatchId}`);
+            item.classList.add('dayble-event-colored');
+            
+            const opacity = this.plugin.settings.eventBgOpacity ?? 1;
+            const bOpacity = this.plugin.settings.eventBorderOpacity ?? 1;
+            
+            item.style.setProperty('--event-bg-color', `color-mix(in srgb, var(--db-swatch-${swatchId}-bg), transparent calc(100% - (${opacity} * 100%)))`);
+            item.style.setProperty('--event-text-color', `var(--db-swatch-${swatchId}-text)`);
+            item.style.setProperty('--event-border-color', `color-mix(in srgb, var(--db-swatch-${swatchId}-text), transparent calc(100% - (${bOpacity} * 100%)))`);
+        } else if (ev.color) {
             bgColor = ev.color;
             textColor = ev.textColor || chooseTextColor(ev.color);
             (item as HTMLElement).dataset.color = ev.color;
@@ -1896,8 +1976,8 @@ class DaybleCalendarView extends ItemView {
             textColor = category.textColor;
         }
         
-        // Apply styling if we have colors
-        if (bgColor && textColor) {
+        // Apply styling if we have colors (for non-swatch colors)
+        if (!colorName && bgColor && textColor) {
             // Convert hex color to rgba with opacity
             const opacity = this.plugin.settings.eventBgOpacity ?? 1;
             const rgbaColor = hexToRgba(bgColor, opacity);
@@ -1949,7 +2029,7 @@ class DaybleCalendarView extends ItemView {
             const desc = item.createDiv({ cls: 'dayble-event-desc' });
             // Description inherits text color
             if (bgColor && textColor) {
-                desc.style.color = textColor;
+                desc.setCssProps({ 'color': textColor });
             }
             renderMarkdown(ev.description, desc, this.plugin.app);
         }
@@ -1985,9 +2065,11 @@ class DaybleCalendarView extends ItemView {
                 const dragImg = item.cloneNode(true) as HTMLElement;
                 dragImg.addClass('dayble-drag-ghost');
                 const rect = item.getBoundingClientRect();
-                dragImg.style.width = `${rect.width}px`;
-                dragImg.style.height = `${rect.height}px`;
-                dragImg.style.borderRadius = getComputedStyle(item).borderRadius;
+                dragImg.setCssProps({
+                    'width': `${rect.width}px`,
+                    'height': `${rect.height}px`,
+                    'border-radius': getComputedStyle(item).borderRadius
+                });
                 document.body.appendChild(dragImg);
                 e.dataTransfer?.setDragImage(dragImg, Math.min(8, rect.width / 4), Math.min(8, rect.height / 4));
                 (item as HTMLElement & { __dragImg?: HTMLElement }).__dragImg = dragImg;
@@ -2011,7 +2093,7 @@ class DaybleCalendarView extends ItemView {
                 menu.addItem(i => i.setTitle('Copy text').setIcon('clipboard').onClick(async () => {
                     const text = `${ev.title || ''}${ev.description ? '\n' + ev.description : ''}`;
                     await navigator.clipboard.writeText(text);
-                    new Notice('event text copied.');
+                    new Notice('Event text copied');
                 }));
                 menu.addSeparator();
             }
@@ -2079,9 +2161,11 @@ class DaybleCalendarView extends ItemView {
                     const dragImg = item.cloneNode(true) as HTMLElement;
                     dragImg.addClass('dayble-drag-ghost');
                     const rect = item.getBoundingClientRect();
-                    dragImg.style.width = `${rect.width}px`;
-                    dragImg.style.height = `${rect.height}px`;
-                    dragImg.style.borderRadius = getComputedStyle(item).borderRadius;
+                    dragImg.setCssProps({
+                        'width': `${rect.width}px`,
+                        'height': `${rect.height}px`,
+                        'border-radius': getComputedStyle(item).borderRadius
+                    });
                     document.body.appendChild(dragImg);
                     e.dataTransfer?.setDragImage(dragImg, Math.min(8, rect.width / 4), Math.min(8, rect.height / 4));
                     (item as HTMLElement & { __dragImg?: HTMLElement }).__dragImg = dragImg;
@@ -2232,6 +2316,7 @@ class EventModal extends Modal {
     iconBtnEl?: HTMLButtonElement;
     selectedColor?: string;
     selectedTextColor?: string;
+    selectedColorName?: string;
 
     constructor(app: App, plugin: DaybleCalendarPlugin, ev: DaybleEvent | undefined, date: string | undefined, endDate: string | undefined, defaultStartTime: string | undefined, defaultEndTime: string | undefined, onSubmit: (ev: Partial<DaybleEvent>) => Promise<void>, onDelete: () => Promise<void>, onPickIcon: () => Promise<void>) {
         super(app);
@@ -2247,6 +2332,7 @@ class EventModal extends Modal {
         this.icon = ev?.icon;
         this.selectedColor = ev?.color;
         this.selectedTextColor = ev?.textColor;
+        this.selectedColorName = ev?.colorName;
     }
 
     setIcon(icon: string) { this.icon = icon; if (this.iconBtnEl) setIcon(this.iconBtnEl, icon || 'plus'); }
@@ -2257,7 +2343,7 @@ class EventModal extends Modal {
         const heading = c.createEl('h3', { cls: 'dayble-modal-title' });
         c.addClass('db-modal');
         heading.addClass('db-modal-title');
-        heading.textContent = this.ev ? 'Edit event' : 'Add new event';
+        heading.textContent = this.ev ? 'Edit event' : '+ Add new event';
         const row1 = c.createDiv({ cls: 'dayble-modal-row' });
         row1.addClass('db-modal-row');
         const iconBtn = row1.createEl('button', { cls: 'dayble-btn dayble-icon-add' });
@@ -2309,8 +2395,10 @@ class EventModal extends Modal {
             });
             document.body.appendChild(suggestionContainer);
             const rect = target.getBoundingClientRect();
-            suggestionContainer.style.left = Math.round(rect.left) + 'px';
-            suggestionContainer.style.top = Math.round(rect.top + rect.height) + 'px';
+            suggestionContainer.setCssProps({
+                'left': Math.round(rect.left) + 'px',
+                'top': Math.round(rect.top + rect.height) + 'px'
+            });
         };
         const moveSuggestionSelection = (dir: 1 | -1) => {
             if (!suggestionContainer) return;
@@ -2353,34 +2441,38 @@ class EventModal extends Modal {
             defaultSwatch.onclick = () => {
                 this.selectedColor = undefined;
                 this.selectedTextColor = undefined;
+                this.selectedColorName = undefined;
                 document.querySelectorAll('.dayble-color-swatch').forEach(s => s.removeClass('dayble-color-swatch-selected'));
                 defaultSwatch.addClass('dayble-color-swatch-selected');
             };
-            if (!this.selectedColor) defaultSwatch.addClass('dayble-color-swatch-selected');
+            if (!this.selectedColor && !this.selectedColorName) defaultSwatch.addClass('dayble-color-swatch-selected');
             
             const settings = this.plugin.settings;
-            const builtSwatches = (settings?.swatches ?? []).map((s: { name: string, color: string, textColor?: string }) => ({ color: s.color, textColor: s.textColor }));
-            const customSwatches = (settings?.userCustomSwatches ?? []).map((s: { name: string, color: string, textColor?: string }) => ({ color: s.color, textColor: s.textColor }));
-            let swatches: Array<{ color: string, textColor?: string }> = builtSwatches;
+            const builtSwatches = (settings?.swatches ?? []).map((s: { name: string, color: string, textColor?: string }) => ({ name: s.name, color: s.color, textColor: s.textColor }));
+            const customSwatches = (settings?.userCustomSwatches ?? []).map((s: { name: string, color: string, textColor?: string }, idx: number) => ({ name: s.name || `custom-${idx}`, color: s.color, textColor: s.textColor }));
+            let swatches: Array<{ name: string, color: string, textColor?: string }> = builtSwatches;
             if (settings?.customSwatchesEnabled) {
                 swatches = builtSwatches.concat(customSwatches);
             }
             if (!swatches || swatches.length === 0) {
-                swatches = ['#eb3b5a', '#fa8231', '#e5a216', '#20bf6b', '#0fb9b1', '#2d98da', '#3867d6', '#5454d0', '#8854d0', '#b554d0', '#e832c1', '#e83289', '#965b3b', '#8392a4'].map(c => ({ color: c }));
+                swatches = ['#eb3b5a', '#fa8231', '#e5a216', '#20bf6b', '#0fb9b1', '#2d98da', '#3867d6', '#5454d0', '#8854d0', '#b554d0', '#e832c1', '#e83289', '#965b3b', '#8392a4'].map((c, i) => ({ name: `Default ${i}`, color: c }));
             }
-            swatches.forEach(({ color, textColor }) => {
+            swatches.forEach(({ name, color, textColor }) => {
                 const swatch = swatchesContainer.createEl('button', { cls: 'dayble-color-swatch' });
                 swatch.addClass('db-color-swatch');
-                swatch.style.backgroundColor = color;
-                swatch.style.borderColor = color;
-                swatch.title = color;
+                swatch.setCssProps({
+                    'background-color': color,
+                    'border-color': color
+                });
+                swatch.title = name || color;
                 swatch.onclick = () => {
-                    this.selectedColor = color;
-                    this.selectedTextColor = textColor || chooseTextColor(color);
+                    this.selectedColor = undefined;
+                    this.selectedTextColor = undefined;
+                    this.selectedColorName = name;
                     document.querySelectorAll('.dayble-color-swatch').forEach(s => s.removeClass('dayble-color-swatch-selected'));
                     swatch.addClass('dayble-color-swatch-selected');
                 };
-                if (this.selectedColor === color) swatch.addClass('dayble-color-swatch-selected');
+                if (this.selectedColorName === name || (this.selectedColor === color && !this.selectedColorName)) swatch.addClass('dayble-color-swatch-selected');
             });
             return colorRow;
         };
@@ -2475,17 +2567,22 @@ class EventModal extends Modal {
                 icon: this.icon,
                 categoryId: selectedCategoryId,
                 color: this.selectedColor,
-                textColor: this.selectedTextColor
+                textColor: this.selectedTextColor,
+                colorName: this.selectedColorName
             };
-            if (!payload.categoryId || !payload.color) {
+            if (!payload.categoryId && !payload.color && !payload.colorName) {
                 const triggers = this.plugin.settings.triggers || [];
                 const txt = ((payload.title || '') + ' ' + (payload.description || '')).toLowerCase();
-                const found = triggers.find((t: { pattern: string, categoryId: string, color?: string, textColor?: string }) => (t.pattern || '').toLowerCase() && txt.includes((t.pattern || '').toLowerCase()));
+                const found = triggers.find((t: { pattern: string, categoryId: string, color?: string, textColor?: string, colorName?: string }) => (t.pattern || '').toLowerCase() && txt.includes((t.pattern || '').toLowerCase()));
                 if (found) {
                     if (!payload.categoryId && found.categoryId) payload.categoryId = found.categoryId;
-                    if (!payload.color && found.color) {
-                        payload.color = found.color;
-                        payload.textColor = found.textColor;
+                    if (!payload.color && !payload.colorName) {
+                        if (found.colorName) {
+                            payload.colorName = found.colorName;
+                        } else if (found.color) {
+                            payload.color = found.color;
+                            payload.textColor = found.textColor;
+                        }
                     }
                 }
             }
@@ -2985,12 +3082,10 @@ class TodayModal extends Modal {
                         }
                     }
 
-                    selectionMirror.innerHTML = `
-                        <div class="dayble-focus-event-inner">
-                            <div>${formatHM(sh_m, sm_m)} - ${formatHM(eh_m, em_m)}</div>
-                            <div class="dayble-selection-duration">${durationText}</div>
-                        </div>
-                    `;
+                    selectionMirror.empty();
+                    const inner = selectionMirror.createDiv({ cls: 'dayble-focus-event-inner' });
+                    inner.createDiv().setText(`${formatHM(sh_m, sm_m)} - ${formatHM(eh_m, em_m)}`);
+                    inner.createDiv({ cls: 'dayble-selection-duration' }).setText(durationText);
                 }
             }
         };
@@ -3098,8 +3193,10 @@ class TodayModal extends Modal {
                 const colIntervals = split ? (cells.length / 2) * 2 : cells.length * 2;
                 for (let i = 1; i < colIntervals; i++) {
                     const line = quarter.createDiv({ cls: 'dayble-quarter-line' });
-                    line.style.left = `${gridRect.left - gRect.left}px`;
-                    line.style.width = `${gridRect.width}px`;
+                    line.setCssProps({
+                        'left': `${gridRect.left - gRect.left}px`,
+                        'width': `${gridRect.width}px`
+                    });
                     line.style.setProperty('--quarter-line-top', `${Math.round((gridRect.top - gRect.top) + i * pxPer15)}px`);
                 }
             });
@@ -3322,10 +3419,12 @@ class TodayModal extends Modal {
                 item.addClass('dayble-focus-event-abs');
                 
                 // Override background-color to use the variable set by createEventItem
-                item.style.backgroundColor = 'var(--event-bg-color, var(--background-primary))';
-                item.style.color = 'var(--event-text-color, var(--text-normal))';
-                item.style.borderColor = 'var(--event-border-color, var(--background-modifier-border))';
-                
+                item.setCssProps({
+                    'background-color': 'var(--event-bg-color, var(--background-primary))',
+                    'color': 'var(--event-text-color, var(--text-normal))',
+                    'border-color': 'var(--event-border-color, var(--background-modifier-border))',
+                    'pointer-events': 'auto'
+                });
                 // For events <= 30 mins, make them compact
                 if (durationMin <= 30) {
                     item.addClass('dayble-event-compact');
@@ -3340,7 +3439,6 @@ class TodayModal extends Modal {
                 item.style.setProperty('--focus-item-top', `${Math.round(top)}px`);
                 item.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
                 item.style.setProperty('--focus-item-height', `${Math.round(height)}px`);
-                item.style.pointerEvents = 'auto'; // Explicitly enable for absolute elements
                 item.onclick = async (e) => { e.stopPropagation(); await this.view?.openEventModal(ev.id, ev.date || ev.startDate, ev.endDate); };
                 // Drag to reposition within today modal (15-min granularity)
                 item.ondragstart = (e) => {
@@ -3359,7 +3457,6 @@ class TodayModal extends Modal {
                         img.width = 1; img.height = 1;
                         dt.setDragImage(img, 0, 0);
                     } catch {}
-                    const startMin = startTotal;
                     let duration = durationMin;
                     this.dragDuration = duration;
                 };
@@ -3428,12 +3525,6 @@ class ConfirmModal extends Modal {
         ok.textContent = 'Delete';
         ok.onclick = async () => { try { await this.onConfirm(); } finally { this.close(); } };
     }
-}
-
-interface ObsidianWindow extends Window {
-    obsidian?: {
-        getIconIds?: () => string[];
-    };
 }
 
 function getIconIdsSafe(): string[] {
@@ -3579,8 +3670,9 @@ class DaybleSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
         ;
+        // new Setting(containerEl).setName('Dayble Calendar Settings').setHeading();
 
-        // containerEl.createEl('h3', { text: 'General' });
+        new Setting(containerEl).setName('General').setHeading();
         new Setting(containerEl)
             .setName('Week start day')
             .setDesc('First day of the week')
@@ -3602,50 +3694,18 @@ class DaybleSettingTab extends PluginSettingTab {
             });
 
         new Setting(containerEl)
-            .setName('Event tooltips')
-            .setDesc('Show detailed tooltips when hovering over events.')
-            .addToggle(t => {
-                t.setValue(this.plugin.settings.tooltipEnabled ?? false)
-                    .onChange(async v => {
-                        this.plugin.settings.tooltipEnabled = v;
-                        await this.plugin.saveSettings();
-                        const view = this.plugin.getCalendarView();
-                        await view?.render();
-                    });
-            });
-
-        new Setting(containerEl)
-            .setName('Today modal split view')
-            .setDesc('Split the today modal focus grid into morning and afternoon columns on desktop.')
-            .addToggle(t => {
-                t.setValue(this.plugin.settings.todayModalSplitView ?? true)
-                    .onChange(async v => {
-                        this.plugin.settings.todayModalSplitView = v;
-                        await this.plugin.saveSettings();
-                    });
-            });
-
-        new Setting(containerEl)
-            .setName('Show copy text option')
-            .setDesc('Show "Copy text" in the event context menu to copy title and description.')
-            .addToggle(t => {
-                t.setValue(this.plugin.settings.showCopyTextOption ?? false)
-                    .onChange(async v => {
-                        this.plugin.settings.showCopyTextOption = v;
-                        await this.plugin.saveSettings();
-                    });
-            });
-
-        new Setting(containerEl)
-            .setName('Only show pinned events in month & week view')
-            .setDesc('Shows only pinned events in Month & Week views. All events still appear in Day view.')
-            .addToggle(t => {
-                t.setValue(this.plugin.settings.onlyShowPinnedEvents ?? false)
-                    .onChange(async v => {
-                        this.plugin.settings.onlyShowPinnedEvents = v;
-                        await this.plugin.saveSettings();
-                        const view = this.plugin.getCalendarView();
-                        await view?.render();
+            .setName('Time format')
+            .setDesc('Display times in 24h or 12h format')
+            .addDropdown(d => {
+                d.addOption('24h', '24-hour')
+                    .addOption('12h', '12-hour')
+                    .setValue(this.plugin.settings.timeFormat ?? '24h')
+                    .onChange(v => {
+                        this.plugin.settings.timeFormat = v as "24h" | "12h" | undefined;
+                        void this.plugin.saveSettings().then(async () => {
+                            const view = this.plugin.getCalendarView();
+                            await view?.render();
+                        });
                     });
             });
 
@@ -3674,23 +3734,48 @@ class DaybleSettingTab extends PluginSettingTab {
                         suggest.open();
                     });
             });
+
         new Setting(containerEl)
-            .setName('Time format')
-            .setDesc('Display times in 24h or 12h format')
-            .addDropdown(d => {
-                d.addOption('24h', '24-hour')
-                    .addOption('12h', '12-hour')
-                    .setValue(this.plugin.settings.timeFormat ?? '24h')
-                    .onChange(v => {
-                        this.plugin.settings.timeFormat = v as "24h" | "12h" | undefined;
-                        void this.plugin.saveSettings().then(async () => {
-                            const view = this.plugin.getCalendarView();
-                            await view?.render();
-                        });
+            .setName('Show copy text option')
+            .setDesc('Show copy text in the event context menu to copy title and description')
+            .addToggle(t => {
+                t.setValue(this.plugin.settings.showCopyTextOption ?? false)
+                    .onChange(async v => {
+                        this.plugin.settings.showCopyTextOption = v;
+                        await this.plugin.saveSettings();
                     });
             });
 
-        new Setting(containerEl).setName('Appearance').setHeading();
+        new Setting(containerEl)
+            .setName('Only show pinned events in month & week view')
+            .setDesc('Shows only pinned events in month & week views. All events still appear in day view')
+            .addToggle(t => {
+                t.setValue(this.plugin.settings.onlyShowPinnedEvents ?? false)
+                    .onChange(async v => {
+                        this.plugin.settings.onlyShowPinnedEvents = v;
+                        await this.plugin.saveSettings();
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
+                    });
+            });
+
+
+        
+
+        new Setting(containerEl).setName('Event appearance').setHeading();
+
+        new Setting(containerEl)
+            .setName('Event tooltips')
+            .setDesc('Show detailed tooltips when hovering over events.')
+            .addToggle(t => {
+                t.setValue(this.plugin.settings.tooltipEnabled ?? false)
+                    .onChange(async v => {
+                        this.plugin.settings.tooltipEnabled = v;
+                        await this.plugin.saveSettings();
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
+                    });
+            });
 
         new Setting(containerEl)
             .setName('Icon placement')
@@ -3837,6 +3922,8 @@ class DaybleSettingTab extends PluginSettingTab {
                         });
                 });
 
+        new Setting(containerEl).setName('Interface').setHeading();
+
         new Setting(containerEl)
             .setName('Holder placement')
             .setDesc('Place the holder toggle (left, right, or hidden)')
@@ -3858,10 +3945,21 @@ class DaybleSettingTab extends PluginSettingTab {
             });
 
         new Setting(containerEl)
-            .setName('Enable weekly notes')
-            .setDesc('Show a Markdown notes section below the calendar in weekly view')
+            .setName('Today modal split view')
+            .setDesc('Split the today modal focus grid into morning and afternoon columns on desktop.')
             .addToggle(t => {
-                t.setValue(this.plugin.settings.weeklyNotesEnabled ?? false)
+                t.setValue(this.plugin.settings.todayModalSplitView ?? true)
+                    .onChange(async v => {
+                        this.plugin.settings.todayModalSplitView = v;
+                        await this.plugin.saveSettings();
+                    });
+            });
+
+        new Setting(containerEl)
+            .setName('Enable weekly notes')
+            .setDesc('Show a Notes section below the calendar in weekly view')
+            .addToggle(t => {
+                t.setValue(this.plugin.settings.weeklyNotesEnabled ?? true)
                     .onChange(v => {
                         this.plugin.settings.weeklyNotesEnabled = v;
                         void this.plugin.saveSettings().then(async () => {
@@ -3888,6 +3986,7 @@ class DaybleSettingTab extends PluginSettingTab {
                 (t.inputEl).type = 'number';
                 (t.inputEl).min = '0';
             });
+            
             new Setting(containerEl)
                 .setName('Color swatch position')
                 .setDesc('Position of color swatches in event modal')
@@ -3904,149 +4003,227 @@ class DaybleSettingTab extends PluginSettingTab {
 
         
         const swatchesSectionTop = containerEl.createDiv();
-        new Setting(swatchesSectionTop).setName('Colors').setHeading();
+        const colorsHeading = new Setting(swatchesSectionTop).setName('Colors').setHeading();
+        colorsHeading.settingEl.style.marginTop = '18px';
         const colorsListTop = swatchesSectionTop.createDiv();
         const renderColorsTop = () => {
             colorsListTop.empty();
             const row = colorsListTop.createDiv();
             row.addClass('dayble-settings-colors-row');
+            row.setAttr('style', 'margin-top: -10px !important; margin-bottom: 20px; display: flex; flex-wrap: wrap;');
+
             const built = (this.plugin.settings.swatches || []).map(s => ({ name: s.name, color: s.color, textColor: s.textColor || '', source: 'built' as const }));
             const customs = (this.plugin.settings.userCustomSwatches || []).map(s => ({ name: s.name || '', color: s.color || '#ff0000', textColor: s.textColor || '', source: 'custom' as const }));
             const combined: { name: string, color: string, textColor: string, source: 'built'|'custom' }[] = [...built, ...customs];
             const makeItem = (entry: { name: string, color: string, textColor: string, source: 'built'|'custom' }, idx: number) => {
                 const wrap = row.createDiv();
-                wrap.addClass('dayble-flex-center-gap');
-                wrap.setAttr('draggable', 'true');
+                wrap.addClass('dayble-color-group');
+                wrap.setAttr('data-qc-index', String(idx));
+                wrap.setAttr('style', 'display: inline-flex; align-items: center; gap: 8px; margin: 4px !important; border: 1px solid var(--background-modifier-border); border-radius: var(--setting-items-radius); background-color: var(--setting-items-background); padding: 6px; flex: 0 0 auto; transition: transform 0.2s ease, box-shadow 0.2s ease;');
+                
+                wrap.setAttr('draggable', 'false');
                 wrap.dataset.source = entry.source;
                 wrap.dataset.index = String(idx);
                 wrap.dataset.name = entry.name;
-                const textPicker = wrap.createEl('input', { type: 'color' });
+
+                // Drag Handle
+                const dragBtn = wrap.createEl('button', {
+                    attr: {
+                        'aria-label': 'Drag to reorder',
+                        'style': 'padding: 0px; border: none; background: transparent; box-shadow: none; cursor: grab; color: var(--text-muted); flex-shrink: 0; display: flex; align-items: center; justify-content: center;'
+                    }
+                });
+                dragBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-menu"><path d="M4 5h16"></path><path d="M4 12h16"></path><path d="M4 19h16"></path></svg>`;
+
+                // Text Color Picker
+                const textPicker = wrap.createEl('input', { 
+                    type: 'color',
+                    attr: {
+                        'title': 'Text Color',
+                        'style': 'width: 30px; height: 30px; border-radius: 50%; border: none; padding: 0px; overflow: hidden; background: transparent; cursor: pointer;'
+                    }
+                });
                 textPicker.value = entry.textColor || '#ffffff';
-                const bgPicker = wrap.createEl('input', { type: 'color' });
+
+                // Background Color Picker
+                const bgPicker = wrap.createEl('input', { 
+                    type: 'color',
+                    attr: {
+                        'title': 'Highlight Color',
+                        'style': 'width: 30px; height: 30px; border-radius: 50%; border: none; padding: 0px; overflow: hidden; background: transparent; cursor: pointer;'
+                    }
+                });
                 bgPicker.value = entry.color;
+
+                // Name input for custom swatches
+                let nameInput: HTMLInputElement | undefined;
+                if (entry.source === 'custom') {
+                    nameInput = wrap.createEl('input', {
+                        type: 'text',
+                        cls: 'db-input',
+                        attr: {
+                            'placeholder': 'Name',
+                            'style': 'width: 80px; height: 30px; margin-left: 4px;'
+                        }
+                    });
+                    nameInput.value = entry.name;
+                    nameInput.onchange = () => updateAll();
+                }
+
                 const updateAll = async () => {
-                    const prevBuiltArr = (this.plugin.settings.swatches || []).map(s => ({ name: s.name, color: s.color, textColor: s.textColor }));
-                    const prevCustomArr = (this.plugin.settings.userCustomSwatches || []).map(s => ({ name: s.name || '', color: s.color || '#ff0000', textColor: s.textColor || '' }));
                     const newBuilt: { name: string, color: string, textColor?: string }[] = [];
                     const newCustom: { name: string, color: string, textColor?: string }[] = [];
-                    row.querySelectorAll('div[draggable="true"]').forEach((w) => {
+                    row.querySelectorAll('.dayble-color-group').forEach((w) => {
                         const el = w as HTMLElement;
                         const src = el.dataset.source;
-                        const nm = el.dataset.name || '';
                         const bg = (el.querySelectorAll('input[type="color"]')[1] as HTMLInputElement).value;
                         const tx = (el.querySelectorAll('input[type="color"]')[0] as HTMLInputElement).value;
-                        if (src === 'built') newBuilt.push({ name: nm, color: bg, textColor: tx });
-                        else newCustom.push({ name: '', color: bg, textColor: tx });
-                    });
-                    const colorMap: Record<string, { color: string, textColor?: string }> = {};
-                    for (let i = 0; i < prevBuiltArr.length && i < newBuilt.length; i++) {
-                        const prev = prevBuiltArr[i];
-                        const now = newBuilt[i];
-                        if (prev.color !== now.color || (prev.textColor || '') !== (now.textColor || '')) {
-                            colorMap[prev.color] = { color: now.color, textColor: now.textColor };
+                        if (src === 'built') {
+                            const name = el.dataset.name || '';
+                            newBuilt.push({ name, color: bg, textColor: tx });
+                        } else {
+                            const nInput = el.querySelector('input[type="text"]') as HTMLInputElement;
+                            newCustom.push({ name: nInput?.value || '', color: bg, textColor: tx });
                         }
-                    }
-                    for (let i = 0; i < prevCustomArr.length && i < newCustom.length; i++) {
-                        const prev = prevCustomArr[i];
-                        const now = newCustom[i];
-                        if (prev.color !== now.color || (prev.textColor || '') !== (now.textColor || '')) {
-                            colorMap[prev.color] = { color: now.color, textColor: now.textColor };
-                        }
-                    }
-                    const updatedTriggers = (this.plugin.settings.triggers || []).map(t => {
-                        if (t.color && colorMap[t.color]) {
-                            const mapped = colorMap[t.color];
-                            return { ...t, color: mapped.color, textColor: mapped.textColor || chooseTextColor(mapped.color) };
-                        }
-                        return t;
                     });
                     this.plugin.settings.swatches = newBuilt;
                     this.plugin.settings.userCustomSwatches = newCustom;
-                    this.plugin.settings.triggers = updatedTriggers;
                     await this.plugin.saveSettings();
                     const view = this.plugin.getCalendarView();
-                    if (view) {
-                        const prevByName = new Map<string, { name: string, color: string, textColor?: string }>();
-                        prevBuiltArr.forEach(s => prevByName.set(s.name, { name: s.name, color: s.color, textColor: s.textColor }));
-                        let dirty = false;
-                        newBuilt.forEach(nb => {
-                            const prev = prevByName.get(nb.name);
-                            if (!prev) return;
-                            const colorChanged = prev.color !== nb.color;
-                            const textChanged = (prev.textColor || '') !== (nb.textColor || '');
-                            if (!colorChanged && !textChanged) return;
-                            const rgba = hexToRgba(nb.color, this.plugin.settings.eventBgOpacity ?? 1);
-                            view.containerEl.querySelectorAll(`.dayble-event[data-color="${prev.color}"]`).forEach(el => {
-                                const h = el as HTMLElement;
-                                h.style.setProperty('--event-bg-color', rgba);
-                                h.style.setProperty('--event-text-color', nb.textColor || chooseTextColor(nb.color));
-                                h.dataset.color = nb.color;
-                                h.classList.add('dayble-event-colored');
-                            });
-                            view.events.forEach(ev => {
-                                if (ev.color === prev.color) {
-                                    ev.color = nb.color;
-                                    ev.textColor = nb.textColor || chooseTextColor(nb.color);
-                                    dirty = true;
-                                }
-                            });
-                            view.holderEvents.forEach(ev => {
-                                if (ev.color === prev.color) {
-                                    ev.color = nb.color;
-                                    ev.textColor = nb.textColor || chooseTextColor(nb.color);
-                                    dirty = true;
-                                }
-                            });
+                    if (view) await view.render();
+                    const triggers = containerEl.querySelectorAll('.dayble-trigger-color-select');
+                    triggers.forEach(t => {
+                        const select = t as HTMLSelectElement;
+                        const current = select.value;
+                        select.empty();
+                        select.add(new Option('Default color', ''));
+                        [...newBuilt, ...newCustom].forEach((s, idx) => {
+                            const name = s.name || `custom-${idx}`;
+                            const opt = new Option('Color', name);
+                            opt.style.backgroundColor = s.color;
+                            opt.style.color = s.textColor || chooseTextColor(s.color);
+                            select.add(opt);
                         });
-                        if (dirty) {
-                            await view.saveAllEntries();
-                            view.render();
+                        select.value = current;
+                        
+                        // Update select style
+                        const selectedSwatch = [...newBuilt, ...newCustom].find((s, idx) => (s.name || `custom-${idx}`) === select.value);
+                        if (selectedSwatch) {
+                            select.style.backgroundColor = selectedSwatch.color;
+                            select.style.color = selectedSwatch.textColor || chooseTextColor(selectedSwatch.color);
                         } else {
-                            view.render();
+                            select.style.removeProperty('background-color');
+                            select.style.removeProperty('color');
                         }
-                    }
-                    if (typeof renderTriggers === 'function') {
-                        renderTriggers();
-                    }
+                    });
                 };
-                textPicker.onchange = async () => await updateAll();
-                bgPicker.onchange = async () => await updateAll();
-                const del = wrap.createEl('button', { cls: 'dayble-btn db-color-del' });
-                del.addClass('dayble-btn-inline-del');
-                setIcon(del, 'x');
-                del.setAttr('draggable','false');
-                del.onmousedown = (e) => { e.stopPropagation(); };
-                del.ontouchstart = (e) => { e.stopPropagation(); };
-                del.onclick = () => {
+
+                textPicker.onchange = updateAll;
+                bgPicker.onchange = updateAll;
+
+                // Delete button
+                const delWrap = wrap.createDiv({ 
+                    cls: 'clickable-icon',
+                    attr: { 'aria-label': 'Delete color swatch' }
+                });
+                setIcon(delWrap, 'x');
+                delWrap.style.flexShrink = '0';
+                
+                delWrap.onclick = () => {
                     const modal = new ConfirmModal(this.app, 'Delete this color swatch?', async () => {
                         wrap.remove();
                         await updateAll();
                     });
                     void modal.open();
                 };
-                wrap.ondragstart = e => {
-                    e.dataTransfer?.setData('text/plain', 'drag');
-                    (e.dataTransfer).effectAllowed = 'move';
-                };
-                row.ondragover = e => { e.preventDefault(); };
-                row.ondrop = async e => {
+
+                dragBtn.addEventListener('mousedown', (e) => {
                     e.preventDefault();
-                    const target = (e.target as HTMLElement).closest('div[draggable="true"]');
-                    if (!target || target.parentElement !== row) return;
-                    const rect = target.getBoundingClientRect();
-                    const before = (e.clientX - rect.left) < rect.width / 2;
-                    if (before) row.insertBefore(wrap, target);
-                    else target.after(wrap);
-                    await updateAll();
-                };
-                return wrap;
+                    e.stopPropagation();
+
+                    const startX = e.clientX;
+                    const startY = e.clientY;
+                    const rect = wrap.getBoundingClientRect();
+                    const offsetX = startX - rect.left;
+                    const offsetY = startY - rect.top;
+
+                    if (navigator.vibrate) navigator.vibrate(100);
+
+                    const ghost = document.body.createDiv({ cls: 'drag-reorder-ghost' });
+                    const clone = wrap.cloneNode(true) as HTMLElement;
+                    clone.style.backgroundColor = 'transparent';
+                    clone.style.border = 'none';
+                    clone.style.boxShadow = 'none';
+                    
+                    const originalInputs = wrap.querySelectorAll('input');
+                    const clonedInputs = clone.querySelectorAll('input');
+                    originalInputs.forEach((el, idx) => {
+                        if (clonedInputs[idx]) clonedInputs[idx].value = el.value;
+                    });
+                    
+                    ghost.appendChild(clone);
+                    ghost.style.width = `${rect.width}px`;
+                    ghost.style.height = `${rect.height}px`;
+                    ghost.style.left = `${rect.left}px`;
+                    ghost.style.top = `${rect.top}px`;
+                    ghost.style.position = 'fixed';
+                    ghost.style.zIndex = '9999';
+                    ghost.style.pointerEvents = 'none';
+                    ghost.style.opacity = '0.8';
+                    ghost.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
+                    ghost.style.backgroundColor = 'transparent';
+                    ghost.style.borderRadius = '4px';
+
+                    wrap.classList.add('drag-ghost-hidden');
+                    const style = document.createElement('style');
+                    style.innerHTML = '.drag-ghost-hidden { opacity: 0 !important; pointer-events: none; }';
+                    document.head.appendChild(style);
+
+                    const onMove = (moveEvent: MouseEvent) => {
+                        moveEvent.preventDefault();
+                        const currentX = moveEvent.clientX;
+                        const currentY = moveEvent.clientY;
+
+                        ghost.style.left = `${currentX - offsetX}px`;
+                        ghost.style.top = `${currentY - offsetY}px`;
+
+                        const target = document.elementFromPoint(currentX, currentY);
+                        const targetRow = target ? target.closest('.dayble-color-group') : null;
+
+                        if (targetRow && targetRow !== wrap && targetRow.parentNode === row) {
+                            const rect = targetRow.getBoundingClientRect();
+                            const next = (currentX - rect.left) > (rect.width * 0.2);
+                            
+                            if (next) {
+                                if (targetRow.nextSibling !== wrap) {
+                                    targetRow.parentNode?.insertBefore(wrap, targetRow.nextSibling);
+                                }
+                            } else {
+                                if (targetRow !== wrap) {
+                                    targetRow.parentNode?.insertBefore(wrap, targetRow);
+                                }
+                            }
+                        }
+                    };
+
+                    const onEnd = async () => {
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onEnd);
+                        ghost.remove();
+                        wrap.classList.remove('drag-ghost-hidden');
+                        style.remove();
+                        await updateAll();
+                    };
+
+                    document.addEventListener('mousemove', onMove);
+                    document.addEventListener('mouseup', onEnd);
+                });
             };
             combined.forEach((entry, idx) => { makeItem(entry, idx); });
             const controlsBottom = new Setting(colorsListTop);
             controlsBottom.settingEl.addClass('dayble-colors-controls');
-            controlsBottom.settingEl.addClass('dayble-settings-controls');
             controlsBottom.addButton(b => {
-                b.setButtonText('Reset to default colors').onClick(() => {
+                b.setButtonText('Reset colors').onClick(() => {
                     const modal = new ConfirmModal(this.app, 'Reset color swatches to default?', async () => {
                         this.plugin.settings.swatches = (DEFAULT_SETTINGS.swatches || []).map(s => ({ name: s.name, color: s.color, textColor: s.textColor }));
                         this.plugin.settings.userCustomSwatches = [];
@@ -4057,85 +4234,11 @@ class DaybleSettingTab extends PluginSettingTab {
                 });
             });
             controlsBottom.addButton(b => {
-                b.setButtonText('+ Add color').onClick(() => {
-                    const wrap = row.createDiv();
-                    wrap.addClass('dayble-settings-color-item');
-                    wrap.setAttr('draggable', 'true');
-                    wrap.dataset.source = 'custom';
-                    wrap.dataset.name = '';
-                    const textPicker = wrap.createEl('input', { type: 'color' });
-                    textPicker.value = '#ffffff';
-                    const bgPicker = wrap.createEl('input', { type: 'color' });
-                    bgPicker.value = '#ff0000';
-                    const del = wrap.createEl('button', { cls: 'dayble-btn db-color-del' });
-                    del.addClass('dayble-btn-inline-del');
-                    setIcon(del, 'x');
-                    del.setAttr('draggable','false');
-                    del.onmousedown = (e) => { e.stopPropagation(); };
-                    del.ontouchstart = (e) => { e.stopPropagation(); };
-                    const updateAll = async () => {
-                        const prevBuiltArr = (this.plugin.settings.swatches || []).map(s => ({ name: s.name, color: s.color, textColor: s.textColor }));
-                        const newBuilt: { name: string, color: string, textColor?: string }[] = [];
-                        const newCustom: { name: string, color: string, textColor?: string }[] = [];
-                        colorsListTop.querySelectorAll('div[draggable="true"]').forEach((w: unknown) => {
-                            const src = (w as HTMLElement).dataset.source;
-                            const nm = (w as HTMLElement).dataset.name || '';
-                            const bg = ((w as HTMLElement).querySelectorAll('input[type="color"]')[1] as HTMLInputElement).value;
-                            const tx = ((w as HTMLElement).querySelectorAll('input[type="color"]')[0] as HTMLInputElement).value;
-                            if (src === 'built') newBuilt.push({ name: nm, color: bg, textColor: tx });
-                            else newCustom.push({ name: '', color: bg, textColor: tx });
-                        });
-                        this.plugin.settings.swatches = newBuilt;
-                        this.plugin.settings.userCustomSwatches = newCustom;
-                        await this.plugin.saveSettings();
-                        const view = this.plugin.getCalendarView();
-                        if (view) {
-                            const prevByName = new Map<string, { name: string, color: string, textColor?: string }>();
-                            prevBuiltArr.forEach(s => prevByName.set(s.name, { name: s.name, color: s.color, textColor: s.textColor }));
-                            let dirty = false;
-                            newBuilt.forEach(nb => {
-                                const prev = prevByName.get(nb.name);
-                                if (!prev) return;
-                                const changed = prev.color !== nb.color || (prev.textColor || '') !== (nb.textColor || '');
-                                if (!changed) return;
-                                const rgba = hexToRgba(nb.color, this.plugin.settings.eventBgOpacity ?? 1);
-                                view.containerEl.querySelectorAll(`.dayble-event[data-color="${prev.color}"]`).forEach(el => {
-                                    const h = el as HTMLElement;
-                                    h.style.setProperty('--event-bg-color', rgba);
-                                    h.style.setProperty('--event-text-color', nb.textColor || chooseTextColor(nb.color));
-                                    h.dataset.color = nb.color;
-                                    h.classList.add('dayble-event-colored');
-                                });
-                                view.events.forEach(ev => {
-                                    if (ev.color === prev.color) {
-                                        ev.color = nb.color;
-                                        ev.textColor = nb.textColor || chooseTextColor(nb.color);
-                                        dirty = true;
-                                    }
-                                });
-                                view.holderEvents.forEach(ev => {
-                                    if (ev.color === prev.color) {
-                                        ev.color = nb.color;
-                                        ev.textColor = nb.textColor || chooseTextColor(nb.color);
-                                        dirty = true;
-                                    }
-                                });
-                            });
-                            if (dirty) {
-                                await view.saveAllEntries();
-                            }
-                            await view.render();
-                        }
-                    };
-                    textPicker.onchange = async () => await updateAll();
-                    bgPicker.onchange = async () => await updateAll();
-                    del.onclick = () => {
-                        const modal = new ConfirmModal(this.app, 'Delete this color swatch?', async () => {
-                            wrap.remove();
-                            await updateAll();
-                        });
-                        void modal.open();
-                    };
+                b.setButtonText('+ Add color').onClick(async () => {
+                    if (!this.plugin.settings.userCustomSwatches) this.plugin.settings.userCustomSwatches = [];
+                    this.plugin.settings.userCustomSwatches.push({ name: '', color: '#ff0000', textColor: '#ffffff' });
+                    await this.plugin.saveSettings();
+                    renderColorsTop();
                 });
             });
         };
@@ -4144,13 +4247,128 @@ class DaybleSettingTab extends PluginSettingTab {
         const rulesWrap = containerEl.createDiv();
         const renderRules = () => {
             rulesWrap.empty();
-            (this.plugin.settings.eventCategories || []).forEach((category: EventCategory) => {
+            (this.plugin.settings.eventCategories || []).forEach((category: EventCategory, idx: number) => {
                 const row = new Setting(rulesWrap);
                 // Remove the left-side setting title element
                 row.settingEl.querySelector('.setting-item-name')?.remove();
                 row.settingEl.addClass('dayble-settings-category-row');
                 row.controlEl.addClass('dayble-settings-category-control');
                 row.settingEl.classList.add('db-category-row');
+                
+                // Drag Handle
+                const dragBtn = row.controlEl.createEl('button', {
+                    attr: {
+                        'aria-label': 'Drag to reorder',
+                        'style': 'padding: 0px; border: none; background: transparent; box-shadow: none; cursor: grab; color: var(--text-muted); flex-shrink: 0; display: flex; align-items: center; justify-content: center; margin-right: 8px;'
+                    }
+                });
+                dragBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-menu"><path d="M4 5h16"></path><path d="M4 12h16"></path><path d="M4 19h16"></path></svg>`;
+
+                dragBtn.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const wrap = row.settingEl;
+                    const startX = e.clientX;
+                    const startY = e.clientY;
+                    const rect = wrap.getBoundingClientRect();
+                    const offsetX = startX - rect.left;
+                    const offsetY = startY - rect.top;
+
+                    if (navigator.vibrate) navigator.vibrate(100);
+
+                    const ghost = document.body.createDiv({ cls: 'drag-reorder-ghost' });
+                    const clone = wrap.cloneNode(true) as HTMLElement;
+                    
+                    // Sync values for cloned inputs/selects
+                    const originalInputs = wrap.querySelectorAll('input, select');
+                    const clonedInputs = clone.querySelectorAll('input, select');
+                    originalInputs.forEach((el, idx) => {
+                        if (clonedInputs[idx]) {
+                            (clonedInputs[idx] as HTMLInputElement | HTMLSelectElement).value = (el as HTMLInputElement | HTMLSelectElement).value;
+                        }
+                    });
+                    
+                    ghost.appendChild(clone);
+                    ghost.style.width = `${rect.width}px`;
+                    ghost.style.height = `${rect.height}px`;
+                    ghost.style.left = `${rect.left}px`;
+                    ghost.style.top = `${rect.top}px`;
+                    ghost.style.position = 'fixed';
+                    ghost.style.zIndex = '9999';
+                    ghost.style.pointerEvents = 'none';
+                    ghost.style.opacity = '0.8';
+                    ghost.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
+                    ghost.style.backgroundColor = 'var(--background-primary)';
+                    ghost.style.borderRadius = '4px';
+
+                    wrap.classList.add('drag-ghost-hidden');
+                    const style = document.createElement('style');
+                    style.innerHTML = '.drag-ghost-hidden { opacity: 0 !important; pointer-events: none; }';
+                    document.head.appendChild(style);
+
+                    const onMove = (moveEvent: MouseEvent) => {
+                        moveEvent.preventDefault();
+                        const currentX = moveEvent.clientX;
+                        const currentY = moveEvent.clientY;
+
+                        ghost.style.left = `${currentX - offsetX}px`;
+                        ghost.style.top = `${currentY - offsetY}px`;
+
+                        const target = document.elementFromPoint(currentX, currentY);
+                        const targetRow = target ? target.closest('.dayble-settings-category-row') : null;
+
+                        if (targetRow && targetRow !== wrap && targetRow.parentNode === rulesWrap) {
+                            const rect = targetRow.getBoundingClientRect();
+                            const isAfter = (currentY - rect.top) > (rect.height / 2);
+                            
+                            if (isAfter) {
+                                if (targetRow.nextSibling !== wrap) {
+                                    targetRow.parentNode?.insertBefore(wrap, targetRow.nextSibling);
+                                }
+                            } else {
+                                if (targetRow !== wrap) {
+                                    targetRow.parentNode?.insertBefore(wrap, targetRow);
+                                }
+                            }
+                        }
+                    };
+
+                    const onEnd = async () => {
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onEnd);
+                        ghost.remove();
+                        wrap.classList.remove('drag-ghost-hidden');
+                        style.remove();
+                        
+                        // Reorder settings based on DOM order
+                        const newCategories: EventCategory[] = [];
+                        rulesWrap.querySelectorAll('.dayble-settings-category-row').forEach((el) => {
+                            const name = (el.querySelector('.db-category-name') as HTMLInputElement)?.value;
+                            const cat = this.plugin.settings.eventCategories?.find(c => c.name === name); // This is a bit fragile if names are identical
+                            if (cat) newCategories.push(cat);
+                        });
+                        
+                        // Fallback/more robust way: store ID on the element
+                        const updatedCategories: EventCategory[] = [];
+                        rulesWrap.querySelectorAll('.dayble-settings-category-row').forEach((el) => {
+                            const catId = (el as HTMLElement).dataset.id;
+                            const cat = this.plugin.settings.eventCategories?.find(c => c.id === catId);
+                            if (cat) updatedCategories.push(cat);
+                        });
+
+                        if (updatedCategories.length > 0) {
+                            this.plugin.settings.eventCategories = updatedCategories;
+                            await this.plugin.saveSettings();
+                        }
+                    };
+
+                    document.addEventListener('mousemove', onMove);
+                    document.addEventListener('mouseup', onEnd);
+                });
+
+                row.settingEl.dataset.id = category.id;
+
                 // Icon button
                 row.addButton(b => {
                     (b.buttonEl).classList.add('dayble-btn','dayble-icon-add','db-btn');
@@ -4271,13 +4489,120 @@ class DaybleSettingTab extends PluginSettingTab {
             const items = this.plugin.settings.triggers || [];
             const swatches = [
                 ...(this.plugin.settings.swatches || []),
-                ...(this.plugin.settings.userCustomSwatches || [])
+                ...(this.plugin.settings.userCustomSwatches || []).map((s, idx) => ({ ...s, name: s.name || `custom-${idx}` }))
             ];
             items.forEach((tr, idx) => {
+                if (!tr.id) tr.id = randomId();
                 const row = new Setting(triggersWrap);
                 row.settingEl.querySelector('.setting-item-name')?.remove();
                 row.settingEl.classList.add('db-triggers-row');
+                row.settingEl.dataset.id = tr.id;
                 (row.controlEl).addClass('dayble-flex-gap-8');
+
+                // Drag Handle
+                const dragBtn = row.controlEl.createEl('button', {
+                    attr: {
+                        'aria-label': 'Drag to reorder',
+                        'style': 'padding: 0px; border: none; background: transparent; box-shadow: none; cursor: grab; color: var(--text-muted); flex-shrink: 0; display: flex; align-items: center; justify-content: center; margin-right: 4px;'
+                    }
+                });
+                dragBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-menu"><path d="M4 5h16"></path><path d="M4 12h16"></path><path d="M4 19h16"></path></svg>`;
+
+                dragBtn.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const wrap = row.settingEl;
+                    const startX = e.clientX;
+                    const startY = e.clientY;
+                    const rect = wrap.getBoundingClientRect();
+                    const offsetX = startX - rect.left;
+                    const offsetY = startY - rect.top;
+
+                    if (navigator.vibrate) navigator.vibrate(100);
+
+                    const ghost = document.body.createDiv({ cls: 'drag-reorder-ghost' });
+                    const clone = wrap.cloneNode(true) as HTMLElement;
+                    
+                    // Sync values for cloned inputs/selects
+                    const originalInputs = wrap.querySelectorAll('input, select');
+                    const clonedInputs = clone.querySelectorAll('input, select');
+                    originalInputs.forEach((el, idx) => {
+                        if (clonedInputs[idx]) {
+                            (clonedInputs[idx] as HTMLInputElement | HTMLSelectElement).value = (el as HTMLInputElement | HTMLSelectElement).value;
+                        }
+                    });
+                    
+                    ghost.appendChild(clone);
+                    ghost.style.width = `${rect.width}px`;
+                    ghost.style.height = `${rect.height}px`;
+                    ghost.style.left = `${rect.left}px`;
+                    ghost.style.top = `${rect.top}px`;
+                    ghost.style.position = 'fixed';
+                    ghost.style.zIndex = '9999';
+                    ghost.style.pointerEvents = 'none';
+                    ghost.style.opacity = '0.8';
+                    ghost.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
+                    ghost.style.backgroundColor = 'var(--background-primary)';
+                    ghost.style.borderRadius = '4px';
+
+                    wrap.classList.add('drag-ghost-hidden');
+                    const style = document.createElement('style');
+                    style.innerHTML = '.drag-ghost-hidden { opacity: 0 !important; pointer-events: none; }';
+                    document.head.appendChild(style);
+
+                    const onMove = (moveEvent: MouseEvent) => {
+                        moveEvent.preventDefault();
+                        const currentX = moveEvent.clientX;
+                        const currentY = moveEvent.clientY;
+
+                        ghost.style.left = `${currentX - offsetX}px`;
+                        ghost.style.top = `${currentY - offsetY}px`;
+
+                        const target = document.elementFromPoint(currentX, currentY);
+                        const targetRow = target ? target.closest('.db-triggers-row') : null;
+
+                        if (targetRow && targetRow !== wrap && targetRow.parentNode === triggersWrap) {
+                            const rect = targetRow.getBoundingClientRect();
+                            const isAfter = (currentY - rect.top) > (rect.height / 2);
+                            
+                            if (isAfter) {
+                                if (targetRow.nextSibling !== wrap) {
+                                    targetRow.parentNode?.insertBefore(wrap, targetRow.nextSibling);
+                                }
+                            } else {
+                                if (targetRow !== wrap) {
+                                    targetRow.parentNode?.insertBefore(wrap, targetRow);
+                                }
+                            }
+                        }
+                    };
+
+                    const onEnd = async () => {
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onEnd);
+                        ghost.remove();
+                        wrap.classList.remove('drag-ghost-hidden');
+                        style.remove();
+                        
+                        // Reorder settings based on DOM order
+                        const updatedTriggers: any[] = [];
+                        triggersWrap.querySelectorAll('.db-triggers-row').forEach((el) => {
+                            const trId = (el as HTMLElement).dataset.id;
+                            const tr = this.plugin.settings.triggers?.find(t => t.id === trId);
+                            if (tr) updatedTriggers.push(tr);
+                        });
+
+                        if (updatedTriggers.length > 0) {
+                            this.plugin.settings.triggers = updatedTriggers;
+                            await this.plugin.saveSettings();
+                        }
+                    };
+
+                    document.addEventListener('mousemove', onMove);
+                    document.addEventListener('mouseup', onEnd);
+                });
+
                 row.addText(t => {
                     t.setPlaceholder('Text in title or description');
                     t.setValue(tr.pattern);
@@ -4306,17 +4631,19 @@ class DaybleSettingTab extends PluginSettingTab {
                 });
                 row.addDropdown(d => {
                     d.addOption('', 'Default color');
-                    swatches.forEach(s => d.addOption(s.color, 'Color'));
-                    d.setValue(tr.color || '');
+                    swatches.forEach(s => d.addOption(s.name, 'Color'));
+                    d.setValue(tr.colorName || tr.color || '');
                     d.onChange(async v => {
                         if (!v) {
+                            delete items[idx].colorName;
                             delete items[idx].color;
                             delete items[idx].textColor;
                         } else {
-                            const s = swatches.find(sw => sw.color === v);
+                            const s = swatches.find(sw => sw.name === v || sw.color === v);
                             if (s) {
-                                items[idx].color = s.color;
-                                items[idx].textColor = s.textColor;
+                                items[idx].colorName = s.name;
+                                delete items[idx].color;
+                                delete items[idx].textColor;
                             }
                         }
                         this.plugin.settings.triggers = items;
@@ -4324,16 +4651,17 @@ class DaybleSettingTab extends PluginSettingTab {
                         applyColorStyles();
                     });
                     (d.selectEl).classList.add('db-select');
+                    (d.selectEl).addClass('dayble-trigger-color-select');
                     
                     // Style the dropdown
                     const applyColorStyles = () => {
                         const currentValue = d.getValue();
-                        const selectedSwatch = swatches.find(sw => sw.color === currentValue);
+                        const selectedSwatch = swatches.find(sw => sw.name === currentValue || sw.color === currentValue);
                         
                         // Style the select element itself
                         if (selectedSwatch) {
                             (d.selectEl).style.setProperty('background-color', selectedSwatch.color);
-                            (d.selectEl).style.setProperty('color', selectedSwatch.textColor || '#000');
+                            (d.selectEl).style.setProperty('color', selectedSwatch.textColor || chooseTextColor(selectedSwatch.color));
                         } else {
                             (d.selectEl).style.removeProperty('background-color');
                             (d.selectEl).style.removeProperty('color');
@@ -4342,10 +4670,10 @@ class DaybleSettingTab extends PluginSettingTab {
                         // Style the options
                         Array.from(d.selectEl.options).forEach(opt => {
                             if (!opt.value) return; // Skip default option
-                            const s = swatches.find(sw => sw.color === opt.value);
+                            const s = swatches.find(sw => sw.name === opt.value || sw.color === opt.value);
                             if (s) {
                                 opt.style.setProperty('background-color', s.color);
-                                opt.style.setProperty('color', s.textColor || '#000');
+                                opt.style.setProperty('color', s.textColor || chooseTextColor(s.color));
                             }
                         });
                     };
@@ -4366,7 +4694,7 @@ class DaybleSettingTab extends PluginSettingTab {
             new Setting(triggersWrap).addButton(b => {
                 b.setButtonText('+ Add trigger').onClick(async () => {
                     const items2 = (this.plugin.settings.triggers || []).slice();
-                    items2.push({ pattern: '', categoryId: '' });
+                    items2.push({ id: randomId(), pattern: '', categoryId: '' });
                     this.plugin.settings.triggers = items2;
                     await this.plugin.saveSettings();
                     renderTriggers();
@@ -4374,179 +4702,6 @@ class DaybleSettingTab extends PluginSettingTab {
             });
         };
         renderTriggers();
-
-        // containerEl.createEl('h4', { text: 'Custom Swatches' });
-        const swatchesSection = containerEl.createDiv();
-        (swatchesSection as HTMLElement).addClass('dayble-hidden');
-        new Setting(swatchesSection)
-            // .setName('Enable Custom Swatches')
-            // .setDesc('If on, your custom swatches will appear in the color picker.')
-            // .addToggle(t => {
-            //     t.setValue(this.plugin.settings.customSwatchesEnabled ?? false)
-            //      .onChange(async (v) => {
-            //         this.plugin.settings.customSwatchesEnabled = v;
-            //         await this.plugin.saveSettings();
-            //      });
-            // });
-            
-        new Setting(swatchesSection).setName('Colors').setHeading();
-        const colorsList = swatchesSection.createDiv();
-        const renderColors = () => {
-            colorsList.empty();
-            const row = colorsList.createDiv();
-            row.addClass('dayble-settings-row-wrap');
-            
-            // Store the old swatches to detect changes
-            const oldBuilt = (this.plugin.settings.swatches || []).map(s => ({ name: s.name, color: s.color, source: 'built' as const }));
-            const oldCustoms = (this.plugin.settings.userCustomSwatches || []).map(s => ({ name: s.name || '', color: s.color || '#ff0000', source: 'custom' as const }));
-            const combined: { name: string, color: string, source: 'built'|'custom' }[] = [...oldBuilt, ...oldCustoms];
-            
-            const makeItem = (entry: { name: string, color: string, source: 'built'|'custom' }, idx: number) => {
-                const wrap = row.createDiv();
-                wrap.addClass('dayble-flex-center-gap');
-                wrap.setAttr('draggable', 'true');
-                wrap.dataset.source = entry.source;
-                wrap.dataset.index = String(idx);
-                wrap.dataset.name = entry.name;
-                const input = wrap.createEl('input', { type: 'color' });
-                input.value = entry.color;
-                input.onchange = async () => {
-                    const newBuilt: { name: string, color: string }[] = [];
-                    const newCustom: { name: string, color: string }[] = [];
-                    row.querySelectorAll('div[draggable="true"]').forEach((w) => {
-                        const el = w as HTMLElement;
-                        const src = el.dataset.source;
-                        const nm = el.dataset.name || '';
-                        const colorInput = el.querySelector('input[type="color"]') as HTMLInputElement;
-                        const val = colorInput?.value || '';
-                        if (src === 'built') newBuilt.push({ name: nm, color: val });
-                        else newCustom.push({ name: '', color: val });
-                    });
-                    
-                    // Create color mapping from old to new based on position
-                    const colorMap: { [oldColor: string]: string } = {};
-                    
-                    // Map built swatches
-                    for (let i = 0; i < oldBuilt.length && i < newBuilt.length; i++) {
-                        if (oldBuilt[i].color !== newBuilt[i].color) {
-                            colorMap[oldBuilt[i].color] = newBuilt[i].color;
-                        }
-                    }
-                    
-                    // Map custom swatches
-                    for (let i = 0; i < oldCustoms.length && i < newCustom.length; i++) {
-                        if (oldCustoms[i].color !== newCustom[i].color) {
-                            colorMap[oldCustoms[i].color] = newCustom[i].color;
-                        }
-                    }
-                    
-                    // Update any triggers using colors that changed
-                    const triggers = (this.plugin.settings.triggers || []).slice();
-                    triggers.forEach(t => {
-                        if (t.color && colorMap[t.color]) {
-                            const newColorValue = colorMap[t.color];
-                            // Also update the textColor
-                            const allSwatches = [...newBuilt, ...newCustom];
-                            const foundSwatch = allSwatches.find(s => s.color === newColorValue);
-                            t.color = newColorValue;
-                            if (foundSwatch) {
-                                // Find the textColor from original settings
-                                const originalSwatch = [...(this.plugin.settings.swatches || []), ...(this.plugin.settings.userCustomSwatches || [])].find(s => s.color === newColorValue);
-                                if (originalSwatch) {
-                                    t.textColor = originalSwatch.textColor;
-                                }
-                            }
-                        }
-                    });
-                    
-                    this.plugin.settings.swatches = newBuilt;
-                    this.plugin.settings.userCustomSwatches = newCustom;
-                    this.plugin.settings.triggers = triggers;
-                    await this.plugin.saveSettings();
-                    renderTriggers();
-                };
-                const del = wrap.createEl('button', { cls: 'dayble-btn db-color-del' });
-                del.addClass('dayble-color-del-btn');
-                setIcon(del, 'x');
-                del.setAttr('draggable','false');
-                del.onmousedown = (e) => { e.stopPropagation(); };
-                del.ontouchstart = (e) => { e.stopPropagation(); };
-                del.onclick = () => {
-                    const modal = new ConfirmModal(this.app, 'Delete this color swatch?', async () => {
-                        wrap.remove();
-                        const newBuilt: { name: string, color: string }[] = [];
-                        const newCustom: { name: string, color: string }[] = [];
-                        row.querySelectorAll('div[draggable="true"]').forEach((w) => {
-                            const el = w as HTMLElement;
-                            const src = el.dataset.source;
-                            const nm = el.dataset.name || '';
-                            const val = (el.querySelector('input[type="color"]') as HTMLInputElement).value;
-                            if (src === 'built') newBuilt.push({ name: nm, color: val });
-                            else newCustom.push({ name: '', color: val });
-                        });
-                        this.plugin.settings.swatches = newBuilt;
-                        this.plugin.settings.userCustomSwatches = newCustom;
-                        await this.plugin.saveSettings();
-                    });
-                    void modal.open();
-                };
-                wrap.ondragstart = e => {
-                    e.dataTransfer?.setData('text/plain', 'drag');
-                    (e.dataTransfer).effectAllowed = 'move';
-                };
-                row.ondragover = e => { e.preventDefault(); };
-                row.ondrop = async e => {
-                    e.preventDefault();
-                    const target = (e.target as HTMLElement).closest('div[draggable="true"]');
-                    if (!target || target.parentElement !== row) return;
-                    const rect = target.getBoundingClientRect();
-                    const before = (e.clientX - rect.left) < rect.width / 2;
-                    if (before) row.insertBefore(wrap, target);
-                    else target.after(wrap);
-                    const newBuilt: { name: string, color: string }[] = [];
-                    const newCustom: { name: string, color: string }[] = [];
-                    row.querySelectorAll('div[draggable="true"]').forEach((w: unknown) => {
-                        const src = (w as HTMLElement).dataset.source;
-                        const nm = (w as HTMLElement).dataset.name || '';
-                        const colorInput = (w as HTMLElement).querySelector('input[type="color"]') as HTMLInputElement;
-                        const val = colorInput?.value || '';
-                        if (src === 'built') newBuilt.push({ name: nm, color: val });
-                        else newCustom.push({ name: '', color: val });
-                    });
-                    this.plugin.settings.swatches = newBuilt;
-                    this.plugin.settings.userCustomSwatches = newCustom;
-                    await this.plugin.saveSettings();
-                };
-                return wrap;
-            };
-            combined.forEach((entry, idx) => { makeItem(entry, idx); });
-            const controlsBottom = new Setting(swatchesSection);
-            controlsBottom.settingEl.addClass('dayble-no-border-top');
-            controlsBottom.addButton(b => {
-                b.setButtonText('Reset to default colors').onClick(async () => {
-                    const modal = new ConfirmModal(this.app, 'Reset color swatches to default?', async () => {
-                        this.plugin.settings.swatches = (DEFAULT_SETTINGS.swatches || []).map(s => ({ name: s.name, color: s.color, textColor: s.textColor }));
-                        this.plugin.settings.userCustomSwatches = [];
-                        await this.plugin.saveSettings();
-                        renderColors();
-                        renderTriggers();
-                    });
-                    void modal.open();
-                });
-            });
-            controlsBottom.addButton(b => {
-                b.setButtonText('+ Add color').onClick(async () => {
-                    const newCustom = (this.plugin.settings.userCustomSwatches || []).slice();
-                    newCustom.push({ name: '', color: '#ff0000' });
-                    this.plugin.settings.userCustomSwatches = newCustom;
-                    await this.plugin.saveSettings();
-                    renderColors();
-                    renderTriggers();
-                });
-                (b.buttonEl).addClass('dayble-ml-auto');
-            });
-        };
-        renderColors();
 
         new Setting(containerEl).setName('Data management').setHeading();
         new Setting(containerEl)
