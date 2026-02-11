@@ -1393,7 +1393,14 @@ margin-top: 6px !important;
 
 .dayble-long-overlay-box { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
 .dayble-cell-max { max-height: var(--dayble-cell-max-height); }
-.dayble-scroll-y { overflow-y: auto; }
+.dayble-scroll-y { 
+    overflow-y: auto; 
+    scrollbar-width: none; 
+    -ms-overflow-style: none;
+}
+.dayble-scroll-y::-webkit-scrollbar {
+    display: none;
+}
 .dayble-scroll-x-hidden { overflow-x: hidden; }
 .dayble-overflow-visible { overflow: visible; }
 
@@ -1565,3 +1572,26 @@ margin-top: 6px !important;
 } */
 
 
+.dayble-add-btn-full {
+   margin-top: 10px;
+}
+
+.dayble-weekly-notes.dayble-weekly-notes-container {
+   border-top: 1px solid var(--background-modifier-border);
+   padding: 10px;
+   padding-top: 0px;
+}
+
+.dayble-weekly-notes-content, .dayble-weekly-notes-textarea.dayble-textarea-auto {
+   background: var(--background-primary-alt) !important;
+   border-radius: var(--radius-m);
+   height: 100px;
+}
+
+.dayble-grid.dayble-grid-el.dayble-week-mode {
+   
+}
+
+.dayble-day.dayble-cell-max {
+   padding-bottom: 0 !important;
+}

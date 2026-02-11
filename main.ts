@@ -34,6 +34,7 @@ interface DaybleSettings {
     weeklyNotesEnabled?: boolean;
     todayModalSplitView?: boolean;
     tooltipEnabled?: boolean;
+    showCopyTextOption?: boolean;
 } 
 
 const DEFAULT_SETTINGS: DaybleSettings = {
@@ -63,6 +64,7 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     weeklyNotesEnabled: false,
     todayModalSplitView: true,
     tooltipEnabled: true,
+    showCopyTextOption: false,
     swatches: [
         { name: 'Red', color: '#eb3b5a', textColor: '#f9c6d0' },
         { name: 'Orange', color: '#fa8231', textColor: '#fed8be' },
@@ -1792,6 +1794,16 @@ class DaybleCalendarView extends ItemView {
             e.preventDefault();
             e.stopPropagation();
             const menu = new Menu();
+
+            if (this.plugin.settings.showCopyTextOption) {
+                menu.addItem(i => i.setTitle('Copy text').setIcon('clipboard').onClick(async () => {
+                    const text = `${ev.title || ''}${ev.description ? '\n' + ev.description : ''}`;
+                    await navigator.clipboard.writeText(text);
+                    new Notice('event text copied.');
+                }));
+                menu.addSeparator();
+            }
+
             menu.addItem(i => i.setTitle('Duplicate').setIcon('copy').onClick(async () => {
                 const newEv: DaybleEvent = { ...ev, id: randomId() };
                 this.events.push(newEv);
@@ -3364,6 +3376,17 @@ class DaybleSettingTab extends PluginSettingTab {
                 t.setValue(this.plugin.settings.todayModalSplitView ?? true)
                     .onChange(async v => {
                         this.plugin.settings.todayModalSplitView = v;
+                        await this.plugin.saveSettings();
+                    });
+            });
+
+        new Setting(containerEl)
+            .setName('Show copy text option')
+            .setDesc('Show "Copy text" in the event context menu to copy title and description.')
+            .addToggle(t => {
+                t.setValue(this.plugin.settings.showCopyTextOption ?? false)
+                    .onChange(async v => {
+                        this.plugin.settings.showCopyTextOption = v;
                         await this.plugin.saveSettings();
                     });
             });
