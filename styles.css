@@ -509,6 +509,7 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
     display: flex;
     gap: 20px;
     padding: 10px;
+    position: relative; /* Add this to make it the offset parent for overlay */
 }
 
 .dayble-focus-grid {
@@ -604,6 +605,36 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
 .dayble-drag-over {
     outline: 2px dashed var(--color-accent);
     outline-offset: -2px;
+}
+
+.dayble-focus-drop {
+    border: 2px dashed var(--color-accent);
+    position: absolute;
+    box-sizing: border-box;
+    pointer-events: none;
+    left: var(--focus-item-left);
+    top: var(--focus-item-top);
+    width: var(--focus-item-width);
+    height: var(--focus-item-height);
+    background: var(--color-accent);
+    opacity: 0.3;
+    border-radius: 4px;
+    z-index: 1000;
+}
+
+.dayble-focus-selection-mirror {
+    border: 2px solid var(--color-accent);
+    background: var(--color-accent);
+    opacity: 0.5;
+    border-radius: 6px;
+    pointer-events: none;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
 .dayble-selected {
@@ -1361,16 +1392,82 @@ margin-top: 6px !important;
 .dayble-focus-grid { display: grid; grid-template-columns: auto 1fr; }
 .dayble-focus-row { display: contents; }
 .dayble-focus-time { text-align: center !important; padding: 6px 10px; border-bottom: 1px solid var(--background-modifier-border); border-right: 1px solid var(--background-modifier-border); color: var(--text-muted); }
-.dayble-focus-cell { min-height: 28px; border-bottom: 1px solid var(--background-modifier-border); }
+.dayble-focus-cell { min-height: 60px; border-bottom: 1px solid var(--background-modifier-border); position: relative; }
+.dayble-focus-cell::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    border-top: 1px dashed var(--background-modifier-border);
+    opacity: 0.3;
+    pointer-events: none;
+}
 .dayble-focus-cell.dayble-selected { background: var(--background-primary-alt); outline: 2px dashed var(--color-accent); outline-offset: -2px; }
 .dayble-focus-event { margin: 4px 6px; padding: 4px 6px; border: 1px solid var(--background-modifier-border); border-radius: 4px; font-size: 0.9em; line-height: 1.2; }
 .dayble-focus-event-span { grid-column: 2; margin: 2px 6px; padding: 6px 8px; border: 1px solid var(--background-modifier-border); border-radius: 6px; box-sizing: border-box; align-self: stretch; display: flex; align-items: center; }
-.dayble-focus-overlay { position: absolute; inset: 0; pointer-events: auto; }
-.dayble-quarter-lines { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.dayble-focus-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.dayble-quarter-lines {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 0;
+}
 .dayble-quarter-line { position: absolute; left: 0; right: 0; top: var(--quarter-line-top); border-top: 1px dashed var(--background-modifier-border); opacity: 0.2; }
-.dayble-focus-event-abs { position: absolute; box-sizing: border-box; pointer-events: auto; left: var(--focus-item-left); top: var(--focus-item-top); width: var(--focus-item-width); height: var(--focus-item-height); }
-.dayble-focus-drop { border: 2px dashed var(--color-accent); position: absolute; box-sizing: border-box; pointer-events: none; left: var(--focus-item-left); top: var(--focus-item-top); width: var(--focus-item-width); height: var(--focus-item-height); background: var(--background-primary-alt); opacity: 0.6; border-radius: 0px; }
-.dayble-focus-event-abs.dragging { opacity: 1 !important; transform: none !important; z-index: 9999 !important; box-shadow: 0 8px 25px rgba(0,0,0,0.3) !important; filter: brightness(1.1) saturate(1.2) !important; transition: box-shadow 0.15s ease !important; cursor: grabbing !important; }
+.dayble-focus-drop {
+    position: absolute;
+    background: var(--color-accent);
+    opacity: 0.15;
+    border: 2px solid var(--color-accent);
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 5;
+    transition: top 0.05s ease, left 0.05s ease, height 0.1s ease;
+    box-sizing: border-box;
+    left: var(--focus-item-left);
+    top: var(--focus-item-top);
+    width: var(--focus-item-width);
+    height: var(--focus-item-height);
+}
+
+.dayble-focus-event-abs { 
+    position: absolute; 
+    box-sizing: border-box; 
+    pointer-events: auto; 
+    left: var(--focus-item-left); 
+    top: var(--focus-item-top); 
+    width: var(--focus-item-width); 
+    height: var(--focus-item-height); 
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease;
+}
+
+.dayble-focus-event-abs.dragging { 
+    opacity: 1 !important; 
+    transform: scale(1.02) !important; 
+    z-index: 9999 !important; 
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3) !important; 
+    filter: brightness(1.1) saturate(1.2) !important; 
+    transition: none !important; /* No transition while dragging for performance */
+    cursor: grabbing !important; 
+}
+
+.dayble-focus-event-abs.settling {
+    z-index: 9998;
+    transition: top 0.3s cubic-bezier(0.19, 1, 0.22, 1), left 0.3s cubic-bezier(0.19, 1, 0.22, 1), transform 0.3s ease;
+    pointer-events: none;
+}
 .dayble-focus-cell.drop-target { transition: background-color 0.15s ease !important; }
 .dayble-grid-col-2 { grid-column: 2; }
 

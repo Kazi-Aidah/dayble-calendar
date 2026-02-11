@@ -2485,34 +2485,151 @@ class TodayModal extends Modal {
             afternoonGrid = morningGrid; // both point to same in single mode
         }
         
-        const overlay = scroller.createDiv({ cls: 'dayble-focus-overlay' });
+        const overlay = gridContainer.createDiv({ cls: 'dayble-focus-overlay' });
         let dropIndicator: HTMLElement | null = null;
+        let selectionMirror: HTMLElement | null = null;
+        
+        const getSlotInfo = (clientX: number, clientY: number) => {
+            const morningRect = morningGrid.getBoundingClientRect();
+            const afternoonRect = afternoonGrid.getBoundingClientRect();
+            
+            const isAfternoon = split && (clientX > (morningRect.right + afternoonRect.left) / 2);
+            const targetGrid = isAfternoon ? afternoonGrid : morningGrid;
+            
+            const cells = Array.from(targetGrid.querySelectorAll('.dayble-focus-cell')) as HTMLElement[];
+            if (cells.length === 0) return null;
+
+            // Find the cell under the given clientY
+            // We use the first cell to get a base row height for 15-min sub-slot calculation
+            const firstCellRect = cells[0].getBoundingClientRect();
+            const pxPer30 = firstCellRect.height;
+            const pxPer15 = pxPer30 / 2;
+
+            let targetCell: HTMLElement | null = null;
+            let slotIdx = -1;
+
+            for (const cell of cells) {
+                const r = cell.getBoundingClientRect();
+                if (clientY >= r.top && clientY <= r.bottom) {
+                    targetCell = cell;
+                    slotIdx = parseInt(cell.getAttribute('data-idx') || '-1', 10);
+                    break;
+                }
+            }
+
+            // Fallback to first or last cell if out of bounds
+            if (!targetCell) {
+                if (clientY < targetGrid.getBoundingClientRect().top) {
+                    targetCell = cells[0];
+                    slotIdx = parseInt(targetCell.getAttribute('data-idx') || '0', 10);
+                } else {
+                    targetCell = cells[cells.length - 1];
+                    slotIdx = parseInt(targetCell.getAttribute('data-idx') || '47', 10);
+                }
+            }
+
+            const targetCellRect = targetCell.getBoundingClientRect();
+            const relYInCell = clientY - targetCellRect.top;
+            const isSecondHalf = relYInCell > pxPer15;
+            
+            // n is the total number of 15-min increments from the start of the grid
+            // (slotIdx - baseIdx) * 2 + (isSecondHalf ? 1 : 0)
+            const baseIdx = (split && isAfternoon) ? 24 : 0;
+            const n = (slotIdx - baseIdx) * 2 + (isSecondHalf ? 1 : 0);
+
+            return {
+                slotIdx,
+                isSecondHalf,
+                pxPer15,
+                isAfternoon,
+                targetRect: targetGrid.getBoundingClientRect(),
+                targetCell,
+                relY: clientY - targetGrid.getBoundingClientRect().top,
+                n
+            };
+        };
+
         const clearTargets = () => {
             gridContainer.querySelectorAll('.dayble-focus-cell.drop-target').forEach(el => el.removeClass('drop-target'));
         };
         // snapping via pxPer15 computed per dragover/drop
-        const sel = { active: false, start: -1, end: -1 };
-        const clearSelection = () => { gridContainer.querySelectorAll('.dayble-focus-cell').forEach(el => el.removeClass('dayble-selected')); };
+        const sel: { active: boolean, start: number, end: number, start15?: number, end15?: number } = { active: false, start: -1, end: -1 };
+        const clearSelection = () => { 
+            gridContainer.querySelectorAll('.dayble-focus-cell').forEach(el => el.removeClass('dayble-selected')); 
+            if (selectionMirror) { selectionMirror.remove(); selectionMirror = null; }
+        };
         const applySelection = () => {
             if (sel.active && sel.start >= 0 && sel.end >= 0) {
                 const s = Math.min(sel.start, sel.end);
                 const e = Math.max(sel.start, sel.end);
+                
+                // Visual Highlight on cells (30-min blocks)
                 for (let i = s; i <= e; i++) {
                     const cell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${i}"]`) as HTMLElement;
                     if (cell) cell.addClass('dayble-selected');
+                }
+
+                // Selection Mirror (Ghost Event) with 15-min precision
+                if (typeof sel.start15 === 'number' && typeof sel.end15 === 'number') {
+                    const s15 = Math.min(sel.start15, sel.end15);
+                    const e15 = Math.max(sel.start15, sel.end15);
+                    
+                    // Find start cell and end cell for coordinates
+                    // s15 / 2 gives the 30-min slot index
+                    const startSlotIdx = Math.floor(s15 / 2);
+                    const endSlotIdx = Math.floor(e15 / 2);
+                    
+                    const startCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${startSlotIdx}"]`) as HTMLElement;
+                    const endCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${endSlotIdx}"]`) as HTMLElement;
+                    
+                    if (startCell && endCell) {
+                        const gRect = gridContainer.getBoundingClientRect();
+                        const sRect = startCell.getBoundingClientRect();
+                        const eRect = endCell.getBoundingClientRect();
+                        
+                        const rowHeight = startCell.offsetHeight || 60;
+                        const pxPer15 = rowHeight / 2;
+                        
+                        if (!selectionMirror) {
+                            selectionMirror = document.createElement('div');
+                            selectionMirror.className = 'dayble-focus-event-abs dayble-focus-selection-mirror';
+                            selectionMirror.innerHTML = '<div class="dayble-focus-event-inner">New Event</div>';
+                            overlay.appendChild(selectionMirror);
+                        }
+                        
+                        // Positioning relative to gridContainer (which is now the offset parent of overlay)
+                        const left = sRect.left - gRect.left;
+                        const top = (sRect.top - gRect.top) + (s15 % 2 === 0 ? 0 : pxPer15);
+                        const width = sRect.width;
+                        const height = ((e15 - s15) + 1) * pxPer15;
+                        
+                        selectionMirror.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
+                        selectionMirror.style.setProperty('--focus-item-top', `${Math.round(top)}px`);
+                        selectionMirror.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
+                        selectionMirror.style.setProperty('--focus-item-height', `${Math.round(height)}px`);
+                    }
                 }
             }
         };
         const toTime = (h: number, m: number) => `${pad(h)}:${pad(m)}`;
         const finalizeSelection = async () => {
-            if (sel.start < 0 || sel.end < 0) return;
-            const sIdx = Math.min(sel.start, sel.end);
-            const eIdx = Math.max(sel.start, sel.end);
-            const s = slots[sIdx];
-            const eNext = slots[eIdx + 1] || { hour: 0, minute: 0 };
-            const sTime = toTime(s.hour, s.minute);
-            const eTime = toTime(eNext.hour, eNext.minute);
-            const endIsMidnightNext = (eIdx === slots.length - 1);
+            if (typeof sel.start15 !== 'number' || typeof sel.end15 !== 'number') return;
+            const sIdx15 = Math.min(sel.start15, sel.end15);
+            const eIdx15 = Math.max(sel.start15, sel.end15);
+            
+            const startTotalMin = sIdx15 * 15;
+            const endTotalMin = (eIdx15 + 1) * 15;
+            
+            const sh = Math.floor(startTotalMin / 60);
+            const sm = startTotalMin % 60;
+            const eh = Math.floor(endTotalMin / 60);
+            const em = endTotalMin % 60;
+            
+            const sTime = toTime(sh, sm);
+            let eTime = toTime(eh, em);
+            const endIsMidnightNext = (endTotalMin >= 24 * 60);
+            if (endIsMidnightNext) eTime = '00:00';
+            
             const sDate = this.date;
             const eDate = endIsMidnightNext ? nextDateStr(this.date) : this.date;
             await this.view?.openEventModal(undefined, sDate, eDate, sTime, eTime);
@@ -2527,11 +2644,34 @@ class TodayModal extends Modal {
             cell.setAttr('data-idx', String(idx));
             cell.onmousedown = (e) => {
                 if ((e as MouseEvent).button !== 0) return;
-                sel.active = true; sel.start = idx; sel.end = idx; clearSelection(); applySelection();
+                const info = getSlotInfo(e.clientX, e.clientY);
+                if (!info) return;
+                
+                sel.active = true; 
+                sel.start = idx; 
+                sel.end = idx;
+                sel.start15 = info.isAfternoon ? (24*2 + (info.n % 48)) : info.n;
+                sel.end15 = sel.start15;
+
+                clearSelection(); 
+                applySelection();
             };
-            cell.onmouseover = () => {
+            cell.onmouseover = (e) => {
                 if (!sel.active) return;
-                sel.end = idx; clearSelection(); applySelection();
+                
+                const info = getSlotInfo(e.clientX, e.clientY);
+                if (!info) return;
+
+                // Determine if we should snap to the first or second half of the slot
+                const snappedIdx = info.isSecondHalf ? idx + 0.5 : idx;
+                
+                // For selection we still use whole indices for highlighting cells,
+                // but the ghost event will use the 15-min snapping.
+                sel.end = idx; 
+                sel.end15 = info.isAfternoon ? (24*2 + (info.n % 48)) : info.n;
+                
+                clearSelection(); 
+                applySelection();
             };
             cell.onmouseup = async () => {
                 if (!sel.active) return;
@@ -2544,10 +2684,10 @@ class TodayModal extends Modal {
         if (typeof this.lastScrollTop === 'number') {
             scroller.scrollTop = this.lastScrollTop;
         }
-        const quarter = scroller.createDiv({ cls: 'dayble-quarter-lines' });
+        const quarter = gridContainer.createDiv({ cls: 'dayble-quarter-lines' });
         const cells = Array.from(gridContainer.querySelectorAll('.dayble-focus-cell')) as HTMLElement[];
         if (cells.length > 0) {
-            const scRect = scroller.getBoundingClientRect();
+            const gRect = gridContainer.getBoundingClientRect();
             const rowHeight = cells[0].offsetHeight || 60;
             const pxPer15 = rowHeight / 2;
             
@@ -2558,9 +2698,9 @@ class TodayModal extends Modal {
                 const colIntervals = split ? (cells.length / 2) * 2 : cells.length * 2;
                 for (let i = 1; i < colIntervals; i++) {
                     const line = quarter.createDiv({ cls: 'dayble-quarter-line' });
-                    line.style.left = `${gridRect.left - scRect.left}px`;
+                    line.style.left = `${gridRect.left - gRect.left}px`;
                     line.style.width = `${gridRect.width}px`;
-                    line.style.setProperty('--quarter-line-top', `${Math.round((gridRect.top - scRect.top) + i * pxPer15)}px`);
+                    line.style.setProperty('--quarter-line-top', `${Math.round((gridRect.top - gRect.top) + i * pxPer15)}px`);
                 }
             });
         }
@@ -2598,15 +2738,15 @@ class TodayModal extends Modal {
                 const startCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${startIdx}"]`) as HTMLElement;
                 if (!startCell) return;
                 const sRect = startCell.getBoundingClientRect();
-                const scRect = scroller.getBoundingClientRect();
-                const left = sRect.left - scRect.left;
+                const gRect = gridContainer.getBoundingClientRect();
+                const left = sRect.left - gRect.left;
                 const width = startCell.offsetWidth;
                 const rowHeight = startCell.offsetHeight || 60;
                 const pxPer15 = rowHeight / 2;
                 const withinMin = (sm % 30);
                 
-                // Use actual cell rect for positioning to ensure perfect alignment
-                const top = (sRect.top - scRect.top) + ((withinMin % 30) / 15) * pxPer15;
+                // Use actual cell rect for positioning relative to gridContainer
+                const top = (sRect.top - gRect.top) + ((withinMin % 30) / 15) * pxPer15;
                 
                 let durationMin = 30;
                 if (endStr) {
@@ -2630,12 +2770,9 @@ class TodayModal extends Modal {
                     this.dragId = ev.id;
                     this.dragEl = item;
                     
-                    // Capture EXACT distance from mouse to top of event in scroll space
-                    const scRect = scroller.getBoundingClientRect();
+                    // Capture EXACT distance from mouse to top of event
                     const itemRect = item.getBoundingClientRect();
-                    const eventTopInScrollSpace = itemRect.top - scRect.top + scroller.scrollTop;
-                    const mouseYInScrollSpace = e.clientY - scRect.top + scroller.scrollTop;
-                    this.dragOffsetY = mouseYInScrollSpace - eventTopInScrollSpace;
+                    this.dragOffsetY = e.clientY - itemRect.top;
 
                     item.addClass('dragging');
                     try {
@@ -2669,60 +2806,31 @@ class TodayModal extends Modal {
             const id = this.dragId;
             if (!id) return;
             const durationMin = Math.max(15, this.dragDuration || 30);
-            const cells = Array.from(gridContainer.querySelectorAll('.dayble-focus-cell')) as HTMLElement[];
-            if (cells.length === 0) return;
             
-            const scRect = scroller.getBoundingClientRect();
-            const morningRect = morningGrid.getBoundingClientRect();
-            const afternoonRect = afternoonGrid.getBoundingClientRect();
+            const info = getSlotInfo(e.clientX, e.clientY - (this.dragOffsetY || 0));
+            if (!info || !info.targetCell) return;
             
-            // Determine which grid we are over based on horizontal mouse position
-            const isAfternoon = split && (e.clientX > (morningRect.right + afternoonRect.left) / 2);
-            const targetGrid = isAfternoon ? afternoonGrid : morningGrid;
-            const targetRect = targetGrid.getBoundingClientRect();
+            const gRect = gridContainer.getBoundingClientRect();
+            const targetCellRect = info.targetCell.getBoundingClientRect();
             
-            const rowHeight = cells[0].offsetHeight || 60;
-            const pxPer15 = rowHeight / 2;
+            // Calculate relative to gridContainer, accounting for scroll
+            const left = targetCellRect.left - gRect.left;
+            const topLocal = (targetCellRect.top - gRect.top) + (info.isSecondHalf ? info.pxPer15 : 0);
             
-            // Mouse Y in scroll space
-            const mouseYInScrollSpace = e.clientY - scRect.top + scroller.scrollTop;
-            const mouseY = mouseYInScrollSpace - (this.dragOffsetY || 0);
+            const width = info.targetCell.offsetWidth;
+            const heightLocal = Math.max(info.pxPer15, Math.round((durationMin / 15) * info.pxPer15));
             
-            // 1. VISUAL FOLLOW: Move the element IMMEDIATELY with the mouse (no snapping for the movement itself)
+            // Visual follow for the dragged element
             if (this.dragEl) {
-                const immediateTop = (mouseY - scroller.scrollTop); // Visual top relative to scroller viewport
-                this.dragEl.style.setProperty('--focus-item-top', `${Math.round(immediateTop)}px`);
-            }
-
-            // 2. LOGICAL SNAPPING: For the drop indicator and final time calculation
-            // Calculate relative Y within the target grid column in scroll space
-            const targetGridTopInScrollSpace = targetRect.top - scRect.top + scroller.scrollTop;
-            const relY = Math.max(0, Math.min(targetRect.height - 1, mouseY - targetGridTopInScrollSpace));
-            
-            const n = Math.floor(relY / pxPer15);
-            const snappedRelY = n * pxPer15;
-            
-            // baseIdx in the WHOLE slots array (0 for morning, 24 for afternoon)
-            const baseIdx = isAfternoon ? 24 : 0;
-            const startIdx = baseIdx + Math.floor(n / 2);
-            
-            const targetCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${startIdx}"]`) as HTMLElement;
-            if (!targetCell) return;
-            
-            const targetCellRect = targetCell.getBoundingClientRect();
-            const left = (targetCellRect.left - scRect.left);
-            
-            // Calculate topLocal in scroll space relative to scroller container top
-            const targetCellTopInScrollSpace = targetCellRect.top - scRect.top + scroller.scrollTop;
-            const topLocal = targetCellTopInScrollSpace + (n % 2 === 0 ? 0 : pxPer15);
-            
-            const width = targetCell.offsetWidth;
-            const heightLocal = Math.max(pxPer15, Math.round((durationMin / 15) * pxPer15));
-            if (this.dragEl) {
+                // Mouse Y relative to gridContainer top
+                const mouseY = (e.clientY - gRect.top) - (this.dragOffsetY || 0);
+                
+                this.dragEl.style.setProperty('--focus-item-top', `${Math.round(mouseY)}px`);
                 this.dragEl.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
                 this.dragEl.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
                 this.dragEl.style.setProperty('--focus-item-height', `${Math.round(heightLocal)}px`);
             }
+
             if (!dropIndicator) {
                 dropIndicator = document.createElement('div');
                 dropIndicator.className = 'dayble-focus-drop';
@@ -2731,10 +2839,10 @@ class TodayModal extends Modal {
             dropIndicator.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
             dropIndicator.style.setProperty('--focus-item-top', `${Math.round(topLocal)}px`);
             dropIndicator.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
-            dropIndicator.style.setProperty('--focus-item-height', `${Math.round(pxPer15)}px`);
+            dropIndicator.style.setProperty('--focus-item-height', `${Math.round(heightLocal)}px`);
             
             gridContainer.querySelectorAll('.dayble-focus-cell').forEach(el => el.removeClass('drop-target'));
-            targetCell.addClass('drop-target');
+            info.targetCell.addClass('drop-target');
         };
         scroller.ondragleave = () => {
             if (dropIndicator) { dropIndicator.remove(); dropIndicator = null; }
@@ -2743,30 +2851,28 @@ class TodayModal extends Modal {
         scroller.ondrop = async (e) => {
             e.preventDefault();
             const id = this.dragId;
+            const el = this.dragEl;
             if (!id) return;
             const durationMin = Math.max(15, this.dragDuration || 30);
             
-            const scRect = scroller.getBoundingClientRect();
-            const morningRect = morningGrid.getBoundingClientRect();
-            const afternoonRect = afternoonGrid.getBoundingClientRect();
-            const isAfternoon = split && (e.clientX > (morningRect.right + afternoonRect.left) / 2);
-            const targetGrid = isAfternoon ? afternoonGrid : morningGrid;
-            const targetRect = targetGrid.getBoundingClientRect();
-            
-            const cells = Array.from(gridContainer.querySelectorAll('.dayble-focus-cell')) as HTMLElement[];
-            if (cells.length === 0) return;
-            
-            const rowHeight = cells[0].offsetHeight || 60;
-            const pxPer15 = rowHeight / 2;
-            
-            const mouseYInScrollSpace = e.clientY - scRect.top + scroller.scrollTop;
-            const mouseY = mouseYInScrollSpace - (this.dragOffsetY || 0);
-            const targetGridTopInScrollSpace = targetRect.top - scRect.top + scroller.scrollTop;
-            const relY = Math.max(0, Math.min(targetRect.height - 1, mouseY - targetGridTopInScrollSpace));
-            
-            const n = Math.floor(relY / pxPer15);
-            const baseMin = isAfternoon ? 12 * 60 : 0;
-            const startTotalMin = baseMin + (n * 15);
+            const info = getSlotInfo(e.clientX, e.clientY - (this.dragOffsetY || 0));
+            if (!info) return;
+
+            // ANIMATION START: Settle the element to its new slot
+            if (el) {
+                const gRect = gridContainer.getBoundingClientRect();
+                const targetCellRect = info.targetCell.getBoundingClientRect();
+                const left = targetCellRect.left - gRect.left;
+                const topLocal = (targetCellRect.top - gRect.top) + (info.isSecondHalf ? info.pxPer15 : 0);
+                
+                el.removeClass('dragging');
+                el.addClass('settling');
+                el.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
+                el.style.setProperty('--focus-item-top', `${Math.round(topLocal)}px`);
+            }
+
+            const baseMin = info.isAfternoon ? 12 * 60 : 0;
+            const startTotalMin = baseMin + (info.n * 15);
             
             const newH = Math.floor(startTotalMin / 60);
             const newM = startTotalMin % 60;
@@ -2788,17 +2894,16 @@ class TodayModal extends Modal {
                 if (evIdx !== -1 && this.view) {
                     const originalEv = this.view.events[evIdx];
                     
-                    // 1. CREATE DEEP COPY - NO SIDE EFFECTS
                     const updatedEv = JSON.parse(JSON.stringify(originalEv));
-                    
-                    // 2. UPDATE ONLY THIS CLONE
                     updatedEv.date = this.date;
                     updatedEv.startDate = this.date;
                     updatedEv.endDate = endDate;
                     updatedEv.time = `${startStr}-${endStr}`;
                     
-                    // 3. REPLACE IN ARRAY
                     this.view.events[evIdx] = updatedEv;
+                    
+                    // WAIT for animation before re-rendering everything
+                    await new Promise(r => setTimeout(r, 250));
                     
                     await this.view.saveAllEntries();
                     await this.view.render();
