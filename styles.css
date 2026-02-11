@@ -1442,25 +1442,65 @@ margin-top: 6px !important;
     height: var(--focus-item-height);
 }
 
-.dayble-focus-event-abs { 
-    position: absolute; 
-    box-sizing: border-box; 
-    pointer-events: auto; 
-    left: var(--focus-item-left); 
-    top: var(--focus-item-top); 
-    width: var(--focus-item-width); 
-    height: var(--focus-item-height); 
-    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease;
+.dayble-focus-event-abs {
+    position: absolute;
+    box-sizing: border-box;
+    left: var(--focus-item-left);
+    top: var(--focus-item-top);
+    width: var(--focus-item-width);
+    height: var(--focus-item-height);
+    margin: 0;
+    overflow: hidden;
+    z-index: 20;
+    cursor: pointer;
+    background: var(--background-primary);
+    border: var(--event-border-width, 2px) solid var(--event-border-color, var(--background-modifier-border));
+    border-radius: var(--event-border-radius, 4px);
+    padding: 2px 4px;
+    display: flex;
+    flex-direction: column;
+    pointer-events: auto !important;
 }
 
-.dayble-focus-event-abs.dragging { 
-    opacity: 1 !important; 
-    transform: scale(1.02) !important; 
-    z-index: 9999 !important; 
-    box-shadow: 0 8px 25px rgba(0,0,0,0.3) !important; 
-    filter: brightness(1.1) saturate(1.2) !important; 
-    transition: none !important; /* No transition while dragging for performance */
-    cursor: grabbing !important; 
+/* Compact layout for short events */
+.dayble-event-compact {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 4px;
+    padding: 0 4px !important;
+}
+
+.dayble-event-compact .dayble-event-icon {
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    order: -1 !important; /* Force to left */
+}
+
+.dayble-event-compact .dayble-event-title {
+    font-size: 0.85em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin: 0 !important;
+    line-height: 1.2;
+    flex: 1;
+}
+
+.dayble-event-compact .dayble-event-desc,
+.dayble-event-compact .dayble-icon-top {
+    display: none !important;
+}
+
+.dayble-focus-event-abs.dragging {
+    opacity: 1; /* Keep opacity constant during drag */
+    z-index: 9999;
+    pointer-events: none;
+    transition: none !important;
 }
 
 .dayble-focus-event-abs.settling {

@@ -2758,10 +2758,51 @@ class TodayModal extends Modal {
                 const height = Math.max(pxPer15, Math.round((durationMin / 15) * pxPer15));
                 const item = this.view?.createEventItem(ev) || document.createElement('div');
                 item.addClass('dayble-focus-event-abs');
+                
+                // Override background-color to use the variable set by createEventItem
+                item.style.backgroundColor = 'var(--event-bg-color, var(--background-primary))';
+                item.style.color = 'var(--event-text-color, var(--text-normal))';
+                item.style.borderColor = 'var(--event-border-color, var(--background-modifier-border))';
+                
+                // For events <= 30 mins, make them compact
+                if (durationMin <= 30) {
+                    item.addClass('dayble-event-compact');
+                }
+
+                // Add rich tooltip
+                const formatTime = (hh: number, mm: number) => {
+                    const ampm = hh >= 12 ? 'pm' : 'am';
+                    const h12 = hh % 12 || 12;
+                    return `${h12}:${String(mm).padStart(2, '0')}${ampm}`;
+                };
+                const durationText = durationMin >= 60 
+                    ? `${Math.floor(durationMin/60)}h ${durationMin%60}m` 
+                    : `${durationMin} minutes`;
+                
+                let endH = 0, endM = 0;
+                if (endStr) {
+                    const parts = endStr.split(':').map(n => parseInt(n || '0', 10));
+                    endH = parts[0];
+                    endM = parts[1];
+                }
+
+                const tooltipLines = [
+                    ev.title || 'Untitled',
+                    ev.description || '',
+                    `Start Time: ${formatTime(sh, sm)}`,
+                    `End Time: ${endStr ? formatTime(endH, endM) : '?'}`,
+                    `Duration: ${durationText}`
+                ].filter(l => l.length > 0);
+                
+                const tooltipText = tooltipLines.join('\n');
+                item.setAttribute('aria-label', tooltipText);
+                item.addClass('db-tooltip'); // Trigger Obsidian's tooltip if applicable
+
                 item.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
                 item.style.setProperty('--focus-item-top', `${Math.round(top)}px`);
                 item.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
                 item.style.setProperty('--focus-item-height', `${Math.round(height)}px`);
+                item.style.pointerEvents = 'auto'; // Explicitly enable for absolute elements
                 item.onclick = async (e) => { e.stopPropagation(); await this.view?.openEventModal(ev.id, ev.date || ev.startDate, ev.endDate); };
                 // Drag to reposition within today modal (15-min granularity)
                 item.ondragstart = (e) => {
