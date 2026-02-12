@@ -120,7 +120,9 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
+    width: 100%;
 }
 
 /* Sidebar/holder */
@@ -265,7 +267,9 @@
     border-radius: var(--input-radius);
     background: var(--background-primary);
     margin-top: -6px;
-    overflow: auto;
+    overflow-y: scroll !important;
+    overflow-x: scroll !important;
+    width: 100%;
 }
 
 .dayble-weekdays {
@@ -273,6 +277,7 @@
     top: 0;
     background: var(--background-primary);
     z-index: 100;
+    width: 100%;
 }
 
 .dayble-grid-header {
@@ -290,12 +295,13 @@
     text-transform: uppercase;
     letter-spacing: 0.2em;
     margin-bottom: 0px !important;
+    min-width: var(--dayble-cell-min-width, 0px);
 }
 
 /* Days */
 .dayble-day {
     /* min-height: 120px; */
-    min-width: 0;
+    min-width: var(--dayble-cell-min-width, 0px);
     border: 2px solid transparent;
     background: var(--background-primary-alt);
     border-radius: var(--input-radius);
@@ -312,8 +318,8 @@
 }
 
 .dayble-day:hover {
-    filter: brightness(1.1);
-    transition: filter 0.2s ease;
+    filter: brightness(1.2);
+    transition: filter 0.1s ease;
 }
 
 .dayble-current-day {
@@ -400,9 +406,8 @@
     display: none !important;
 }
 
-.dayble-agenda-long-events {
-    /* Special styling for multi-day events in agenda view */
-}
+/* .dayble-agenda-long-events {
+} */
 
 .dayble-event {
     display: grid;
@@ -572,6 +577,7 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
 .dayble-focus-grid-container {
     display: flex;
     gap: 20px;
+    width: 100%;
     /* padding: 10px; */
     position: relative; /* Add this to make it the offset parent for overlay */
 }
@@ -1305,13 +1311,13 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     overflow: hidden;
 }
 /* Triggers layout */
-.db-triggers-row {
+.db-triggers-row, .db-states-row {
     grid-template-columns: minmax(0, 1fr) !important;
 }
-.db-triggers-row .setting-item-info {
+.db-triggers-row .setting-item-info, .db-states-row .setting-item-info {
     display: none !important;
 }
-.db-triggers-row .setting-item-control {
+.db-triggers-row .setting-item-control, .db-states-row .setting-item-control {
     width: 100%;
     display: flex;
     flex-wrap: nowrap;
@@ -1550,6 +1556,17 @@ margin-top: 6px !important;
 
 .dayble-event-dim {
    opacity: 0.6;
+}
+
+.dayble-strikethrough .dayble-event-title,
+.dayble-strikethrough .dayble-event-desc,
+.dayble-strikethrough .dayble-event-title *,
+.dayble-strikethrough .dayble-event-desc * {
+   text-decoration: line-through !important;
+}
+
+.dayble-strikethrough {
+   opacity: 0.8;
 }
 
 .dayble-event-hidden {
@@ -1870,4 +1887,17 @@ margin-top: 6px !important;
 .dayble-focus-scroll {
    border-radius: 0;
    border: 2px solid var(--background-modifier-border);
+}
+
+.dayble-focus-grid-container {
+   gap: 0px;
+}
+
+.dayble-focus-grid.afternoon {
+   border-left: 2px solid var(--background-modifier-border);
+}
+
+.dayble-modal-wide {
+    width: 100% !important;
+    max-width: none !important;
 }
