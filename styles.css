@@ -1,10 +1,8 @@
-/* Hide view content when dayble-root is anywhere in the same workspace leaf */
 .workspace-leaf:has(.dayble-root) .view-content,
 .workspace-leaf:has(.dayble-root) .view-header {
     display: none;
 }
 
-/* Dayble root and layout */
 .dayble-root {
     display: flex;
     flex-direction: column;
@@ -53,6 +51,7 @@
     margin-right: 4px;
     text-align: center;
     text-align-last: center;
+    width: 70px;
 }
 
 .dayble-view-select option {
@@ -88,7 +87,6 @@
     text-overflow: ellipsis;
 }
 
-/* Buttons */
 .dayble-btn {
     border: none;
     color: inherit;
@@ -102,13 +100,15 @@
     border-radius: var(--button-radius);
     padding: 6px;
     cursor: pointer;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    border: none;
 }
 
 .dayble-icon-btn:hover {
     background: var(--background-primary-alt);
 }
 
-/* Body and calendar layout */
 .dayble-body {
     display: flex;
     flex: 1;
@@ -125,7 +125,6 @@
     width: 100%;
 }
 
-/* Sidebar/holder */
 .dayble-holder {
     display: none;
     flex: 0 0 auto;
@@ -160,6 +159,7 @@
     align-items: center;
     padding: 10px;
 }
+
 .dayble-holder-header .dayble-btn {
     margin-left: 6px;
 }
@@ -185,30 +185,17 @@
     background: var(--interactive-accent);
 }
 
-
-/* Weekly notes resize handle */
 .dayble-weekly-notes {
     position: relative;
     display: flex;
     flex-direction: column;
 }
 
-/* .dayble-weekly-drag-handle {
-    position: absolute;
-    top: -4px;
-    left: 0;
-    right: 0;
-    height: 8px;
-    cursor: ns-resize;
-    background: transparent;
-    transition: background 0.2s;
-    z-index: 2000;
-} */
-
-/* .dayble-weekly-drag-handle:hover {
-    background: var(--interactive-accent);
-    z-index: 2000;
-} */
+.dayble-weekly-notes.dayble-weekly-notes-container {
+    border-top: 1px solid var(--background-modifier-border);
+    padding: 10px;
+    padding-top: 0px;
+}
 
 .dayble-weekly-notes-header {
     flex: 0 0 auto !important;
@@ -222,7 +209,13 @@
     flex-direction: column;
 }
 
-/* Weekly notes textarea only */
+.dayble-weekly-notes-content,
+.dayble-weekly-notes-textarea.dayble-textarea-auto {
+    background: var(--background-primary-alt) !important;
+    border-radius: var(--radius-m);
+    height: 100px;
+}
+
 .dayble-weekly-notes-textarea {
     font-family: var(--font-monospace);
     font-size: var(--font-text-size);
@@ -254,9 +247,13 @@
 
 .dayble-weekdays {
     flex: 0 0 auto !important;
+    position: sticky;
+    top: 0;
+    background: var(--background-primary);
+    z-index: 100;
+    width: 100%;
 }
 
-/* Calendar grid */
 .dayble-grid {
     flex: 1 1 auto !important;
     position: relative;
@@ -264,7 +261,6 @@
     grid-template-columns: repeat(7, 1fr);
     gap: 6px;
     padding: 8px;
-    border-radius: var(--input-radius);
     background: var(--background-primary);
     margin-top: -6px;
     overflow-y: scroll !important;
@@ -272,12 +268,10 @@
     width: 100%;
 }
 
-.dayble-weekdays {
-    position: sticky;
-    top: 0;
-    background: var(--background-primary);
-    z-index: 100;
-    width: 100%;
+.dayble-grid.dayble-day-mode,
+.dayble-grid.dayble-day-mode {
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
 }
 
 .dayble-grid-header {
@@ -298,13 +292,11 @@
     min-width: var(--dayble-cell-min-width, 0px);
 }
 
-/* Days */
 .dayble-day {
-    /* min-height: 120px; */
     min-width: var(--dayble-cell-min-width, 0px);
     border: 2px solid transparent;
     background: var(--background-primary-alt);
-    border-radius: var(--input-radius);
+    border-radius: var(--day-cell-radius, var(--input-radius));
     padding: 6px;
     display: flex;
     flex-direction: column;
@@ -313,8 +305,8 @@
     filter: brightness(1);
 }
 
-.dayble-inactive {
-    opacity: .6;
+.dayble-day.dayble-cell-max {
+    padding-bottom: 0 !important;
 }
 
 .dayble-day:hover {
@@ -322,8 +314,17 @@
     transition: filter 0.1s ease;
 }
 
+.dayble-inactive {
+    opacity: .6;
+}
+
 .dayble-current-day {
     border: 2px solid var(--color-accent);
+}
+
+.dayble-day.dayble-current-day .dayble-day-header {
+    margin-top: -6px !important;
+    margin-left: 2px !important;
 }
 
 .dayble-day-header {
@@ -354,7 +355,6 @@
     color: var(--color-accent);
 }
 
-/* Events */
 .dayble-event-container {
     position: relative;
     transition: none !important;
@@ -379,8 +379,27 @@
     letter-spacing: 0.05em;
 }
 
-.dayble-agenda-container .dayble-event {
-    min-height: 28px; /* hide this to fix text overflow */
+.dayble-lane-walls {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    pointer-events: none;
+}
+
+.dayble-lane-wall {
+    width: 100%;
+}
+
+.dayble-long-container {
+    pointer-events: none;
+}
+
+.dayble-long-event {
+    pointer-events: auto;
+}
+
+.dayble-event {
+    min-height: 28px;
     height: auto !important;
     max-height: none !important;
     align-items: flex-start;
@@ -388,9 +407,15 @@
     flex-direction: column;
     text-overflow: ellipsis;
 }
-
+.dayble-day-mode .dayble-focus-grid-container .dayble-event {
+   border-radius: 0 !important;
+   clip-path: inset(2px 0 2px 0);
+}
 .dayble-agenda-long-events {
-   min-height: 28px;
+    min-height: 28px;
+    border-width: var(--event-border-width, 2px) !important;
+    border-style: solid !important;
+    border-color: var(--event-border-color, var(--background-modifier-border)) !important;
 }
 
 .dayble-agenda-container .dayble-event-title {
@@ -406,18 +431,15 @@
     display: none !important;
 }
 
-/* .dayble-agenda-long-events {
-} */
-
 .dayble-event {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     grid-auto-rows: auto;
     align-items: center;
-    padding: 4px 6px;
+    padding: var(--event-vertical-padding, 4px) 6px !important;
     background: var(--background-primary);
     color: var(--text-normal);
-    border: var(--event-border-width, 1px) solid var(--background-modifier-border);
+    border: var(--event-border-width, 2px) solid var(--background-modifier-border);
     border-radius: var(--event-border-radius, var(--input-radius));
     margin-bottom: 4px;
     cursor: grab;
@@ -429,15 +451,15 @@
     box-sizing: border-box;
 }
 
+.dayble-event:hover {
+    filter: brightness(1.1);
+    transition: filter 0.2s ease;
+}
+
 .dayble-event.dayble-event-colored {
     background: var(--event-bg-color, var(--background-primary));
     color: var(--event-text-color, var(--text-normal));
     border-color: var(--event-border-color, var(--event-text-color, var(--background-modifier-border)));
-}
-
-.dayble-event:hover {
-    filter: brightness(1.1);
-    transition: filter 0.2s ease;
 }
 
 .dayble-event.dayble-layout-center-flex {
@@ -448,6 +470,14 @@
     flex-wrap: wrap;
 }
 
+.dayble-event-title-container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    grid-column: 1 / -1;
+}
+
 .dayble-event-title {
     font-size: .9em;
     font-weight: 600;
@@ -455,8 +485,12 @@
     overflow-wrap: break-word;
     overflow: hidden;
     text-overflow: ellipsis;
-    grid-column: 2;
-    justify-self: center;
+}
+
+.dayble-event-title p,
+.dayble-event-desc p {
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
 .dayble-event.dayble-layout-center-flex .dayble-event-title {
@@ -472,6 +506,7 @@
     grid-column: 1 / -1;
     overflow-wrap: break-word;
     margin-bottom: 4px !important;
+    line-height: 1.2;
 }
 
 .dayble-event.dayble-layout-center-flex .dayble-event-desc {
@@ -481,22 +516,61 @@
     flex-basis: 100%;
 }
 
-/* Text alignment */
-.dayble-title-align-left .dayble-event-title { text-align: left; grid-column: 2; justify-self: start; }
-.dayble-title-align-center .dayble-event-title { text-align: center; grid-column: 2; justify-self: center; }
-.dayble-title-align-right .dayble-event-title { text-align: right; grid-column: 2; justify-self: end; }
+.dayble-title-align-left .dayble-event-title-container {
+    justify-content: flex-start;
+}
 
-/* Override grid layout per alignment to avoid unintended centering */
-.dayble-title-align-left.dayble-event { grid-template-columns: auto 1fr; }
-.dayble-title-align-right.dayble-event { grid-template-columns: 1fr auto; }
+.dayble-title-align-center .dayble-event-title-container {
+    justify-content: center;
+}
 
-/* Icon placement per alignment */
-.dayble-title-align-left .dayble-event-icon:not(.dayble-icon-top):first-child { grid-column: 1; justify-self: start; margin-right: 6px; }
-.dayble-title-align-right .dayble-event-icon:not(.dayble-icon-top):not(:first-child) { grid-column: 2; justify-self: end; margin-left: 6px; }
+.dayble-title-align-right .dayble-event-title-container {
+    justify-content: flex-end;
+}
 
-.dayble-desc-align-left .dayble-event-desc { text-align: left; }
-.dayble-desc-align-center .dayble-event-desc { text-align: center; }
-.dayble-desc-align-right .dayble-event-desc { text-align: right; }
+.dayble-title-align-left .dayble-event-title {
+    text-align: left;
+}
+
+.dayble-title-align-center .dayble-event-title {
+    text-align: center;
+}
+
+.dayble-title-align-right .dayble-event-title {
+    text-align: right;
+}
+
+.dayble-title-align-left.dayble-event {
+    grid-template-columns: auto 1fr;
+}
+
+.dayble-title-align-right.dayble-event {
+    grid-template-columns: 1fr auto;
+}
+
+.dayble-title-align-left .dayble-event-icon:not(.dayble-icon-top):first-child {
+    grid-column: 1;
+    justify-self: start;
+    margin-right: 6px;
+}
+
+.dayble-title-align-right .dayble-event-icon:not(.dayble-icon-top):not(:first-child) {
+    grid-column: 2;
+    justify-self: end;
+    margin-left: 6px;
+}
+
+.dayble-desc-align-left .dayble-event-desc {
+    text-align: left;
+}
+
+.dayble-desc-align-center .dayble-event-desc {
+    text-align: center;
+}
+
+.dayble-desc-align-right .dayble-event-desc {
+    text-align: right;
+}
 
 .dayble-event:has(.dayble-icon-top-center) .dayble-event-desc,
 .dayble-event:has(.dayble-icon-top-left) .dayble-event-desc,
@@ -513,8 +587,6 @@
     margin-bottom: 4px !important;
 }
 
-
-
 .dayble-event:has(.dayble-event-desc) .dayble-event-title {
     margin-bottom: -2px !important;
 }
@@ -523,22 +595,13 @@
     margin-top: -2px !important;
 }
 
-
-
-
-.dayble-icon-top-center, .dayble-icon-top-left, .dayble-icon-top-right {
+.dayble-icon-top-center,
+.dayble-icon-top-left,
+.dayble-icon-top-right {
     margin-top: 6px !important;
     margin-bottom: 2px !important;
     order: -1;
 }
-
-/* .dayble-root .status-bar {
-    display: none !important;
-} */
-
-/* body:has(.workspace-leaf.mod-active .view-content[data-type="dayble-calendar"]) .status-bar {
-    display: none !important;
-} */
 
 .workspace-leaf.mod-active:has(.workspace-leaf-content[data-type="dayble-calendar-view"]) ~ .status-bar,
 body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-calendar-view"]) .status-bar {
@@ -547,39 +610,57 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
 
 .dayble-long-event {
     background: var(--background-primary);
-    border-width: var(--event-border-width, 1px);
+    border-style: solid;
+    border-width: var(--event-border-width, 2px);
+    border-color: var(--event-border-color, var(--event-text-color, var(--background-modifier-border)));
     border-radius: var(--event-border-radius, var(--input-radius));
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 8px;
+    padding: var(--event-vertical-padding, 4px) 8px !important;
     box-sizing: border-box;
     overflow: hidden;
     text-overflow: ellipsis;
     z-index: 10;
     transition: none !important;
+    border-radius: 0;
+    min-height: 2.2em;
+    height: auto !important;
 }
 
 .dayble-long-event-start {
     border-radius: var(--event-border-radius, var(--input-radius)) 0 0 var(--event-border-radius, var(--input-radius));
+    border-top-left-radius: var(--event-border-radius, var(--input-radius));
+    border-bottom-left-radius: var(--event-border-radius, var(--input-radius));
 }
 
 .dayble-long-event-end {
     border-radius: 0 var(--event-border-radius, var(--input-radius)) var(--event-border-radius, var(--input-radius)) 0;
+    border-top-right-radius: var(--event-border-radius, var(--input-radius));
+    border-bottom-right-radius: var(--event-border-radius, var(--input-radius));
 }
 
-/* Split-grid layout for TodayModal on desktop */
+.dayble-long-event-single {
+    border-radius: var(--event-border-radius, var(--input-radius));
+}
+
+.dayble-long-event-start.dayble-long-event-end {
+    border-radius: var(--input-radius);
+}
+
 .dayble-modal-wide {
     width: 80vw !important;
     max-width: 1000px !important;
+    width: 100% !important;
+    max-width: none !important;
 }
 
 .dayble-focus-grid-container {
     display: flex;
     gap: 20px;
     width: 100%;
-    /* padding: 10px; */
-    position: relative; /* Add this to make it the offset parent for overlay */
+    position: relative;
+    gap: 0px;
 }
 
 .dayble-focus-grid {
@@ -588,7 +669,10 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
     flex-direction: column;
 }
 
-/* Ensure mobile view stays single column */
+.dayble-focus-grid.afternoon {
+    border-left: 2px solid var(--background-modifier-border);
+}
+
 @media screen and (max-width: 600px) {
     .dayble-focus-grid-container {
         flex-direction: column;
@@ -596,11 +680,6 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
     }
 }
 
-.dayble-long-event-start.dayble-long-event-end {
-    border-radius: var(--input-radius);
-}
-
-/* Event icons */
 .dayble-event-icon {
     display: inline-flex;
     align-items: center;
@@ -611,17 +690,34 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
     line-height: 1;
 }
 
-/* Position non-top icons to left/right columns */
-.dayble-event > .dayble-event-icon:not(.dayble-icon-top):first-child { grid-column: 1; justify-self: start; margin-left: 0; margin-right: 6px; }
-.dayble-event > .dayble-event-icon:not(.dayble-icon-top):not(:first-child) { grid-column: 3; justify-self: end; margin-left: 6px; margin-right: 0; }
+.dayble-icon-top {
+    width: 100%;
+    margin-bottom: 4px;
+}
 
-.dayble-event.dayble-layout-center-flex > .dayble-event-icon:not(.dayble-icon-top):first-child { order: 1; margin-left: 0; margin-right: 6px; }
-.dayble-event.dayble-layout-center-flex > .dayble-event-icon:not(.dayble-icon-top):not(:first-child) { order: 3; margin-left: 6px; margin-right: 0; }
+.dayble-event.dayble-layout-center-flex > .dayble-event-icon:not(.dayble-icon-top):first-child {
+    order: 1;
+    margin-left: 0;
+    margin-right: 6px;
+}
 
-/* gappy lr title icon */
-.dayble-title-align-center.dayble-event.dayble-layout-center-flex:has(.dayble-event-icon:not(.dayble-icon-top)) { gap: 3px; }
-.dayble-title-align-center.dayble-event.dayble-layout-center-flex > .dayble-event-icon:not(.dayble-icon-top):first-child { margin-right: 3px; }
-.dayble-title-align-center.dayble-event.dayble-layout-center-flex > .dayble-event-icon:not(.dayble-icon-top):not(:first-child) { margin-left: 3px; }
+.dayble-event.dayble-layout-center-flex > .dayble-event-icon:not(.dayble-icon-top):not(:first-child) {
+    order: 3;
+    margin-left: 6px;
+    margin-right: 0;
+}
+
+.dayble-title-align-center.dayble-event.dayble-layout-center-flex:has(.dayble-event-icon:not(.dayble-icon-top)) {
+    gap: 3px;
+}
+
+.dayble-title-align-center.dayble-event.dayble-layout-center-flex > .dayble-event-icon:not(.dayble-icon-top):first-child {
+    margin-right: 3px;
+}
+
+.dayble-title-align-center.dayble-event.dayble-layout-center-flex > .dayble-event-icon:not(.dayble-icon-top):not(:first-child) {
+    margin-left: 3px;
+}
 
 .dayble-icon-top {
     display: flex;
@@ -649,10 +745,10 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
     justify-content: flex-end;
 }
 
-/* Move title below top icon if present */
 .dayble-event:has(.dayble-event-icon.dayble-icon-top) .dayble-event-title {
     grid-row: 2;
 }
+
 .dayble-event:has(.dayble-event-icon.dayble-icon-top) .dayble-event-desc {
     grid-row: 3;
 }
@@ -671,19 +767,22 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
     flex-direction: column;
 }
 
-.dayble-modal-full-height {
-    max-height: 80vh;
-}
-
 .dayble-event-icon.dayble-icon-top.dayble-icon-top-center {
     margin: 8px 0 4px;
 }
 
-.dayble-event-icon.dayble-icon-top.dayble-icon-top-left { margin: 8px 0 4px; margin-left: 4px; margin-right: 2px; }
+.dayble-event-icon.dayble-icon-top.dayble-icon-top-left {
+    margin: 8px 0 4px;
+    margin-left: 4px;
+    margin-right: 2px;
+}
 
-.dayble-event-icon.dayble-icon-top.dayble-icon-top-right { margin: 8px 0 4px; margin-left: 2px; margin-right: 4px; }
+.dayble-event-icon.dayble-icon-top.dayble-icon-top-right {
+    margin: 8px 0 4px;
+    margin-left: 2px;
+    margin-right: 4px;
+}
 
-/* Drag and selection states */
 .dayble-drag-over {
     outline: 2px dashed var(--color-accent);
     outline-offset: -2px;
@@ -699,9 +798,17 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
     width: var(--focus-item-width);
     height: var(--focus-item-height);
     background: var(--color-accent);
-    opacity: 0.3;
+    opacity: 0.5;
     border-radius: var(--input-radius);
     z-index: 1000;
+    background: var(--color-accent);
+    border: 2px solid var(--color-accent);
+    /* border-radius: var(--event-border-radius, var(--input-radius)); */
+    border-radius: 0;
+    pointer-events: none;
+    z-index: 5;
+    transition: top 0.05s ease, left 0.05s ease, height 0.1s ease;
+    box-sizing: border-box;
 }
 
 .dayble-focus-selection-mirror {
@@ -716,7 +823,32 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
     justify-content: center;
     color: white;
     font-weight: 600;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    background-color: hsla(var(--interactive-accent-hsl), 0.2) !important;
+    border: 2px solid var(--interactive-accent) !important;
+    color: var(--text-normal) !important;
+    font-weight: bold;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 0.85em;
+    z-index: 30;
+    opacity: 1 !important;
+    pointer-events: none !important;
+}
+
+.dayble-focus-selection-mirror .dayble-focus-event-inner {
+    opacity: 1 !important;
+    color: var(--text-normal) !important;
+}
+
+.dayble-focus-selection-mirror .dayble-selection-duration {
+    font-size: 0.8em;
+    opacity: 1 !important;
+    color: var(--text-muted) !important;
+    font-weight: normal;
 }
 
 .dayble-selected {
@@ -724,7 +856,6 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
     background: var(--background-primary-alt);
 }
 
-/* Modal styles */
 .dayble-modal-title {
     margin: 0 0 8px;
     margin-top: -10px;
@@ -756,7 +887,6 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
     text-align: center;
 }
 
-/* Time input styling */
 input[type="time"] {
     color: var(--text-normal);
 }
@@ -808,11 +938,10 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     background: transparent !important;
     background-color: transparent !important;
     border: none !important;
-   padding: 4px;
-   margin-top: 10px;
+    padding: 4px;
+    margin-top: 10px;
 }
 
-/* Color palette - UPDATED to stretch swatches */
 .dayble-color-palette {
     display: flex;
     justify-content: space-between;
@@ -830,19 +959,46 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     border-radius: var(--checkbox-radius);
     border: 1px solid var(--background-modifier-border);
     cursor: pointer;
+    flex: 1;
+    min-width: 0;
+    aspect-ratio: 1;
+    border-radius: var(--checkbox-radius);
+    border: 2px solid var(--background-modifier-border);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: transparent;
+    padding: 0;
 }
 
-.dayble-color-swatch.selected {
+.dayble-color-swatch.selected,
+.dayble-color-swatch-selected {
     outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
 }
 
-/* Modal footer */
+.dayble-color-swatch-none {
+    background: repeating-linear-gradient(45deg, transparent, transparent 2px, var(--background-modifier-border) 2px, var(--background-modifier-border) 4px);
+}
+
+.dayble-color-swatch:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
 .dayble-modal-footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-top: 12px;
     gap: 8px;
+    position: sticky;
+    bottom: 0;
+    background-color: var(--background-primary);
+    z-index: 20;
+    border-top: 1px solid var(--background-modifier-border);
+    padding: 10px;
+    margin-top: auto;
+    border-top: 3px solid var(--background-modifier-border);
 }
 
 .dayble-modal-footer-right {
@@ -851,7 +1007,6 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     margin-left: auto;
 }
 
-/* Effects - Applied only on colored events from categories */
 .dayble-event-colored.dayble-effect-striped-1 {
     background-image: linear-gradient(45deg, transparent 25%, rgba(0, 0, 0, 0.1) 25%, rgba(0, 0, 0, 0.1) 50%, transparent 50%, transparent 75%, rgba(0, 0, 0, 0.1) 75%);
     background-size: 20px 20px;
@@ -873,15 +1028,15 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .dayble-event-colored.dayble-effect-crosshatched {
-    background-image: repeating-linear-gradient(0deg, transparent, transparent 8px, rgba(0, 0, 0, 0.06) 8px, rgba(0, 0, 0, 0.06) 9px), 
-                      repeating-linear-gradient(90deg, transparent, transparent 8px, rgba(0, 0, 0, 0.06) 8px, rgba(0, 0, 0, 0.06) 9px);
+    background-image: repeating-linear-gradient(0deg, transparent, transparent 8px, rgba(0, 0, 0, 0.06) 8px, rgba(0, 0, 0, 0.06) 9px),
+        repeating-linear-gradient(90deg, transparent, transparent 8px, rgba(0, 0, 0, 0.06) 8px, rgba(0, 0, 0, 0.06) 9px);
     background-color: var(--event-bg-color);
     background-attachment: local;
 }
 
 .dayble-event-colored.dayble-effect-checkerboard {
-    background-image: linear-gradient(45deg, rgba(0, 0, 0, 0.06) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.06) 75%), 
-                      linear-gradient(45deg, rgba(0, 0, 0, 0.06) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.06) 75%);
+    background-image: linear-gradient(45deg, rgba(0, 0, 0, 0.06) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.06) 75%),
+        linear-gradient(45deg, rgba(0, 0, 0, 0.06) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.06) 75%);
     background-size: 20px 20px;
     background-position: 0 0, 10px 10px;
     background-color: var(--event-bg-color);
@@ -904,8 +1059,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .dayble-event-colored.dayble-effect-argyle {
-    background-image: linear-gradient(135deg, rgba(0, 0, 0, 0.06) 25%, transparent 25%, transparent 50%, rgba(0, 0, 0, 0.06) 50%, rgba(0, 0, 0, 0.06) 75%, transparent 75%), 
-                      linear-gradient(45deg, rgba(0, 0, 0, 0.06) 25%, transparent 25%, transparent 50%, rgba(0, 0, 0, 0.06) 50%, rgba(0, 0, 0, 0.06) 75%, transparent 75%);
+    background-image: linear-gradient(135deg, rgba(0, 0, 0, 0.06) 25%, transparent 25%, transparent 50%, rgba(0, 0, 0, 0.06) 50%, rgba(0, 0, 0, 0.06) 75%, transparent 75%),
+        linear-gradient(45deg, rgba(0, 0, 0, 0.06) 25%, transparent 25%, transparent 50%, rgba(0, 0, 0, 0.06) 50%, rgba(0, 0, 0, 0.06) 75%, transparent 75%);
     background-size: 20px 20px;
     background-color: var(--event-bg-color);
     background-attachment: local;
@@ -932,47 +1087,46 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     box-shadow: inset 2px 2px 0 #ffffff50, inset -3px -3px 0 #00000040;
     border-radius: var(--event-border-radius, var(--input-radius));
 }
-/* Search highlight */
+
 .dayble-event-highlight {
     outline: 2px solid var(--interactive-accent);
     outline-offset: 2px;
 }
 
-/* New effects */
 .dayble-event-colored.dayble-effect-glow {
     box-shadow: 0 0 8px var(--event-text-color, currentColor), 0 0 16px color-mix(in srgb, var(--event-text-color, currentColor) 50%, transparent);
 }
+
 .dayble-event-colored.dayble-effect-checkboard {
-    background-image: repeating-conic-gradient(rgba(0,0,0,0.08) 0deg 90deg, transparent 90deg 180deg);
+    background-image: repeating-conic-gradient(rgba(0, 0, 0, 0.08) 0deg 90deg, transparent 90deg 180deg);
     background-size: 16px 16px;
     background-color: var(--event-bg-color);
     background-attachment: local;
 }
 
 .dayble-event-colored.dayble-effect-hexaboard {
-    background-image: linear-gradient(45deg, rgba(0, 0, 0, 0.06) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.06) 75%), 
-                      linear-gradient(45deg, rgba(0, 0, 0, 0.06) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.06) 75%);
+    background-image: linear-gradient(45deg, rgba(0, 0, 0, 0.06) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.06) 75%),
+        linear-gradient(45deg, rgba(0, 0, 0, 0.06) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.06) 75%);
     background-repeat: repeat;
     background-size: 32px 32px;
     background-color: var(--event-bg-color);
     background-attachment: local;
 }
 
-/* Glass effect */
 .dayble-event-colored.dayble-effect-glass {
     position: relative;
-    background: rgba(255,255,255,0.18);
+    background: rgba(255, 255, 255, 0.18);
     box-shadow: 0 8px 20px rgba(31, 38, 135, 0.2);
-    border: 1px solid rgba(255,255,255,0.25);
+    border: 1px solid rgba(255, 255, 255, 0.25);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
 }
 
-/* Glass shine animation */
 .dayble-anim-glass-shine {
     position: relative;
     overflow: hidden;
 }
+
 .dayble-anim-glass-shine::after {
     content: '';
     position: absolute;
@@ -980,36 +1134,46 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     left: -50%;
     width: 200%;
     height: 200%;
-    background: linear-gradient(120deg, rgba(255,255,255,0) 40%, rgba(255,255,255,0.35) 50%, rgba(255,255,255,0) 60%);
+    background: linear-gradient(120deg, rgba(255, 255, 255, 0) 40%, rgba(255, 255, 255, 0.35) 50%, rgba(255, 255, 255, 0) 60%);
     transform: rotate(0deg);
     animation: dayble-glass-shine 3s linear infinite;
     pointer-events: none;
 }
+
 @keyframes dayble-glass-shine {
-    0% { transform: translate(-50%, -50%) rotate(0deg); }
-    100% { transform: translate(50%, 50%) rotate(0deg); }
+    0% {
+        transform: translate(-50%, -50%) rotate(0deg);
+    }
+    100% {
+        transform: translate(50%, 50%) rotate(0deg);
+    }
 }
 
-/* Glowing animation */
 .dayble-anim-glowing {
     animation: dayble-glow-pulse 2.5s ease-in-out infinite;
 }
+
 @keyframes dayble-glow-pulse {
-    0% { box-shadow: 0 0 6px color-mix(in srgb, var(--event-text-color, currentColor) 40%, transparent); }
-    50% { box-shadow: 0 0 16px color-mix(in srgb, var(--event-text-color, currentColor) 70%, transparent); }
-    100% { box-shadow: 0 0 6px color-mix(in srgb, var(--event-text-color, currentColor) 40%, transparent); }
+    0% {
+        box-shadow: 0 0 6px color-mix(in srgb, var(--event-text-color, currentColor) 40%, transparent);
+    }
+    50% {
+        box-shadow: 0 0 16px color-mix(in srgb, var(--event-text-color, currentColor) 70%, transparent);
+    }
+    100% {
+        box-shadow: 0 0 6px color-mix(in srgb, var(--event-text-color, currentColor) 40%, transparent);
+    }
 }
 
-/* Hide scrollbars for scrollable containers */
 .dayble-scrollable {
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* IE/Edge */
-}
-.dayble-scrollable::-webkit-scrollbar {
-    display: none; /* Chrome/Safari */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
 
-/* Animations */
+.dayble-scrollable::-webkit-scrollbar {
+    display: none;
+}
+
 @keyframes dayble-move-horizontally {
     0% {
         background-position: 0 0;
@@ -1049,72 +1213,30 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     position: relative;
     overflow: hidden;
 }
+
 .dayble-anim-particles::before {
     content: '';
     position: absolute;
     inset: 0;
     pointer-events: none;
-    box-shadow:
-        0px 0px 0 0px var(--event-text-color, currentColor),
-        10px 15px 0 0px var(--event-text-color, currentColor),
-        -5px 20px 0 0px var(--event-text-color, currentColor),
-        15px 5px 0 0px var(--event-text-color, currentColor),
-        -10px -10px 0 0px var(--event-text-color, currentColor);
+    box-shadow: 0px 0px 0 0px var(--event-text-color, currentColor), 10px 15px 0 0px var(--event-text-color, currentColor), -5px 20px 0 0px var(--event-text-color, currentColor), 15px 5px 0 0px var(--event-text-color, currentColor), -10px -10px 0 0px var(--event-text-color, currentColor);
     animation: particle-flow 5s linear infinite;
     opacity: 0.7;
 }
+
 @keyframes particle-flow {
     0% {
         transform: translate(0, 0);
         opacity: 0.7;
-        box-shadow:
-            0px 0px 0 0px var(--event-text-color, currentColor),
-            10px 15px 0 0px var(--event-text-color, currentColor),
-            -5px 20px 0 0px var(--event-text-color, currentColor),
-            15px 5px 0 0px var(--event-text-color, currentColor),
-            -10px -10px 0 0px var(--event-text-color, currentColor);
+        box-shadow: 0px 0px 0 0px var(--event-text-color, currentColor), 10px 15px 0 0px var(--event-text-color, currentColor), -5px 20px 0 0px var(--event-text-color, currentColor), 15px 5px 0 0px var(--event-text-color, currentColor), -10px -10px 0 0px var(--event-text-color, currentColor);
     }
     100% {
         transform: translate(100%, 100%);
         opacity: 0;
-        box-shadow:
-            100% 100% 0 0px var(--event-text-color, currentColor),
-            calc(100% + 10px) calc(100% + 15px) 0 0px var(--event-text-color, currentColor),
-            calc(100% - 5px) calc(100% + 20px) 0 0px var(--event-text-color, currentColor),
-            calc(100% + 15px) calc(100% + 5px) 0 0px var(--event-text-color, currentColor),
-            calc(100% - 10px) calc(100% - 10px) 0 0px var(--event-text-color, currentColor);
+        box-shadow: 100% 100% 0 0px var(--event-text-color, currentColor), calc(100% + 10px) calc(100% + 15px) 0 0px var(--event-text-color, currentColor), calc(100% - 5px) calc(100% + 20px) 0 0px var(--event-text-color, currentColor), calc(100% + 15px) calc(100% + 5px) 0 0px var(--event-text-color, currentColor), calc(100% - 10px) calc(100% - 10px) 0 0px var(--event-text-color, currentColor);
     }
 }
 
-
-/* 
-.dayble-anim-snow-falling {
-    position: relative;
-    overflow: hidden;
-}
-.dayble-anim-snow-falling::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-image:
-        radial-gradient(ellipse at 20% 10%, currentColor 1.5px, transparent 3px),
-        radial-gradient(ellipse at 70% 30%, currentColor 2px, transparent 4px),
-        radial-gradient(ellipse at 50% 50%, currentColor 2.5px, transparent 5px),
-        radial-gradient(ellipse at 90% 70%, currentColor 1.8px, transparent 3.6px),
-        radial-gradient(ellipse at 30% 90%, currentColor 2.2px, transparent 4.4px),
-        radial-gradient(ellipse at 10% 60%, currentColor 2.4px, transparent 4.8px);
-    background-size: 200px 200px;
-    animation: snow-fall 5s linear infinite;
-    pointer-events: none;
-    opacity: 0.8;
-}
-@keyframes snow-fall {
-    0% { background-position: 0 0, 50px 50px, 100px 100px, 150px 150px, 200px 200px, 250px 250px; }
-    100% { background-position: 0 400px, 50px 450px, 100px 500px, 150px 550px, 200px 600px, 250px 650px; }
-} */
-
-
-/* ------- start of snow -------- */
 .dayble-anim-snow-falling {
     overflow: hidden;
 }
@@ -1133,11 +1255,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .dayble-anim-snow-falling::before {
-    background-image:
-        radial-gradient(circle at 20% 10%, currentColor 1.5px, transparent 3px),
-        radial-gradient(circle at 70% 30%, currentColor 1.2px, transparent 3px),
-        radial-gradient(circle at 50% 50%, currentColor 1.8px, transparent 4px),
-        radial-gradient(circle at 90% 70%, currentColor 1.3px, transparent 3px);
+    background-image: radial-gradient(circle at 20% 10%, currentColor 1.5px, transparent 3px), radial-gradient(circle at 70% 30%, currentColor 1.2px, transparent 3px), radial-gradient(circle at 50% 50%, currentColor 1.8px, transparent 4px), radial-gradient(circle at 90% 70%, currentColor 1.3px, transparent 3px);
     background-size: 250px 250px;
     animation: snow-back 16s linear infinite;
     animation-delay: 0s;
@@ -1145,22 +1263,14 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .dayble-anim-snow-falling::after {
-    background-image:
-        radial-gradient(circle at 30% 20%, currentColor 2.5px, transparent 5px),
-        radial-gradient(circle at 80% 40%, currentColor 2px, transparent 4px),
-        radial-gradient(circle at 60% 80%, currentColor 2.2px, transparent 4px),
-        radial-gradient(circle at 10% 60%, currentColor 2.8px, transparent 5px);
+    background-image: radial-gradient(circle at 30% 20%, currentColor 2.5px, transparent 5px), radial-gradient(circle at 80% 40%, currentColor 2px, transparent 4px), radial-gradient(circle at 60% 80%, currentColor 2.2px, transparent 4px), radial-gradient(circle at 10% 60%, currentColor 2.8px, transparent 5px);
     background-size: 200px 200px;
     animation: snow-front 10s linear infinite;
     animation-delay: 0s;
 }
 
 .dayble-anim-snow-falling .snow-layer-1 {
-    background-image:
-        radial-gradient(circle at 15% 25%, currentColor 1.8px, transparent 3.5px),
-        radial-gradient(circle at 65% 45%, currentColor 1.5px, transparent 3px),
-        radial-gradient(circle at 45% 75%, currentColor 2px, transparent 4px),
-        radial-gradient(circle at 85% 15%, currentColor 1.6px, transparent 3px);
+    background-image: radial-gradient(circle at 15% 25%, currentColor 1.8px, transparent 3.5px), radial-gradient(circle at 65% 45%, currentColor 1.5px, transparent 3px), radial-gradient(circle at 45% 75%, currentColor 2px, transparent 4px), radial-gradient(circle at 85% 15%, currentColor 1.6px, transparent 3px);
     background-size: 220px 220px;
     animation: snow-mid 12s linear infinite;
     animation-delay: -4s;
@@ -1168,11 +1278,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .dayble-anim-snow-falling .snow-layer-2 {
-    background-image:
-        radial-gradient(circle at 40% 35%, currentColor 2px, transparent 4px),
-        radial-gradient(circle at 75% 55%, currentColor 1.7px, transparent 3.5px),
-        radial-gradient(circle at 25% 85%, currentColor 2.2px, transparent 4.5px),
-        radial-gradient(circle at 55% 25%, currentColor 1.9px, transparent 4px);
+    background-image: radial-gradient(circle at 40% 35%, currentColor 2px, transparent 4px), radial-gradient(circle at 75% 55%, currentColor 1.7px, transparent 3.5px), radial-gradient(circle at 25% 85%, currentColor 2.2px, transparent 4.5px), radial-gradient(circle at 55% 25%, currentColor 1.9px, transparent 4px);
     background-size: 180px 180px;
     animation: snow-mid 14s linear infinite;
     animation-delay: -7s;
@@ -1180,11 +1286,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .dayble-anim-snow-falling .snow-layer-3 {
-    background-image:
-        radial-gradient(circle at 50% 15%, currentColor 2.2px, transparent 4.5px),
-        radial-gradient(circle at 20% 65%, currentColor 1.9px, transparent 4px),
-        radial-gradient(circle at 80% 45%, currentColor 2.4px, transparent 5px),
-        radial-gradient(circle at 35% 90%, currentColor 2.1px, transparent 4.5px);
+    background-image: radial-gradient(circle at 50% 15%, currentColor 2.2px, transparent 4.5px), radial-gradient(circle at 20% 65%, currentColor 1.9px, transparent 4px), radial-gradient(circle at 80% 45%, currentColor 2.4px, transparent 5px), radial-gradient(circle at 35% 90%, currentColor 2.1px, transparent 4.5px);
     background-size: 190px 190px;
     animation: snow-front 8s linear infinite;
     animation-delay: -2s;
@@ -1218,21 +1320,15 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     }
 }
 
-/* ------- end of snow -------- */
-
 .dayble-anim-animated-gradient {
     position: relative;
 }
+
 .dayble-anim-animated-gradient::after {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(45deg,
-        rgba(0,0,0,0.10) 0%,
-        hsla(180, 100%, 50%, 0.20) 25%,
-        hsla(270, 100%, 50%, 0.22) 50%,
-        hsla(0, 100%, 50%, 0.18) 75%,
-        rgba(0,0,0,0.10) 100%);
+    background: linear-gradient(45deg, rgba(0, 0, 0, 0.10) 0%, hsla(180, 100%, 50%, 0.20) 25%, hsla(270, 100%, 50%, 0.22) 50%, hsla(0, 100%, 50%, 0.18) 75%, rgba(0, 0, 0, 0.10) 100%);
     background-size: 200% 200%;
     animation: subtle-gradient 6s ease-in-out infinite alternate, hue-rotate 12s linear infinite;
     mix-blend-mode: overlay;
@@ -1240,68 +1336,62 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     opacity: 0.6;
     border-radius: inherit;
 }
+
 @keyframes subtle-gradient {
-    0% { background-position: 0% 0%; }
-    100% { background-position: 100% 100%; }
-}
-@keyframes hue-rotate {
-    0% { filter: hue-rotate(0deg); }
-    100% { filter: hue-rotate(360deg); }
+    0% {
+        background-position: 0% 0%;
+    }
+    100% {
+        background-position: 100% 100%;
+    }
 }
 
+@keyframes hue-rotate {
+    0% {
+        filter: hue-rotate(0deg);
+    }
+    100% {
+        filter: hue-rotate(360deg);
+    }
+}
 
 .dayble-icons-list {
     justify-content: space-between;
 }
 
-.dayble-icon-btn {
-    background-color: transparent !important;
-    box-shadow: none !important;
-    border: none;
+.dayble-icons-list.dayble-icon-list.db-icon-list {
+    margin-bottom: 12px;
 }
 
-/* Long event segments rendered per day cell */
 .dayble-long-container {
     display: flex;
     flex-direction: column;
     gap: 4px;
     margin-bottom: 6px;
 }
+
 .dayble-long-segment {
     background: var(--background-primary);
     border-width: var(--event-border-width, 1px);
     border-radius: var(--event-border-radius, var(--input-radius));
     display: flex;
     align-items: center;
-    padding: 4px 6px;
+    padding: var(--event-vertical-padding, 4px) 6px !important;
     min-height: 2.2em;
 }
-/* Long event overlay segments */
-.dayble-long-event {
-    border-radius: 0px;
-}
-.dayble-long-event-single {
-    border-radius: var(--event-border-radius, var(--input-radius));
-}
-.dayble-long-event-start {
-    border-top-left-radius: var(--event-border-radius, var(--input-radius));
-    border-bottom-left-radius: var(--event-border-radius, var(--input-radius));
-}
-.dayble-long-event-end {
-    border-top-right-radius: var(--event-border-radius, var(--input-radius));
-    border-bottom-right-radius: var(--event-border-radius, var(--input-radius));
-}
+
 .dayble-long-container .dayble-long-segment .dayble-event-icon {
     margin-right: 6px;
 }
 
-/* Compress left spacing in category rows */
 .db-category-row {
     grid-template-columns: minmax(0, 1fr) !important;
 }
+
 .db-category-row .setting-item-info {
     display: none !important;
 }
+
 .db-category-row .setting-item-control {
     width: 100%;
     display: flex;
@@ -1310,14 +1400,19 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     align-items: center;
     overflow: hidden;
 }
-/* Triggers layout */
-.db-triggers-row, .db-states-row {
+
+.db-triggers-row,
+.db-states-row {
     grid-template-columns: minmax(0, 1fr) !important;
 }
-.db-triggers-row .setting-item-info, .db-states-row .setting-item-info {
+
+.db-triggers-row .setting-item-info,
+.db-states-row .setting-item-info {
     display: none !important;
 }
-.db-triggers-row .setting-item-control, .db-states-row .setting-item-control {
+
+.db-triggers-row .setting-item-control,
+.db-states-row .setting-item-control {
     width: 100%;
     display: flex;
     flex-wrap: nowrap;
@@ -1325,38 +1420,43 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     align-items: center;
 }
 
-/* Ensure controls shrink within bounds */
 .db-category-row .setting-item-control > * {
     max-width: 100%;
     flex-shrink: 1;
 }
+
 .db-category-row .db-category-name {
     flex: 0 1 120px;
     min-width: 0;
 }
+
 .db-category-row .db-select {
-    /* flex: 0 1 auto; */
     min-width: 100px;
     width: 150px;
 }
+
 .db-category-row .db-color {
     flex: 0 0 auto;
 }
+
 .db-category-row .db-animation2 {
-    /* flex: 0 0 auto; */
     min-width: 100px;
     width: 150px;
 }
+
 .db-category-row .db-delete-category {
     margin-left: auto;
     flex: 0 0 auto;
 }
 
-/* Specific widths to keep a single row */
-.db-category-row .db-effect { width: 150px; }
-.db-category-row .db-animation { width: 170px; }
+.db-category-row .db-effect {
+    width: 150px;
+}
 
-/* Color swatches */
+.db-category-row .db-animation {
+    width: 170px;
+}
+
 .dayble-color-swatches-row {
     align-items: center;
 }
@@ -1368,32 +1468,6 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     flex-wrap: wrap;
 }
 
-.dayble-color-swatch {
-    flex: 1;
-    min-width: 0;
-    aspect-ratio: 1;
-    border-radius: var(--checkbox-radius);
-    border: 2px solid var(--background-modifier-border);
-    cursor: pointer;
-    transition: all 0.2s ease;
-    background: transparent;
-    padding: 0;
-}
-
-.dayble-color-swatch-none {
-    background: repeating-linear-gradient(45deg, transparent, transparent 2px, var(--background-modifier-border) 2px, var(--background-modifier-border) 4px);
-}
-
-.dayble-color-swatch:hover {
-    transform: scale(1.1);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-}
-
-.dayble-color-swatch-selected {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 2px;
-}
-
 .db-color-del {
     background: none !important;
     box-shadow: none !important;
@@ -1402,7 +1476,6 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     min-width: 0 !important;
 }
 
-/* Color controls layout */
 .dayble-colors-controls {
     display: flex !important;
     flex-wrap: wrap;
@@ -1433,16 +1506,6 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     align-items: center;
 }
 
-/* .dayble-colors-controls button {
-    min-width: 120px;
-} */
-
-/* Markdown link autocomplete suggestions */
-.dayble-link-suggestions {
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-/* Markdown rendering styles */
 .dayble-event-desc strong,
 .dayble-today-event-desc strong {
     font-weight: 600;
@@ -1476,7 +1539,6 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     text-decoration: underline;
 }
 
-/* Image embeds */
 .dayble-embed-image {
     max-width: 100%;
     height: auto;
@@ -1486,16 +1548,11 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .dayble-event:has(.dayble-embed-image) .dayble-event-title {
-margin-top: 6px !important;
+    margin-top: 6px !important;
 }
 
-/* ----------- */
-/* .db-category-row .setting-item-control {
-    width: 0%;
-} */
-
 .db-modal-title {
-   margin-top: -10px;
+    margin-top: -10px;
 }
 
 .dayble-today-events-container.db-events-container {
@@ -1506,89 +1563,185 @@ margin-top: 6px !important;
     display: none !important;
 }
 
-.dayble-icon-list.db-icon-list {
-   margin-bottom: 12px;
-}
-
 .dayble-btn.dayble-holder-add-btn {
-   padding: 6px !important;
+    padding: 6px !important;
 }
 
 .dayble-btn.dayble-delete.db-btn {
-   padding: 6px !important;
-   box-shadow: none;
+    padding: 6px !important;
+    box-shadow: none;
 }
 
 .dayble-btn.dayble-icon-add.db-btn {
-   padding: 8px !important;
+    padding: 8px !important;
 }
 
-/* crucial for today cell - long event + normal */
-.dayble-day.dayble-current-day .dayble-day-header {
-   margin-top: -6px !important;
-   margin-left: 2px !important;
-}
-
-/* Markdown rendering styles */
 .dayble-inline-code {
-   background: var(--background-secondary);
-   padding: 2px 4px;
-   border-radius: var(--input-radius);
+    background: var(--background-secondary);
+    padding: 2px 4px;
+    border-radius: var(--input-radius);
 }
 
 .dayble-code-block {
-   background: var(--background-secondary);
-   padding: 6px;
-   border-radius: var(--input-radius);
+    background: var(--background-secondary);
+    padding: 6px;
+    border-radius: var(--input-radius);
 }
 
 .dayble-internal-link {
-   color: var(--link-color);
+    color: var(--link-color);
 }
 
 .dayble-external-link {
-   color: var(--link-color);
+    color: var(--link-color);
 }
 
 .dayble-holder-hidden {
-   display: none !important;
+    display: none !important;
 }
 
 .dayble-event-dim {
-   opacity: 0.6;
+    opacity: 0.6;
 }
 
 .dayble-strikethrough .dayble-event-title,
 .dayble-strikethrough .dayble-event-desc,
 .dayble-strikethrough .dayble-event-title *,
 .dayble-strikethrough .dayble-event-desc * {
-   text-decoration: line-through !important;
+    text-decoration: line-through !important;
 }
 
 .dayble-strikethrough {
-   opacity: 0.8;
+    opacity: 0.8;
 }
 
 .dayble-event-hidden {
-   display: none !important;
+    display: none !important;
 }
 
-/* New classes added for standardization */
-.dayble-icon-select { width: 90px; }
-.dayble-trigger-input { flex: 1; }
-.dayble-inline-flex { display: inline-flex; }
-.dayble-textarea-auto { height: auto; }
-.dayble-absolute-box { position: absolute; box-sizing: border-box; }
-.dayble-suggestion-container { position: fixed; background-color: var(--background-primary); border: 1px solid var(--background-modifier-border); border-radius: var(--input-radius); max-height: 180px; overflow-y: auto; z-index: 10000; min-width: 200px; }
-.dayble-category-label { text-align: center; }
-.dayble-time-el-style { min-width: 60px; font-weight: 600; }
-.dayble-drag-image-style { position: fixed; top: -10000px; left: -10000px; opacity: 1; box-shadow: none; box-sizing: border-box; transform: none; }
-.dayble-flex-center-gap { display: flex; align-items: center; gap: 6px; }
-.dayble-flex-gap-8 { display: flex; gap: 8px; flex: 1; }
-.dayble-settings-row-wrap { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; }
-.dayble-drag-ghost { position: absolute; top: -1000px; left: -1000px; z-index: 10000; opacity: 0.8; pointer-events: none; }
-.dayble-add-btn-full { width: 100%; padding: 10px; border: none; border-radius: var(--button-radius); font-weight: 600; cursor: pointer; margin-top: auto; }
-.dayble-no-border-top { border-top: none !important; }
+.dayble-icon-select {
+    width: 90px;
+}
+
+.dayble-trigger-input {
+    flex: 1;
+}
+
+.dayble-inline-flex {
+    display: inline-flex;
+}
+
+.dayble-textarea-auto {
+    height: auto;
+}
+
+.dayble-absolute-box {
+    position: absolute;
+    box-sizing: border-box;
+}
+
+.dayble-suggestion-container {
+    position: fixed;
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--input-radius);
+    max-height: 250px;
+    overflow-y: auto;
+    z-index: 10000;
+    min-width: 200px;
+    padding: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.dayble-suggestion-item {
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 0.9em;
+    color: var(--text-normal);
+    border-radius: calc(var(--input-radius) - 2px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin: 1px 0;
+}
+
+.dayble-suggestion-item:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.dayble-suggestion-item.is-selected {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+
+.dayble-category-label {
+    text-align: center;
+}
+
+.dayble-time-el-style {
+    min-width: 60px;
+    font-weight: 600;
+}
+
+.dayble-drag-image-style {
+    position: fixed;
+    top: -10000px;
+    left: -10000px;
+    opacity: 1;
+    box-shadow: none;
+    box-sizing: border-box;
+    transform: none;
+}
+
+.dayble-flex-center-gap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.dayble-flex-gap-8 {
+    display: flex;
+    gap: 8px;
+    flex: 1;
+}
+
+.dayble-settings-row-wrap {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.dayble-drag-ghost {
+    position: absolute;
+    top: -1000px;
+    left: -1000px;
+    z-index: 10000;
+    opacity: 0.8;
+    pointer-events: none;
+    pointer-events: none !important;
+}
+
+.dayble-modal-full-height {
+    max-height: 100% !important;
+    display: flex;
+    flex-direction: column;
+}
+
+.dayble-add-btn-full {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: var(--button-radius);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.dayble-no-border-top {
+    border-top: none !important;
+}
+
 .dayble-ml-auto {
     margin-left: auto !important;
 }
@@ -1604,21 +1757,33 @@ margin-top: 6px !important;
     padding: 2px 4px !important;
 }
 
-.dayble-long-overlay-box { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
-.dayble-cell-max { max-height: var(--dayble-cell-max-height); }
-.dayble-scroll-y { 
-    overflow-y: auto; 
-    scrollbar-width: none; 
+.dayble-long-overlay-box {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.dayble-cell-max {
+    max-height: var(--dayble-cell-max-height);
+}
+
+.dayble-scroll-y {
+    overflow-y: auto;
+    scrollbar-width: none;
     -ms-overflow-style: none;
 }
+
 .dayble-scroll-y::-webkit-scrollbar {
     display: none;
 }
-.dayble-scroll-x-hidden { overflow-x: hidden; }
-.dayble-overflow-visible { overflow: visible; }
 
-.dayble-drag-ghost {
-    pointer-events: none !important;
+.dayble-scroll-x-hidden {
+    overflow-x: hidden;
+}
+
+.dayble-overflow-visible {
+    overflow: visible;
 }
 
 .drag-ghost-hidden {
@@ -1626,11 +1791,47 @@ margin-top: 6px !important;
     pointer-events: none !important;
 }
 
-.dayble-focus-scroll { position: relative; max-height: 100% !important; overflow-y: auto; overflow-x: hidden; border: 1px solid var(--background-modifier-border); border-radius: var(--input-radius); }
-.dayble-focus-grid { display: grid; grid-template-columns: auto 1fr; }
-.dayble-focus-row { display: contents; }
-.dayble-focus-time { text-align: center !important; padding: 6px 10px; border-bottom: 1px solid var(--background-modifier-border); border-right: 1px solid var(--background-modifier-border); color: var(--text-muted); }
-.dayble-focus-cell { min-height: 60px; border-bottom: 1px solid var(--background-modifier-border); position: relative; }
+.dayble-focus-scroll {
+    position: relative;
+    max-height: 100% !important;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--input-radius);
+    border-radius: 0;
+    border: 2px solid var(--background-modifier-border);
+}
+
+.dayble-focus-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+}
+
+.dayble-focus-row {
+    display: contents;
+}
+
+.dayble-focus-time {
+    text-align: center !important;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    border-right: 1px solid var(--background-modifier-border);
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.2s ease;
+}
+
+.dayble-focus-time:hover {
+    color: var(--interactive-accent);
+}
+
+.dayble-focus-cell {
+    min-height: 60px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    position: relative;
+}
+
 .dayble-focus-cell::after {
     content: "";
     position: absolute;
@@ -1641,10 +1842,190 @@ margin-top: 6px !important;
     opacity: 0.3;
     pointer-events: none;
 }
-.dayble-focus-cell.dayble-selected { background: var(--background-primary-alt); }
-/* All-day section in Day View */
+
+.dayble-focus-cell.dayble-selected {
+    background: var(--background-primary-alt);
+}
+
+.dayble-focus-cell::before,
+.dayble-focus-cell::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 50%;
+    pointer-events: none;
+    box-sizing: border-box;
+}
+
+.dayble-focus-cell::before {
+    top: 0;
+}
+
+.dayble-focus-cell::after {
+    bottom: 0;
+}
+
+.dayble-focus-cell.sel-top::before {
+    outline: 1px dashed var(--interactive-accent);
+    outline-offset: -1px;
+    z-index: 1;
+    opacity: 0.3;
+}
+
+.dayble-focus-cell.sel-bottom::after {
+    outline: 1px dashed var(--interactive-accent);
+    outline-offset: -1px;
+    z-index: 1;
+    opacity: 0.3;
+}
+
+.dayble-focus-cell.drop-target {
+    transition: background-color 0.15s ease !important;
+}
+
+.dayble-focus-event {
+    margin: 4px 6px;
+    padding: 4px 6px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--event-border-radius, var(--input-radius));
+    font-size: 0.9em;
+    line-height: 1.2;
+}
+
+.dayble-focus-event-span {
+    grid-column: 2;
+    margin: 2px 6px;
+    padding: 6px 8px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--event-border-radius, var(--input-radius));
+    box-sizing: border-box;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+}
+
+.dayble-focus-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.dayble-quarter-lines {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.dayble-quarter-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: var(--quarter-line-top);
+    border-top: 1px dashed var(--background-modifier-border);
+    opacity: 0.2;
+}
+
+.dayble-focus-event-abs {
+    position: absolute;
+    box-sizing: border-box;
+    left: var(--focus-item-left);
+    top: var(--focus-item-top);
+    width: var(--focus-item-width);
+    height: var(--focus-item-height);
+    margin: 0;
+    overflow: hidden;
+    z-index: 20;
+    cursor: pointer;
+    background: var(--background-primary);
+    border: var(--event-border-width, 2px) solid var(--event-border-color, var(--background-modifier-border));
+    border-radius: var(--event-border-radius, var(--input-radius));
+    padding: 2px 4px;
+    display: flex;
+    flex-direction: column;
+    pointer-events: auto !important;
+}
+
+.dayble-focus-event-split-start {
+    border-right-width: 0 !important;
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+}
+
+.dayble-focus-event-split-end {
+    border-left-width: 0 !important;
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+}
+
+.dayble-selecting .dayble-focus-event-abs {
+    pointer-events: none !important;
+}
+
+.dayble-focus-event-abs.dragging {
+    opacity: 1;
+    z-index: 9999;
+    pointer-events: none;
+    transition: none !important;
+}
+
+.dayble-focus-event-abs.settling {
+    z-index: 9998;
+    transition: top 0.3s cubic-bezier(0.19, 1, 0.22, 1), left 0.3s cubic-bezier(0.19, 1, 0.22, 1), transform 0.3s ease;
+    pointer-events: none;
+}
+
+.dayble-event-compact {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 4px;
+    padding: var(--event-vertical-padding, 0px) 4px !important;
+}
+
+.dayble-event-compact .dayble-event-icon {
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    order: -1 !important;
+}
+
+.dayble-event-compact .dayble-event-title {
+    font-size: 0.85em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin: 0 !important;
+    line-height: 1.2;
+    flex: 1;
+}
+
+.dayble-event-compact .dayble-event-desc,
+.dayble-event-compact .dayble-icon-top {
+    display: none !important;
+}
+
+.dayble-grid-col-2 {
+    grid-column: 2;
+}
+
 .dayble-all-day-section {
     background-color: var(--background-primary-alt);
+    background: none;
+    padding: 8px 0 !important;
+    margin: 0;
+    gap: 8px;
 }
 
 .dayble-all-day-event-item {
@@ -1652,9 +2033,11 @@ margin-top: 6px !important;
     display: flex !important;
     flex-direction: row !important;
     align-items: center;
-    padding: 2px 8px !important;
+    padding: var(--event-vertical-padding, 2px) 8px !important;
     margin-bottom: 0 !important;
-    border: 1px solid var(--background-modifier-border);
+    border-width: var(--event-border-width, 2px) !important;
+    border-style: solid !important;
+    border-color: var(--event-border-color, var(--background-modifier-border)) !important;
     border-radius: var(--event-border-radius, 4px);
     font-size: 0.85em;
     gap: 4px;
@@ -1680,224 +2063,4 @@ margin-top: 6px !important;
 
 .dayble-all-day-event-item .dayble-event-desc {
     display: none !important;
-}
-
-.dayble-focus-time {
-    cursor: pointer;
-    user-select: none;
-    transition: color 0.2s ease;
-}
-
-.dayble-focus-time:hover {
-    color: var(--interactive-accent);
-}
-
-.dayble-focus-cell { position: relative; }
-.dayble-focus-cell::before, .dayble-focus-cell::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    height: 50%;
-    pointer-events: none;
-    box-sizing: border-box;
-}
-.dayble-focus-cell::before { top: 0; }
-.dayble-focus-cell::after { bottom: 0; }
-.dayble-focus-cell.sel-top::before { outline: 1px dashed var(--interactive-accent); outline-offset: -1px; z-index: 1; opacity: 0.3; }
-.dayble-focus-cell.sel-bottom::after { outline: 1px dashed var(--interactive-accent); outline-offset: -1px; z-index: 1; opacity: 0.3; }
-.dayble-focus-selection-mirror {
-    background-color: hsla(var(--interactive-accent-hsl), 0.2) !important;
-    border: 2px solid var(--interactive-accent) !important;
-    color: var(--text-normal) !important;
-    font-weight: bold;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    font-size: 0.85em;
-    z-index: 30;
-    opacity: 1 !important; /* Ensure the element itself is fully opaque so children are visible */
-    pointer-events: none !important;
-}
-.dayble-focus-selection-mirror .dayble-focus-event-inner {
-    opacity: 1 !important;
-    color: var(--text-normal) !important;
-}
-.dayble-focus-selection-mirror .dayble-selection-duration {
-    font-size: 0.8em;
-    opacity: 1 !important;
-    color: var(--text-muted) !important;
-    font-weight: normal;
-}
-.dayble-focus-event { margin: 4px 6px; padding: 4px 6px; border: 1px solid var(--background-modifier-border); border-radius: var(--event-border-radius, var(--input-radius)); font-size: 0.9em; line-height: 1.2; }
-.dayble-focus-event-span { grid-column: 2; margin: 2px 6px; padding: 6px 8px; border: 1px solid var(--background-modifier-border); border-radius: var(--event-border-radius, var(--input-radius)); box-sizing: border-box; align-self: stretch; display: flex; align-items: center; }
-.dayble-focus-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    pointer-events: none;
-    z-index: 10;
-}
-
-.dayble-quarter-lines {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    pointer-events: none;
-    z-index: 0;
-}
-.dayble-quarter-line { position: absolute; left: 0; right: 0; top: var(--quarter-line-top); border-top: 1px dashed var(--background-modifier-border); opacity: 0.2; }
-.dayble-focus-drop {
-    position: absolute;
-    background: var(--color-accent);
-    opacity: 0.15;
-    border: 2px solid var(--color-accent);
-    border-radius: var(--event-border-radius, var(--input-radius));
-    pointer-events: none;
-    z-index: 5;
-    transition: top 0.05s ease, left 0.05s ease, height 0.1s ease;
-    box-sizing: border-box;
-    left: var(--focus-item-left);
-    top: var(--focus-item-top);
-    width: var(--focus-item-width);
-    height: var(--focus-item-height);
-}
-
-.dayble-focus-event-abs {
-    position: absolute;
-    box-sizing: border-box;
-    left: var(--focus-item-left);
-    top: var(--focus-item-top);
-    width: var(--focus-item-width);
-    height: var(--focus-item-height);
-    margin: 0;
-    overflow: hidden;
-    z-index: 20;
-    cursor: pointer;
-    background: var(--background-primary);
-    border: var(--event-border-width, 2px) solid var(--event-border-color, var(--background-modifier-border));
-    border-radius: var(--event-border-radius, var(--input-radius));
-    padding: 2px 4px;
-    display: flex;
-    flex-direction: column;
-    pointer-events: auto !important;
-}
-
-.dayble-selecting .dayble-focus-event-abs {
-    pointer-events: none !important;
-}
-
-/* Compact layout for short events */
-.dayble-event-compact {
-    flex-direction: row !important;
-    align-items: center !important;
-    gap: 4px;
-    padding: 0 4px !important;
-}
-
-.dayble-event-compact .dayble-event-icon {
-    margin: 0 !important;
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    width: 14px;
-    height: 14px;
-    order: -1 !important; /* Force to left */
-}
-
-.dayble-event-compact .dayble-event-title {
-    font-size: 0.85em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin: 0 !important;
-    line-height: 1.2;
-    flex: 1;
-}
-
-.dayble-event-compact .dayble-event-desc,
-.dayble-event-compact .dayble-icon-top {
-    display: none !important;
-}
-
-.dayble-focus-event-abs.dragging {
-    opacity: 1; /* Keep opacity constant during drag */
-    z-index: 9999;
-    pointer-events: none;
-    transition: none !important;
-}
-
-.dayble-focus-event-abs.settling {
-    z-index: 9998;
-    transition: top 0.3s cubic-bezier(0.19, 1, 0.22, 1), left 0.3s cubic-bezier(0.19, 1, 0.22, 1), transform 0.3s ease;
-    pointer-events: none;
-}
-.dayble-focus-cell.drop-target { transition: background-color 0.15s ease !important; }
-.dayble-grid-col-2 { grid-column: 2; }
-
-
-/* .dayble-day {
-    min-width: 200px;
-    max-width: 400px;
-} */
-
-
-.dayble-add-btn-full {
-   margin-top: 10px;
-}
-
-.dayble-weekly-notes.dayble-weekly-notes-container {
-   border-top: 1px solid var(--background-modifier-border);
-   padding: 10px;
-   padding-top: 0px;
-}
-
-.dayble-weekly-notes-content, .dayble-weekly-notes-textarea.dayble-textarea-auto {
-   background: var(--background-primary-alt) !important;
-   border-radius: var(--radius-m);
-   height: 100px;
-}
-
-/* .dayble-grid.dayble-grid-el.dayble-week-mode {
-   
-} */
-
-.dayble-day.dayble-cell-max {
-   padding-bottom: 0 !important;
-}
-
-.dayble-view-select {
-   width: 70px;
-}
-
-.dayble-all-day-section {
-   background: none;
-   padding: 8px 0 !important;
-   margin: 0;
-   gap: 8px;
-}
-
-.dayble-focus-scroll {
-   border-radius: 0;
-   border: 2px solid var(--background-modifier-border);
-}
-
-.dayble-focus-grid-container {
-   gap: 0px;
-}
-
-.dayble-focus-grid.afternoon {
-   border-left: 2px solid var(--background-modifier-border);
-}
-
-.dayble-modal-wide {
-    width: 100% !important;
-    max-width: none !important;
 }

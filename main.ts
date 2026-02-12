@@ -18,6 +18,8 @@ interface DaybleSettings {
     eventBorderWidth?: number; // 0-5px, controls border thickness
     eventBorderRadius?: number; // px, controls border radius
     eventBorderOpacity?: number; // 0-1, controls border color opacity (for colored events)
+    dayCellRadius?: number; // px, controls day cell border radius
+    eventVerticalPadding?: number; // px, controls event vertical padding
     colorSwatchPosition?: 'under-title' | 'under-description' | 'none'; // position of color swatches in modal
     onlyAnimateToday?: boolean;
     completeBehavior?: 'none' | 'dim' | 'strikethrough' | 'hide' | 'color';
@@ -40,6 +42,7 @@ interface DaybleSettings {
     showCopyTextOption?: boolean;
     onlyShowPinnedEventsMonth?: boolean;
     onlyShowPinnedEventsWeek?: boolean;
+    onlyShowPinnedEventsAgenda?: boolean;
     defaultEventColorName?: string;
     eventStates?: EventState[];
     weekTitleFormat?: 'month_year' | 'week_number' | 'full_range' | 'short_range';
@@ -59,9 +62,11 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     weeklyNotesHeight: 200,
     preferUserColors: false,
     eventBgOpacity: 0.50,
-    eventBorderWidth: 0,
+    eventBorderWidth: 2,
     eventBorderRadius: 6,
     eventBorderOpacity: 0.25,
+    dayCellRadius: 8,
+    eventVerticalPadding: 2,
     colorSwatchPosition: 'under-title',
     onlyAnimateToday: false,
     completeBehavior: 'dim',
@@ -81,6 +86,7 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     showCopyTextOption: false,
     onlyShowPinnedEventsMonth: false,
     onlyShowPinnedEventsWeek: false,
+    onlyShowPinnedEventsAgenda: false,
     defaultEventColorName: '',
     eventStates: [],
     weekTitleFormat: 'month_year',
@@ -446,6 +452,8 @@ class DaybleCalendarView extends ItemView {
     async onOpen() {
         this.rootEl = this.containerEl.createDiv({ cls: 'dayble-root' });
         this.rootEl.style.setProperty('--event-border-radius', `${this.plugin.settings.eventBorderRadius ?? 6}px`);
+        this.rootEl.style.setProperty('--day-cell-radius', `${this.plugin.settings.dayCellRadius ?? 8}px`);
+        this.rootEl.style.setProperty('--event-vertical-padding', `${this.plugin.settings.eventVerticalPadding ?? 2}px`);
         const initialMinW = this.plugin.settings.dayCellMinWidth ?? 0;
         if (initialMinW > 0) {
             this.rootEl.style.setProperty('--dayble-cell-min-width', `${initialMinW}px`);
@@ -864,7 +872,10 @@ class DaybleCalendarView extends ItemView {
         } else if (view === 'Day') {
             this.currentDate.setDate(this.currentDate.getDate() + delta);
         } else if (view === 'Agenda') {
-            this.currentDate.setDate(this.currentDate.getDate() + (delta * 7)); // Agenda shifts by week? Or maybe month? Let's say week.
+            // Explicitly shift by month for Agenda view
+            const d = new Date(this.currentDate);
+            d.setMonth(d.getMonth() + delta);
+            this.currentDate = d;
         } else {
             const d = new Date(this.currentDate);
             d.setMonth(d.getMonth() + delta);
@@ -880,6 +891,8 @@ class DaybleCalendarView extends ItemView {
         }
         if (this.rootEl) {
             this.rootEl.style.setProperty('--event-border-radius', `${this.plugin.settings.eventBorderRadius ?? 6}px`);
+            this.rootEl.style.setProperty('--day-cell-radius', `${this.plugin.settings.dayCellRadius ?? 8}px`);
+            this.rootEl.style.setProperty('--event-vertical-padding', `${this.plugin.settings.eventVerticalPadding ?? 2}px`);
             const minW = this.plugin.settings.dayCellMinWidth ?? 0;
             if (minW > 0) {
                 this.rootEl.style.setProperty('--dayble-cell-min-width', `${minW}px`);
@@ -912,6 +925,77 @@ class DaybleCalendarView extends ItemView {
         } else {
             await this.renderMonthView(titleEl);
         }
+
+        // Post-render: The lane walls inside the event container act as spacers,
+        // so we don't need manual margin adjustments anymore.
+    }
+
+    calculateLongEventLanes(longEvents: DaybleEvent[], unitParams?: { lanesPerEvent: number, lanesPerGap: number, extraLanesForDesc: number }): { eventLanes: Map<string, number>, maxLanesByDate: Record<string, number> } {
+        const eventLanes = new Map<string, number>();
+        const maxLanesByDate: Record<string, number> = {};
+        const occupiedLanesByDate = new Map<string, Set<number>>();
+        
+        const { lanesPerEvent = 1, lanesPerGap = 0, extraLanesForDesc = 1 } = unitParams || {};
+
+        // Sort long events: earlier start date first, then longer duration first
+        const sorted = [...longEvents].sort((a, b) => {
+            const startA = new Date(a.startDate).getTime();
+            const startB = new Date(b.startDate).getTime();
+            const durA = new Date(a.endDate).getTime() - startA;
+            const durB = new Date(b.endDate).getTime() - startB;
+
+            // Longest duration first
+            if (durA !== durB) return durB - durA;
+            // Then by start date
+            return startA - startB;
+        });
+
+        sorted.forEach(ev => {
+            if (!ev.startDate || !ev.endDate) return;
+            const start = new Date(ev.startDate);
+            const end = new Date(ev.endDate);
+            const dates: string[] = [];
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                dates.push(`${y}-${m}-${dd}`);
+            }
+
+            const isDoubleLane = ev.description && ev.description.trim().length > 0;
+            const lanesNeeded = lanesPerEvent + lanesPerGap + (isDoubleLane ? extraLanesForDesc : 0);
+
+            let lane = 0;
+            while (true) {
+                let laneAvailable = true;
+                for (const date of dates) {
+                    const occupied = occupiedLanesByDate.get(date);
+                    if (occupied) {
+                        for (let i = 0; i < lanesNeeded; i++) {
+                            if (occupied.has(lane + i)) {
+                                laneAvailable = false;
+                                break;
+                            }
+                        }
+                    }
+                    if (!laneAvailable) break;
+                }
+                if (laneAvailable) break;
+                lane++;
+            }
+
+            eventLanes.set(ev.id, lane);
+            for (const date of dates) {
+                if (!occupiedLanesByDate.has(date)) occupiedLanesByDate.set(date, new Set());
+                const occupied = occupiedLanesByDate.get(date)!;
+                for (let i = 0; i < lanesNeeded; i++) {
+                    occupied.add(lane + i);
+                }
+                maxLanesByDate[date] = Math.max(maxLanesByDate[date] || 0, lane + lanesNeeded);
+            }
+        });
+        
+        return { eventLanes, maxLanesByDate };
     }
 
     async renderWeekView(titleEl?: HTMLElement): Promise<void> {
@@ -960,25 +1044,19 @@ class DaybleCalendarView extends ItemView {
         const ordered = days.slice(weekStart).concat(days.slice(0, weekStart));
         ordered.forEach(d => header.createDiv({ text: d, cls: 'dayble-grid-header-cell' }));
 
-        // Pre-calculate long event margins (reused from month view logic)
-        const segmentHeight = 28;
-        const segmentGap = 4; // gappy
-        const countsByDate: Record<string, number> = {};
+        // Pre-calculate long event lanes (reused from month view logic)
+        const vPadding = this.plugin.settings.eventVerticalPadding ?? 2;
+        const segmentHeight = 24 + (vPadding * 2);
+        const segmentGap = 6; // gappy
+        
+        // Filter long events for week view
         let longEventsPreset = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
         if (this.plugin.settings.onlyShowPinnedEventsWeek) {
             longEventsPreset = longEventsPreset.filter(ev => ev.pinned);
         }
-        longEventsPreset.forEach(ev => {
-            const start = new Date(ev.startDate);
-            const end = new Date(ev.endDate);
-            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-                const yy = d.getFullYear();
-                const mm = String(d.getMonth() + 1).padStart(2, '0');
-                const dd = String(d.getDate()).padStart(2, '0');
-                const key = `${yy}-${mm}-${dd}`;
-                countsByDate[key] = (countsByDate[key] || 0) + 1;
-            }
-        });
+
+        const { maxLanesByDate } = this.calculateLongEventLanes(longEventsPreset);
+        const countsByDate = maxLanesByDate;
 
         // Grid
         const fragment = document.createDocumentFragment();
@@ -1020,11 +1098,8 @@ class DaybleCalendarView extends ItemView {
             
             const container = cell.createDiv({ cls: 'dayble-event-container' });
             
-            // Apply margins for long events
-            const preCount = countsByDate[fullDate] || 0;
-            const preMt = preCount > 0 ? (preCount * segmentHeight) + (Math.max(0, preCount - 1) * segmentGap) + 2 : 0;
-            const adjusted = Math.max(0, preMt - 6);
-            container.setCssProps({ 'margin-top': adjusted ? `${adjusted}px` : '' });
+            // Create lane walls container for intelligent stacking
+            container.createDiv({ cls: 'dayble-lane-walls' });
 
             let dayEvents = this.events.filter(e => e.date === fullDate);
             if (this.plugin.settings.onlyShowPinnedEventsWeek) {
@@ -1137,6 +1212,8 @@ class DaybleCalendarView extends ItemView {
                     if (hIdx !== -1) {
                         const evn = this.holderEvents.splice(hIdx, 1)[0];
                         evn.date = fullDate;
+                        evn.startDate = fullDate;
+                        evn.endDate = fullDate;
                         this.events.push(evn);
                         await this.saveAllEntries();
                         await this.loadAllEntries();
@@ -1148,8 +1225,20 @@ class DaybleCalendarView extends ItemView {
                      if (idx !== -1) {
                          const ev = this.events[idx];
                          // Check if moving to same day (already handled by container.ondrop)
-                         if (ev.date !== fullDate) {
-                             ev.date = fullDate;
+                         if (ev.date !== fullDate || ev.startDate !== fullDate) {
+                             if (ev.startDate && ev.endDate && ev.startDate !== ev.endDate) {
+                                 const span = Math.floor((new Date(ev.endDate).getTime() - new Date(ev.startDate).getTime()) / 86400000);
+                                 ev.startDate = fullDate;
+                                 const ns = new Date(fullDate);
+                                 const ne = new Date(ns);
+                                 ne.setDate(ns.getDate() + span);
+                                 ev.endDate = `${ne.getFullYear()}-${String(ne.getMonth() + 1).padStart(2, '0')}-${String(ne.getDate()).padStart(2, '0')}`;
+                                 ev.date = undefined;
+                             } else {
+                                 ev.date = fullDate;
+                                 ev.startDate = fullDate;
+                                 ev.endDate = fullDate;
+                             }
                              await this.saveAllEntries();
                              await this.loadAllEntries();
                              await this.render();
@@ -1308,24 +1397,19 @@ class DaybleCalendarView extends ItemView {
         const days = ['sun','mon','tue','wed','thu','fri','sat'];
         const ordered = days.slice(weekStart).concat(days.slice(0, weekStart));
         ordered.forEach(d => header.createDiv({ text: d, cls: 'dayble-grid-header-cell' }));
-        const segmentHeight = 28;
-        const segmentGap = 4; // gappy
-        const countsByDate: Record<string, number> = {};
+        const vPadding = this.plugin.settings.eventVerticalPadding ?? 2;
+        const segmentHeight = 24 + (vPadding * 2);
+        const segmentGap = 6; // gappy
+        
+        // Filter long events for month view
         let longEventsPreset = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
         if (this.plugin.settings.onlyShowPinnedEventsMonth) {
             longEventsPreset = longEventsPreset.filter(ev => ev.pinned);
         }
-        longEventsPreset.forEach(ev => {
-            const start = new Date(ev.startDate);
-            const end = new Date(ev.endDate);
-            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-                const yy = d.getFullYear();
-                const mm = String(d.getMonth() + 1).padStart(2, '0');
-                const dd = String(d.getDate()).padStart(2, '0');
-                const key = `${yy}-${mm}-${dd}`;
-                countsByDate[key] = (countsByDate[key] || 0) + 1;
-            }
-        });
+
+        const { maxLanesByDate } = this.calculateLongEventLanes(longEventsPreset);
+        const countsByDate = maxLanesByDate;
+
         for (let i = 0; i < leading; i++) {
             const c = this.gridEl.createDiv({ cls: 'dayble-day dayble-inactive' });
             c.setAttr('data-empty', 'true');
@@ -1355,9 +1439,9 @@ class DaybleCalendarView extends ItemView {
             const longContainer = cell.createDiv({ cls: 'dayble-long-container' });
             longContainer.addClass('db-long-container');
             const container = cell.createDiv({ cls: 'dayble-event-container' });
-            const preMt = countsByDate[fullDate] || 0;
-            const preMtPx = preMt > 0 ? (preMt * segmentHeight) + (Math.max(0, preMt - 1) * segmentGap) + 2 : 0;
-            container.setCssProps({ 'margin-top': preMtPx ? `${preMtPx}px` : '' });
+            
+            // Create lane walls container for intelligent stacking
+            container.createDiv({ cls: 'dayble-lane-walls' });
             
             let dayEvents = this.events.filter(e => e.date === fullDate);
             if (this.plugin.settings.onlyShowPinnedEventsMonth) {
@@ -1522,6 +1606,8 @@ class DaybleCalendarView extends ItemView {
                         if (hIdx !== -1) {
                             const evn = this.holderEvents.splice(hIdx, 1)[0];
                             evn.date = fullDate;
+                            evn.startDate = fullDate;
+                            evn.endDate = fullDate;
                             this.events.push(evn);
                             await this.saveAllEntries();
                             await this.renderHolder();
@@ -1538,8 +1624,11 @@ class DaybleCalendarView extends ItemView {
                                 const ne = new Date(ns);
                                 ne.setDate(ns.getDate() + span);
                                 ev.endDate = `${ne.getFullYear()}-${String(ne.getMonth()+1).padStart(2,'0')}-${String(ne.getDate()).padStart(2,'0')}`;
-                            } else if (ev.date) {
+                                ev.date = undefined;
+                            } else {
                                 ev.date = fullDate;
+                                ev.startDate = fullDate;
+                                ev.endDate = fullDate;
                             }
                             await this.saveAllEntries();
                         }
@@ -1666,6 +1755,7 @@ class DaybleCalendarView extends ItemView {
         const dayMap = new Map<string, DaybleEvent[]>();
         
         this.events.forEach(ev => {
+            if (this.plugin.settings.onlyShowPinnedEventsAgenda && !ev.pinned) return;
             if (ev.date) {
                 if (!dayMap.has(ev.date)) dayMap.set(ev.date, []);
                 dayMap.get(ev.date)?.push(ev);
@@ -1711,8 +1801,10 @@ class DaybleCalendarView extends ItemView {
                     const itemEl = item as HTMLElement;
                     itemEl.setCssProps({ 'width': '100%' });
                     
-                    // Add special class for long (multi-day) events
-                    if (ev.startDate && ev.endDate && ev.startDate !== ev.endDate) {
+                    // Add special class for long (multi-day) or all-day (no time) events
+                    const isMultiDay = ev.startDate && ev.endDate && ev.startDate !== ev.endDate;
+                    const isAllDay = !ev.time || isMultiDay;
+                    if (isAllDay) {
                         itemEl.addClass('dayble-agenda-long-events');
                     }
                 });
@@ -1798,14 +1890,19 @@ class DaybleCalendarView extends ItemView {
             this._longOverlayEl.addClass('dayble-long-overlay-box');
         }
         const cells = Array.from(this.gridEl.children).filter(el => (el as HTMLElement).hasClass?.('dayble-day')) as HTMLElement[];
-        const todayNum = (el: HTMLElement) => {
-            const n = el.querySelector('.dayble-day-number');
-            return n ? n.getBoundingClientRect().height + parseFloat(getComputedStyle(n).marginBottom || '0') : 24;
-        };
-        const segmentHeight = 28;
+        
+        // Fixed buffer from the top of the day cell to the first long event
+        const HEADER_BUFFER = 38; 
+        const vPadding = this.plugin.settings.eventVerticalPadding ?? 2;
+        const segmentHeight = 24 + (vPadding * 2);
         const segmentGap = 4;
-        // getCellWidth removed as unused
-        const countsByDate: Record<string, number> = {};
+        
+        // Fine-grained lane system using units
+        const LANE_UNIT_HEIGHT = 4;
+        const lanesPerEvent = Math.ceil(segmentHeight / LANE_UNIT_HEIGHT);
+        const lanesPerGap = Math.ceil(segmentGap / LANE_UNIT_HEIGHT);
+        const extraLanesForDesc = 1; // Reduced from full lane to 8px extra
+
         let longEvents = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
         const isMonth = this.plugin.settings.calendarView === 'Month' || (!this.plugin.settings.calendarView && !this.plugin.settings.calendarWeekActive);
         const isWeek = this.plugin.settings.calendarView === 'Week' || (!this.plugin.settings.calendarView && this.plugin.settings.calendarWeekActive);
@@ -1813,32 +1910,67 @@ class DaybleCalendarView extends ItemView {
         if ((isMonth && this.plugin.settings.onlyShowPinnedEventsMonth) || (isWeek && this.plugin.settings.onlyShowPinnedEventsWeek)) {
             longEvents = longEvents.filter(ev => ev.pinned);
         }
-        longEvents.forEach(ev => {
-            const start = new Date(ev.startDate);
-            const end = new Date(ev.endDate);
-            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-                const y = d.getFullYear();
-                const m = String(d.getMonth() + 1).padStart(2, '0');
-                const dd = String(d.getDate()).padStart(2, '0');
-                const key = `${y}-${m}-${dd}`;
-                countsByDate[key] = (countsByDate[key] || 0) + 1;
+
+        const { eventLanes, maxLanesByDate } = this.calculateLongEventLanes(longEvents, { lanesPerEvent, lanesPerGap, extraLanesForDesc });
+        const countsByDate = maxLanesByDate;
+
+        const sortedLongEvents = [...longEvents].sort((a, b) => {
+            const laneA = eventLanes.get(a.id) ?? 0;
+            const laneB = eventLanes.get(b.id) ?? 0;
+            return laneA - laneB;
+        });
+
+        const requiredKeys = new Set<string>();
+
+        // Pre-initialize lane walls for all cells
+        cells.forEach(cell => {
+            const wallsContainer = cell.querySelector('.dayble-lane-walls');
+            if (!wallsContainer) return;
+            const date = cell.getAttr('data-date');
+            const unitsCount = countsByDate[date] || 0;
+            const totalHeight = unitsCount * LANE_UNIT_HEIGHT;
+            
+            // Use a single spacer wall for efficiency and smoother layout
+            let wall = wallsContainer.firstElementChild as HTMLElement;
+            if (!wall) wall = wallsContainer.createDiv({ cls: 'dayble-lane-wall' });
+            wall.style.height = `${totalHeight}px`;
+            
+            while (wallsContainer.children.length > 1) {
+                wallsContainer.lastElementChild?.remove();
             }
         });
-        const requiredKeys = new Set<string>();
-        longEvents.forEach(ev => {
+
+        // Function to position a single event segment using fixed calculations
+        const positionEventSegment = (item: HTMLElement, first: HTMLElement, last: HTMLElement, stackIndex: number) => {
+            const frLeft = first.offsetLeft;
+            const frTop = first.offsetTop;
+            const lrRight = last.offsetLeft + last.offsetWidth;
+            
+            // Fixed top offset calculation based on lane unit index
+            const topOffset = HEADER_BUFFER + (stackIndex * LANE_UNIT_HEIGHT);
+            
+            const left = frLeft;
+            const top = frTop + topOffset;
+            const width = (lrRight - frLeft);
+            
+            item.setCssProps({
+                'left': `${left}px`,
+                'top': `${top}px`,
+                'width': `${width}px`,
+                'height': `${segmentHeight}px`,
+                'min-height': `${segmentHeight}px`
+            });
+            
+            return { top, left, width };
+        };
+
+        sortedLongEvents.forEach(ev => {
             const startIdx = cells.findIndex(c => c.getAttr('data-date') === ev.startDate);
             if (startIdx === -1) return;
             const start = new Date(ev.startDate);
             const end = new Date(ev.endDate);
-            const overlap = longEvents
-                .filter(e => e.startDate && e.endDate && e.startDate !== e.endDate && new Date(e.startDate) <= start && new Date(e.endDate) >= start)
-                .sort((a,b) => {
-                    const ad = (new Date(a.endDate).getTime() - new Date(a.startDate).getTime());
-                    const bd = (new Date(b.endDate).getTime() - new Date(b.startDate).getTime());
-                    if (ad !== bd) return bd - ad; // longer first (on top)
-                    return a.id.localeCompare(b.id);
-                });
-            const stackIndex = overlap.findIndex(e => e.id === ev.id);
+            
+            const stackIndex = eventLanes.get(ev.id) ?? 0;
             const span = Math.floor((end.getTime() - start.getTime())/86400000) + 1;
             const cellsPerRow = 7;
             const startRow = Math.floor(startIdx / cellsPerRow);
@@ -1847,60 +1979,30 @@ class DaybleCalendarView extends ItemView {
             const category = this.plugin.settings.eventCategories?.find(c => c.id === ev.categoryId);
             const styleSig = `${ev.categoryId || ''}|${ev.color || ''}|${ev.textColor || ''}|${ev.colorName || ''}|${category?.bgColor || ''}|${category?.textColor || ''}|${this.plugin.settings.eventBgOpacity}|${this.plugin.settings.iconPlacement}|${this.plugin.settings.onlyAnimateToday}|${this.plugin.settings.eventBorderWidth}|${this.plugin.settings.eventBorderRadius}|${this.plugin.settings.eventBorderOpacity}`;
             const contentSig = `${ev.title || ''}|${ev.description || ''}|${ev.icon || ''}|${ev.time || ''}`;
+            
             if (startRow === endRow) {
                 const first = cells[startIdx];
                 const last = cells[endIdx];
                 if (!first || !last) return;
-                const frLeft = (first).offsetLeft;
-                const frTop = (first).offsetTop;
-                const lrRight = (last).offsetLeft + (last).offsetWidth;
-                const topOffset = todayNum(first) + 14 + stackIndex * (segmentHeight + segmentGap);
-                const left = frLeft - 2;
-                const top = frTop + topOffset;
-                const width = (lrRight - frLeft) + 4;
+                
                 const key = `${ev.id}:row:${startRow}-single`;
                 requiredKeys.add(key);
                 let item = this._longEls.get(key);
-                if (!item) {
-                    item = this.createEventItem(ev);
-                    item.addClass('dayble-long-event');
-                    item.addClass('dayble-long-event-single');
+                if (!item || item.dataset.styleSig !== styleSig || item.dataset.contentSig !== contentSig) {
+                    if (item && item.parentElement) item.remove();
+                    item = this.createEventItem(ev, true); // isLong=true hides description
+                    item.addClass('dayble-long-event', 'dayble-long-event-single', 'dayble-absolute-box');
                     item.dataset.longKey = key;
                     item.dataset.styleSig = styleSig;
                     item.dataset.contentSig = contentSig;
-                    item.addClass('dayble-absolute-box');
                     item.onclick = async (e) => { e.stopPropagation(); await this.openEventModal(ev.id, ev.startDate, ev.endDate); };
                     this.gridEl.appendChild(item);
                     this._longEls.set(key, item);
                 }
-                else {
-                    const sig = styleSig;
-                    const csig = contentSig;
-                    if ((item).dataset.styleSig !== sig || (item).dataset.contentSig !== csig) {
-                        const newItem = this.createEventItem(ev);
-                        newItem.addClass('dayble-long-event');
-                        newItem.addClass('dayble-long-event-single');
-                        (newItem).dataset.longKey = key;
-                        (newItem).dataset.styleSig = sig;
-                        (newItem).dataset.contentSig = csig;
-                        newItem.addClass('dayble-absolute-box');
-                        newItem.onclick = async (e) => { e.stopPropagation(); await this.openEventModal(ev.id, ev.startDate, ev.endDate); };
-                        if (item.parentElement) item.replaceWith(newItem);
-                        item = newItem;
-                        this._longEls.set(key, item);
-                    }
-                }
-                if (!item.isConnected || item.parentElement !== this.gridEl) {
-                    this.gridEl.appendChild(item);
-                }
-                (item).style.setProperty('--event-border-width', `${this.plugin.settings.eventBorderWidth ?? 2}px`);
-                (item).style.setProperty('--event-border-radius', `${this.plugin.settings.eventBorderRadius ?? 6}px`);
-                item.setCssProps({
-                    'left': `${left}px`,
-                    'top': `${top}px`,
-                    'width': `${width}px`,
-                    'height': `${segmentHeight}px`
-                });
+                
+                if (!item.isConnected) this.gridEl.appendChild(item);
+                positionEventSegment(item, first, last, stackIndex);
+
             } else {
                 for (let row = startRow; row <= endRow; row++) {
                     const rowStartIdx = row * cellsPerRow;
@@ -1908,61 +2010,30 @@ class DaybleCalendarView extends ItemView {
                     const eventStartInRow = row === startRow ? startIdx : rowStartIdx;
                     const eventEndInRow = row === endRow ? endIdx : rowEndIdx;
                     if (eventStartInRow > rowEndIdx || eventEndInRow < rowStartIdx) continue;
+                    
                     const first = cells[eventStartInRow];
                     const last = cells[eventEndInRow];
                     if (!first || !last) continue;
-                    const frLeft = (first).offsetLeft;
-                    const frTop = (first).offsetTop;
-                    const lrRight = (last).offsetLeft + (last).offsetWidth;
-                    const topOffset = todayNum(first) + 14 + stackIndex * (segmentHeight + segmentGap);
-                    const left = frLeft - 2;
-                    const top = frTop + topOffset;
-                    const width = (lrRight - frLeft) + 4;
+                    
                     const key = `${ev.id}:row:${row}`;
                     requiredKeys.add(key);
                     let item = this._longEls.get(key);
-                    if (!item) {
-                        item = this.createEventItem(ev);
-                        item.addClass('dayble-long-event');
-                        if (row === startRow) { item.addClass('dayble-long-event-start'); }
-                        if (row === endRow) { item.addClass('dayble-long-event-end'); }
+                    if (!item || item.dataset.styleSig !== styleSig || item.dataset.contentSig !== contentSig) {
+                        if (item && item.parentElement) item.remove();
+                        item = this.createEventItem(ev, true);
+                        item.addClass('dayble-long-event', 'dayble-absolute-box');
+                        if (row === startRow) item.addClass('dayble-long-event-start');
+                        if (row === endRow) item.addClass('dayble-long-event-end');
                         item.dataset.longKey = key;
                         item.dataset.styleSig = styleSig;
                         item.dataset.contentSig = contentSig;
-                        item.addClass('dayble-absolute-box');
                         item.onclick = (e) => { e.stopPropagation(); void this.openEventModal(ev.id, ev.startDate, ev.endDate); };
                         this.gridEl.appendChild(item);
                         this._longEls.set(key, item);
                     }
-                    else {
-                        const sig = styleSig;
-                        const csig = contentSig;
-                        if ((item).dataset.styleSig !== sig || (item).dataset.contentSig !== csig) {
-                            const newItem = this.createEventItem(ev);
-                            newItem.addClass('dayble-long-event');
-                            if (row === startRow) newItem.addClass('dayble-long-event-start');
-                            if (row === endRow) newItem.addClass('dayble-long-event-end');
-                            (newItem).dataset.longKey = key;
-                            (newItem).dataset.styleSig = sig;
-                            (newItem).dataset.contentSig = csig;
-                            newItem.addClass('dayble-absolute-box');
-                            newItem.onclick = async (e) => { e.stopPropagation(); await this.openEventModal(ev.id, ev.startDate, ev.endDate); };
-                            if (item.parentElement) item.replaceWith(newItem);
-                            item = newItem;
-                            this._longEls.set(key, item);
-                        }
-                    }
-                    if (!item.isConnected || item.parentElement !== this.gridEl) {
-                        this.gridEl.appendChild(item);
-                    }
-                    item.style.setProperty('--event-border-width', `${this.plugin.settings.eventBorderWidth ?? 2}px`);
-                    item.style.setProperty('--event-border-radius', `${this.plugin.settings.eventBorderRadius ?? 6}px`);
-                    item.setCssProps({
-                        'left': `${left}px`,
-                        'top': `${top}px`,
-                        'width': `${width}px`,
-                        'height': `${segmentHeight}px`
-                    });
+                    
+                    if (!item.isConnected) this.gridEl.appendChild(item);
+                    positionEventSegment(item, first, last, stackIndex);
                 }
             }
         });
@@ -1974,31 +2045,29 @@ class DaybleCalendarView extends ItemView {
                 this._longEls.delete(key);
             }
         });
-        cells.forEach(cell => {
-            const date = cell.getAttr('data-date');
-            const count = countsByDate[date] || 0;
-            const container = cell.querySelector('.dayble-event-container');
-            if (container) {
-                const baseMt = count > 0 ? (count * segmentHeight) + (Math.max(0, count - 1) * segmentGap) + 2 : 0;
-                const isTodayCell = cell.classList.contains('dayble-current-day');
-                const mt = isTodayCell ? Math.max(0, baseMt - 4) : baseMt; // gappy
-                (container as HTMLElement).setCssProps({ 'margin-top': mt ? `${mt}px` : '' });
-                const maxH = this.plugin.settings.dayCellMaxHeight ?? 0;
-                if (maxH > 0) {
-                    (cell as HTMLElement).style.setProperty('--dayble-cell-max-height', `${maxH}px`);
-                    (cell as HTMLElement).addClass('dayble-cell-max');
-                    (container as HTMLElement).removeClass('dayble-overflow-visible');
-                    (container as HTMLElement).addClass('dayble-scroll-y');
-                    (container as HTMLElement).addClass('dayble-scroll-x-hidden');
-                } else {
-                    (cell as HTMLElement).style.removeProperty('--dayble-cell-max-height');
-                    (cell as HTMLElement).removeClass('dayble-cell-max');
-                    (container as HTMLElement).removeClass('dayble-scroll-y');
-                    (container as HTMLElement).removeClass('dayble-scroll-x-hidden');
-                    (container as HTMLElement).addClass('dayble-overflow-visible');
+
+        const updateNormalEventMargins = () => {
+            cells.forEach(cell => {
+                const container = cell.querySelector('.dayble-event-container') as HTMLElement;
+                if (container) {
+                    const maxH = this.plugin.settings.dayCellMaxHeight ?? 0;
+                    if (maxH > 0) {
+                        (cell as HTMLElement).style.setProperty('--dayble-cell-max-height', `${maxH}px`);
+                        (cell as HTMLElement).addClass('dayble-cell-max');
+                        container.removeClass('dayble-overflow-visible');
+                        container.addClass('dayble-scroll-y', 'dayble-scroll-x-hidden');
+                    } else {
+                        (cell as HTMLElement).style.removeProperty('--dayble-cell-max-height');
+                        (cell as HTMLElement).removeClass('dayble-cell-max');
+                        container.removeClass('dayble-scroll-y', 'dayble-scroll-x-hidden');
+                        container.addClass('dayble-overflow-visible');
+                    }
                 }
-            }
-        });
+            });
+        };
+
+        // Initial update
+        updateNormalEventMargins();
     }
 
     getEventTooltipText(ev: DaybleEvent): string {
@@ -2077,7 +2146,7 @@ class DaybleCalendarView extends ItemView {
         return lines.join('\n');
     }
 
-    createEventItem(ev: DaybleEvent): HTMLElement {
+    createEventItem(ev: DaybleEvent, isLong = false): HTMLElement {
         const item = document.createElement('div');
         item.className = 'dayble-event';
         item.setAttribute('draggable', 'true');
@@ -2120,6 +2189,9 @@ class DaybleCalendarView extends ItemView {
                 item.style.setProperty('--event-bg-color', hexToRgba(swatchBg, opacity));
                 item.style.setProperty('--event-text-color', swatchText);
                 item.style.setProperty('--event-border-color', hexToRgba(swatchText, bOpacity));
+                
+                bgColor = swatchBg;
+                textColor = swatchText;
             }
         } else {
             if (ev.color) {
@@ -2147,6 +2219,7 @@ class DaybleCalendarView extends ItemView {
         // Apply border width settings
         item.style.setProperty('--event-border-width', `${this.plugin.settings.eventBorderWidth ?? 2}px`);
         item.style.setProperty('--event-border-radius', `${this.plugin.settings.eventBorderRadius ?? 6}px`);
+        item.style.setProperty('--event-vertical-padding', `${this.plugin.settings.eventVerticalPadding ?? 2}px`);
         
         // Apply effect and animation from state or category
         const state = ev.stateId ? (this.plugin.settings.eventStates || []).find(s => s.id === ev.stateId) : null;
@@ -2164,7 +2237,8 @@ class DaybleCalendarView extends ItemView {
             item.addClass(`dayble-anim-${anim2}`);
         }
         
-        const title = item.createDiv({ cls: 'dayble-event-title' });
+        const titleContainer = item.createDiv({ cls: 'dayble-event-title-container' });
+        const title = titleContainer.createDiv({ cls: 'dayble-event-title' });
         renderMarkdown(ev.title || '', title, this.plugin.app);
         const iconToUse = (state && state.icon) || ev.icon || (category?.icon || '');
         if (this.plugin.settings.iconPlacement !== 'none' && iconToUse) {
@@ -2172,18 +2246,18 @@ class DaybleCalendarView extends ItemView {
             setIcon(iconEl, iconToUse);
             const place = this.plugin.settings.iconPlacement ?? 'left';
             if (place === 'left') {
-                item.insertBefore(iconEl, title);
+                titleContainer.insertBefore(iconEl, title);
             } else if (place === 'right') {
-                item.appendChild(iconEl);
+                titleContainer.appendChild(iconEl);
             } else if (place === 'top' || place === 'top-left' || place === 'top-right') {
                 iconEl.addClass('dayble-icon-top');
                 if (place === 'top-left') iconEl.addClass('dayble-icon-top-left');
                 else if (place === 'top-right') iconEl.addClass('dayble-icon-top-right');
                 else iconEl.addClass('dayble-icon-top-center');
-                item.insertBefore(iconEl, item.firstChild);
+                item.insertBefore(iconEl, titleContainer);
             }
         }
-        if (ev.description) {
+        if (ev.description && !isLong) {
             const desc = item.createDiv({ cls: 'dayble-event-desc' });
             // Description inherits text color
             if (bgColor && textColor) {
@@ -2242,6 +2316,11 @@ class DaybleCalendarView extends ItemView {
             try {
                 const dragImg = item.cloneNode(true) as HTMLElement;
                 dragImg.addClass('dayble-drag-ghost');
+                // Ensure ghost is "visible" for browser capture but off-screen or behind
+                dragImg.style.position = 'fixed';
+                dragImg.style.top = '0';
+                dragImg.style.left = '0';
+                dragImg.style.zIndex = '-10000';
                 const rect = item.getBoundingClientRect();
                 dragImg.setCssProps({
                     'width': `${rect.width}px`,
@@ -2276,7 +2355,7 @@ class DaybleCalendarView extends ItemView {
                 }));
             }
 
-            if (this.plugin.settings.onlyShowPinnedEventsMonth || this.plugin.settings.onlyShowPinnedEventsWeek) {
+            if (this.plugin.settings.onlyShowPinnedEventsMonth || this.plugin.settings.onlyShowPinnedEventsWeek || this.plugin.settings.onlyShowPinnedEventsAgenda) {
                 menu.addItem(i => i.setTitle(ev.pinned ? 'Unpin event' : 'Pin event').setIcon('pin').onClick(async () => {
                     ev.pinned = !ev.pinned;
                     await this.saveAllEntries();
@@ -2299,7 +2378,7 @@ class DaybleCalendarView extends ItemView {
             if (eventStates.length > 0) {
                 // Individual states
                 eventStates.forEach(state => {
-                    menu.addItem(i => i.setTitle(`Set as ${state.name}`).setIcon(state.icon).onClick(async () => {
+                    menu.addItem(i => i.setTitle(`Set as ${state.name}`).setIcon(state.icon || 'dot').onClick(async () => {
                         if (state.colorName) ev.colorName = state.colorName;
                         ev.stateId = state.id;
                         ev.effect = state.effect || '';
@@ -2377,6 +2456,11 @@ class DaybleCalendarView extends ItemView {
                 try {
                     const dragImg = item.cloneNode(true) as HTMLElement;
                     dragImg.addClass('dayble-drag-ghost');
+                    // Ensure ghost is "visible" for browser capture but off-screen or behind
+                    dragImg.style.position = 'fixed';
+                    dragImg.style.top = '0';
+                    dragImg.style.left = '0';
+                    dragImg.style.zIndex = '-10000';
                     const rect = item.getBoundingClientRect();
                     dragImg.setCssProps({
                         'width': `${rect.width}px`,
@@ -2534,6 +2618,7 @@ class EventModal extends Modal {
     selectedColor?: string;
     selectedTextColor?: string;
     selectedColorName?: string;
+    isPinned: boolean = false;
 
     constructor(app: App, plugin: DaybleCalendarPlugin, ev: DaybleEvent | undefined, date: string | undefined, endDate: string | undefined, defaultStartTime: string | undefined, defaultEndTime: string | undefined, onSubmit: (ev: Partial<DaybleEvent>) => Promise<void>, onDelete: () => Promise<void>, onPickIcon: () => Promise<void>) {
         super(app);
@@ -2550,6 +2635,7 @@ class EventModal extends Modal {
         this.selectedColor = ev?.color;
         this.selectedTextColor = ev?.textColor;
         this.selectedColorName = ev?.colorName;
+        this.isPinned = ev?.pinned ?? false;
     }
 
     setIcon(icon: string) { this.icon = icon; if (this.iconBtnEl) setIcon(this.iconBtnEl, icon || 'plus'); }
@@ -2571,6 +2657,30 @@ class EventModal extends Modal {
         const titleInput = row1.createEl('input', { type: 'text', cls: 'dayble-input', attr: { placeholder: 'Event title', autofocus: 'true' } });
         titleInput.addClass('db-input');
         titleInput.value = this.ev?.title ?? '';
+
+        const pinBtn = row1.createEl('button', { cls: 'dayble-btn' });
+        pinBtn.addClass('db-btn');
+        setIcon(pinBtn, 'pin');
+        setTooltip(pinBtn, this.isPinned ? 'Unpin event' : 'Pin event');
+        
+        const updatePinStyle = () => {
+            if (this.isPinned) {
+                pinBtn.addClass('mod-cta');
+                pinBtn.removeClass('button');
+            } else {
+                pinBtn.removeClass('mod-cta');
+                pinBtn.addClass('button');
+            }
+        };
+        updatePinStyle();
+
+        pinBtn.onclick = (e) => {
+            e.preventDefault();
+            this.isPinned = !this.isPinned;
+            updatePinStyle();
+            setTooltip(pinBtn, this.isPinned ? 'Unpin event' : 'Pin event');
+        };
+
         const focusTitle = () => { try { titleInput.focus({ preventScroll: true }); } catch (e) { console.debug('[Dayble] Focus title:', e); } };
         focusTitle();
         requestAnimationFrame(focusTitle);
@@ -2600,13 +2710,21 @@ class EventModal extends Modal {
                 item.textContent = file.name;
                 item.classList.add('dayble-suggestion-item');
                 if (i === 0) { item.classList.add('is-selected'); }
+                
+                item.onmouseenter = () => {
+                    suggestionSelectedIndex = i;
+                    const allItems = Array.from(suggestionContainer?.children || []) as HTMLElement[];
+                    allItems.forEach(el => el.classList.remove('is-selected'));
+                    item.classList.add('is-selected');
+                };
+
                 item.onclick = (e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     const text = target.value;
-                const beforeMatch = text.substring(0, text.lastIndexOf('[['));
-                target.value = beforeMatch + '[[' + file.name + ']]';
-                closeSuggestions();
+                    const beforeMatch = text.substring(0, text.lastIndexOf('[['));
+                    target.value = beforeMatch + '[[' + file.name + ']]';
+                    closeSuggestions();
                 };
                 suggestionContainer.appendChild(item);
             });
@@ -2771,6 +2889,7 @@ class EventModal extends Modal {
                 title: titleInput.value,
                 description: descInput.value,
                 icon: this.icon,
+                pinned: this.isPinned,
                 categoryId: selectedCategoryId,
                 color: this.selectedColor,
                 textColor: this.selectedTextColor,
@@ -3120,6 +3239,11 @@ class TodayModal extends Modal {
             // It's an all-day event if it has no time OR if it's a multi-day event
             const isMultiDay = e.startDate && e.endDate && e.startDate !== e.endDate;
             return !e.time || isMultiDay;
+        }).sort((a, b) => {
+            const ad = a.startDate && a.endDate ? (new Date(a.endDate).getTime() - new Date(a.startDate).getTime()) : 0;
+            const bd = b.startDate && b.endDate ? (new Date(b.endDate).getTime() - new Date(b.startDate).getTime()) : 0;
+            if (ad !== bd) return bd - ad; // longer first
+            return (a.title || '').localeCompare(b.title || '');
         });
 
         if (allDayEvents.length > 0) {
@@ -3263,38 +3387,48 @@ class TodayModal extends Modal {
                     }
                 }
 
-                // Selection Mirror (Ghost Event) with 15-min precision
-                const startSlotIdx = Math.floor(s15 / 2);
-                const endSlotIdx = Math.floor(e15 / 2);
-                
-                const startCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${startSlotIdx}"]`) as HTMLElement;
-                const endCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${endSlotIdx}"]`) as HTMLElement;
-                
-                if (startCell && endCell) {
+                if (selectionMirror) { selectionMirror.remove(); selectionMirror = null; }
+                selectionMirror = document.createElement('div');
+                selectionMirror.className = 'dayble-focus-selection-mirror-container';
+                overlay.appendChild(selectionMirror);
+
+                const renderMirrorSegment = (start15: number, end15: number, type: 'full'|'start'|'end') => {
+                    const startSlotIdx = Math.floor(start15 / 2);
+                    const startCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${startSlotIdx}"]`) as HTMLElement;
+                    if (!startCell) return;
+
                     const gRect = gridContainer.getBoundingClientRect();
                     const sRect = startCell.getBoundingClientRect();
-                    
                     const rowHeight = startCell.offsetHeight || 60;
                     const pxPer15 = rowHeight / 2;
-                    
-                    if (!selectionMirror) {
-                        selectionMirror = document.createElement('div');
-                        selectionMirror.className = 'dayble-focus-event-abs dayble-focus-selection-mirror';
-                        overlay.appendChild(selectionMirror);
-                    }
-                    
-                    // Use cell boundaries instead of whole grid boundaries
+
+                    const segment = document.createElement('div');
+                    segment.className = 'dayble-focus-event-abs dayble-focus-selection-mirror';
+                    if (type === 'start') segment.addClass('dayble-focus-event-split-start');
+                    if (type === 'end') segment.addClass('dayble-focus-event-split-end');
+                    selectionMirror?.appendChild(segment);
+
                     const left = sRect.left - gRect.left;
-                    const top = (sRect.top - gRect.top) + (s15 % 2 === 0 ? 0 : pxPer15);
+                    const top = (sRect.top - gRect.top) + (start15 % 2 === 0 ? 0 : pxPer15);
                     const width = startCell.offsetWidth;
-                    const height = Math.max(pxPer15, ((e15 - s15) + 1) * pxPer15);
+                    const height = Math.max(pxPer15, ((end15 - start15) + 1) * pxPer15);
                     
-                    selectionMirror.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
-                    selectionMirror.style.setProperty('--focus-item-top', `${Math.round(top)}px`);
-                    selectionMirror.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
-                    selectionMirror.style.setProperty('--focus-item-height', `${Math.round(height)}px`);
-                    
-                    // Show time range in the mirror
+                    segment.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
+                    segment.style.setProperty('--focus-item-top', `${Math.round(top)}px`);
+                    segment.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
+                    segment.style.setProperty('--focus-item-height', `${Math.round(height)}px`);
+                };
+
+                const boundary15 = 48; // 12:00 PM is at 15-min index 48
+                if (split && s15 < boundary15 && e15 >= boundary15) {
+                    renderMirrorSegment(s15, boundary15 - 1, 'start');
+                    renderMirrorSegment(boundary15, e15, 'end');
+                } else {
+                    renderMirrorSegment(s15, e15, 'full');
+                }
+                
+                if (selectionMirror) {
+                    // Show time range and duration in the container or segments
                     const sTotal = s15 * 15;
                     const eTotal = (e15 + 1) * 15;
                     const sh_m = Math.floor(sTotal / 60);
@@ -3320,10 +3454,13 @@ class TodayModal extends Modal {
                         }
                     }
 
-                    selectionMirror.empty();
-                    const inner = selectionMirror.createDiv({ cls: 'dayble-focus-event-inner' });
-                    inner.createDiv().setText(`${formatHM(sh_m, sm_m)} - ${formatHM(eh_m, em_m)}`);
-                    inner.createDiv({ cls: 'dayble-selection-duration' }).setText(durationText);
+                    // For now, just add text to the first segment
+                    const firstSeg = selectionMirror.querySelector('.dayble-focus-selection-mirror') as HTMLElement;
+                    if (firstSeg) {
+                        const inner = firstSeg.createDiv({ cls: 'dayble-focus-event-inner' });
+                        inner.createDiv().setText(`${formatHM(sh_m, sm_m)} - ${formatHM(eh_m, em_m)}`);
+                        inner.createDiv({ cls: 'dayble-selection-duration' }).setText(durationText);
+                    }
                 }
             }
         };
@@ -3481,7 +3618,8 @@ class TodayModal extends Modal {
                 }
             });
         }
-        const addBtn = c.createEl('button', { cls: 'dayble-today-add-btn', text: '+ add event' });
+        const footer = c.createDiv({ cls: 'dayble-modal-footer' });
+        const addBtn = footer.createEl('button', { cls: 'dayble-today-add-btn', text: '+ add event' });
         addBtn.addClass('db-btn');
         addBtn.addClass('dayble-add-btn-full');
         addBtn.onclick = async () => { await this.view?.openEventModal(undefined, this.date); };
@@ -3683,83 +3821,98 @@ class TodayModal extends Modal {
             processedEvents.forEach(data => {
                 const { ev, startTotal, endTotal, column, totalColumns } = data;
                 
-                const sh = Math.floor(startTotal / 60);
-                const sm = startTotal % 60;
-                let startIdx = toIdx(sh, sm);
-                const startCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${startIdx}"]`) as HTMLElement;
-                if (!startCell) return;
-                const sRect = startCell.getBoundingClientRect();
-                const gRect = gridContainer.getBoundingClientRect();
+                const split = this.view?.plugin?.settings?.todayModalSplitView ?? true;
+                const boundary = 12 * 60; // 12:00 PM
                 
-                const rowHeight = startCell.offsetHeight || 60;
-                const pxPer15 = rowHeight / 2;
-                const withinMin = (sm % 30);
-                
-                const top = (sRect.top - gRect.top) + (withinMin / 15) * pxPer15;
-                const durationMin = endTotal - startTotal;
-                const height = Math.max(pxPer15, Math.round((durationMin / 15) * pxPer15));
-
-                // Calculate width and left based on columns within the cell area
-                const fullWidth = startCell.offsetWidth;
-                const colWidth = fullWidth / totalColumns;
-                const left = (sRect.left - gRect.left) + (column * colWidth);
-                const width = colWidth;
-
-                const item = this.view?.createEventItem(ev) || document.createElement('div');
-                item.addClass('dayble-focus-event-abs');
-                
-                // Override background-color to use the variable set by createEventItem
-                item.setCssProps({
-                    'background-color': 'var(--event-bg-color, var(--background-primary))',
-                    'color': 'var(--event-text-color, var(--text-normal))',
-                    'border-color': 'var(--event-border-color, var(--background-modifier-border))',
-                    'pointer-events': 'auto'
-                });
-                // For events <= 30 mins, make them compact
-                if (durationMin <= 30) {
-                    item.addClass('dayble-event-compact');
-                }
-
-                // Add rich tooltip
-                if (this.view && this.view.plugin.settings.tooltipEnabled) {
-                    setTooltip(item, this.view.getEventTooltipText(ev));
-                }
-
-                item.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
-                item.style.setProperty('--focus-item-top', `${Math.round(top)}px`);
-                item.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
-                item.style.setProperty('--focus-item-height', `${Math.round(height)}px`);
-                item.onclick = async (e) => { e.stopPropagation(); await this.view?.openEventModal(ev.id, ev.date || ev.startDate, ev.endDate); };
-                // Drag to reposition within today modal (15-min granularity)
-                item.ondragstart = (e) => {
-                    const dt = e.dataTransfer;
-                    if (!dt) return;
-                    this.dragId = ev.id;
-                    this.dragEl = item;
+                const renderSegment = (sMin: number, eMin: number, segmentType: 'full' | 'start' | 'end') => {
+                    const sh = Math.floor(sMin / 60);
+                    const sm = sMin % 60;
+                    let startIdx = toIdx(sh, sm);
+                    const startCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${startIdx}"]`) as HTMLElement;
+                    if (!startCell) return;
+                    const sRect = startCell.getBoundingClientRect();
+                    const gRect = gridContainer.getBoundingClientRect();
                     
-                    // Capture EXACT distance from mouse to top of event
-                    const itemRect = item.getBoundingClientRect();
-                    this.dragOffsetY = e.clientY - itemRect.top;
+                    const rowHeight = startCell.offsetHeight || 60;
+                    const pxPer15 = rowHeight / 2;
+                    const withinMin = (sm % 30);
+                    
+                    const top = (sRect.top - gRect.top) + (withinMin / 15) * pxPer15;
+                    const durationMin = eMin - sMin;
+                    const height = Math.max(pxPer15, Math.round((durationMin / 15) * pxPer15));
 
-                    item.addClass('dragging');
-                    try {
-                        const img = new Image();
-                        img.width = 1; img.height = 1;
-                        dt.setDragImage(img, 0, 0);
-                    } catch {}
-                    let duration = durationMin;
-                    this.dragDuration = duration;
+                    // Calculate width and left based on columns within the cell area
+                    const fullWidth = startCell.offsetWidth;
+                    const colWidth = fullWidth / totalColumns;
+                    const left = (sRect.left - gRect.left) + (column * colWidth);
+                    const width = colWidth;
+
+                    const item = this.view?.createEventItem(ev) || document.createElement('div');
+                    item.addClass('dayble-focus-event-abs');
+                    
+                    if (segmentType === 'start') item.addClass('dayble-focus-event-split-start');
+                    if (segmentType === 'end') item.addClass('dayble-focus-event-split-end');
+
+                    // Override background-color to use the variable set by createEventItem
+                    item.setCssProps({
+                        'background-color': 'var(--event-bg-color, var(--background-primary))',
+                        'color': 'var(--event-text-color, var(--text-normal))',
+                        'border-color': 'var(--event-border-color, var(--background-modifier-border))',
+                        'pointer-events': 'auto'
+                    });
+                    // For events <= 30 mins, make them compact
+                    if (durationMin <= 30) {
+                        item.addClass('dayble-event-compact');
+                    }
+
+                    // Add rich tooltip
+                    if (this.view && this.view.plugin.settings.tooltipEnabled) {
+                        setTooltip(item, this.view.getEventTooltipText(ev));
+                    }
+
+                    item.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
+                    item.style.setProperty('--focus-item-top', `${Math.round(top)}px`);
+                    item.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
+                    item.style.setProperty('--focus-item-height', `${Math.round(height)}px`);
+                    item.onclick = async (e) => { e.stopPropagation(); await this.view?.openEventModal(ev.id, ev.date || ev.startDate, ev.endDate); };
+                    // Drag to reposition within today modal (15-min granularity)
+                    item.ondragstart = (e) => {
+                        const dt = e.dataTransfer;
+                        if (!dt) return;
+                        this.dragId = ev.id;
+                        this.dragEl = item;
+                        
+                        // Capture EXACT distance from mouse to top of event
+                        const itemRect = item.getBoundingClientRect();
+                        this.dragOffsetY = e.clientY - itemRect.top;
+
+                        item.addClass('dragging');
+                        try {
+                            const img = new Image();
+                            img.width = 1; img.height = 1;
+                            dt.setDragImage(img, 0, 0);
+                        } catch {}
+                        let duration = (endTotal - startTotal); // Original full duration
+                        this.dragDuration = duration;
+                    };
+                    item.ondragend = () => { 
+                        const currentIndicator = this.contentEl.querySelector('.dayble-focus-drop');
+                        if (currentIndicator) currentIndicator.remove();
+                        this.gridContainer.querySelectorAll('.dayble-focus-cell.drop-target').forEach(el => el.removeClass('drop-target'));
+                        item.removeClass('dragging'); 
+                        this.dragId = undefined; 
+                        this.dragDuration = undefined; 
+                        this.dragEl = undefined; 
+                    };
+                    overlay.appendChild(item);
                 };
-                item.ondragend = () => { 
-                    const currentIndicator = this.contentEl.querySelector('.dayble-focus-drop');
-                    if (currentIndicator) currentIndicator.remove();
-                    this.gridContainer.querySelectorAll('.dayble-focus-cell.drop-target').forEach(el => el.removeClass('drop-target'));
-                    item.removeClass('dragging'); 
-                    this.dragId = undefined; 
-                    this.dragDuration = undefined; 
-                    this.dragEl = undefined; 
-                };
-                overlay.appendChild(item);
+
+                if (split && startTotal < boundary && endTotal > boundary) {
+                    renderSegment(startTotal, boundary, 'start');
+                    renderSegment(boundary, endTotal, 'end');
+                } else {
+                    renderSegment(startTotal, endTotal, 'full');
+                }
             });
         } catch (e) { console.debug('[Dayble] Focus grid event render:', e); }
     }
@@ -4252,6 +4405,19 @@ class DaybleSettingTab extends PluginSettingTab {
                     });
             });
 
+        new Setting(containerEl)
+            .setName('Only show pinned events in agenda view')
+            .setDesc('Shows only pinned events in agenda view. All events still appear in day view')
+            .addToggle(t => {
+                t.setValue(this.plugin.settings.onlyShowPinnedEventsAgenda ?? false)
+                    .onChange(async v => {
+                        this.plugin.settings.onlyShowPinnedEventsAgenda = v;
+                        await this.plugin.saveSettings();
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
+                    });
+            });
+
 
         
 
@@ -4593,6 +4759,39 @@ class DaybleSettingTab extends PluginSettingTab {
                     .setValue(this.plugin.settings.eventBorderRadius ?? 6)
                     .onChange(v => {
                         this.plugin.settings.eventBorderRadius = v;
+                        void this.plugin.saveSettings().then(async () => {
+                            updateEventPreview();
+                            const view = this.plugin.getCalendarView();
+                            await view?.render();
+                        });
+                    })
+                    .setDynamicTooltip();
+            });
+
+        new Setting(containerEl)
+            .setName('Day cell radius')
+            .setDesc('Controls day cell corner roundness (px)')
+            .addSlider(s => {
+                s.setLimits(0, 24, 1)
+                    .setValue(this.plugin.settings.dayCellRadius ?? 8)
+                    .onChange(v => {
+                        this.plugin.settings.dayCellRadius = v;
+                        void this.plugin.saveSettings().then(async () => {
+                            const view = this.plugin.getCalendarView();
+                            await view?.render();
+                        });
+                    })
+                    .setDynamicTooltip();
+            });
+
+        new Setting(containerEl)
+            .setName('Event vertical padding')
+            .setDesc('Controls vertical space inside events (0-12px)')
+            .addSlider(s => {
+                s.setLimits(0, 12, 1)
+                    .setValue(this.plugin.settings.eventVerticalPadding ?? 2)
+                    .onChange(v => {
+                        this.plugin.settings.eventVerticalPadding = v;
                         void this.plugin.saveSettings().then(async () => {
                             updateEventPreview();
                             const view = this.plugin.getCalendarView();
@@ -5706,6 +5905,9 @@ class DaybleSettingTab extends PluginSettingTab {
                         new IconPickerModal(this.plugin.app, (icon) => {
                             state.icon = icon;
                             void this.plugin.saveSettings().then(() => renderStates());
+                        }, () => {
+                            state.icon = '';
+                            void this.plugin.saveSettings().then(() => renderStates());
                         }).open();
                     });
                 });
@@ -5840,7 +6042,7 @@ class DaybleSettingTab extends PluginSettingTab {
                 (b.buttonEl).addClass('mod-cta');
                 b.onClick(async () => {
                     const items2 = (this.plugin.settings.eventStates || []).slice();
-                    items2.push({ id: randomId(), name: '', icon: 'plus', colorName: '', effect: '', animation: '', animation2: '' });
+                    items2.push({ id: randomId(), name: '', icon: '', colorName: '', effect: '', animation: '', animation2: '' });
                     this.plugin.settings.eventStates = items2;
                     await this.plugin.saveSettings();
                     renderStates();
