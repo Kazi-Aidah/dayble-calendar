@@ -402,6 +402,7 @@
     max-height: none !important;
     display: flex !important;
     flex-direction: column;
+    transition: opacity 0.2s ease, filter 0.2s ease;
 }
 .dayble-day-mode .dayble-focus-grid-container .dayble-focus-event-abs {
    border-radius: 0 !important;
@@ -616,6 +617,7 @@
     margin: 0 !important;
 }
 
+
 .dayble-focus-event-abs.dayble-event .dayble-event-title-container {
     padding: 0 !important;
     margin: 0 !important;
@@ -788,7 +790,7 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
     border-radius: var(--event-border-radius, var(--input-radius));
     display: flex;
     align-items: center;
-    justify-content: flex-start !important; /* Force left alignment for long events */
+    justify-content: center !important;
     gap: 6px;
     padding: var(--event-vertical-padding, 4px) 8px !important;
     box-sizing: border-box;
@@ -1110,6 +1112,72 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
     padding: 6px;
 }
 
+.dayble-custom-time-input {
+    display: flex;
+    align-items: center;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--input-radius);
+    padding: 0 8px;
+    flex: 1;
+    cursor: text;
+    justify-content: center;
+}
+
+.dayble-time-segment {
+    border: none !important;
+    padding: 6px 0 !important;
+    width: 22px;
+    background: transparent !important;
+    text-align: center;
+    box-shadow: none !important;
+    font-family: var(--font-monospace);
+    font-size: 1em;
+    color: var(--text-normal);
+}
+
+.dayble-time-segment-ampm {
+    width: 30px;
+    cursor: default;
+    font-weight: bold;
+    color: var(--text-muted);
+}
+
+.dayble-time-segment:focus {
+    color: var(--text-accent);
+    outline: none;
+}
+
+.dayble-time-separator {
+    color: var(--text-muted);
+    font-weight: bold;
+    user-select: none;
+    padding: 0 2px;
+}
+
+.dayble-ampm-toggle {
+    background: var(--background-secondary);
+    border: none;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.75em;
+    cursor: pointer;
+    color: var(--text-muted);
+    margin-left: 8px;
+    font-weight: bold;
+    transition: all 0.2s;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+}
+
+.dayble-ampm-toggle:hover {
+    color: var(--text-normal);
+    background: var(--background-modifier-hover);
+}
+
 .dayble-category-select {
     text-align: center;
 }
@@ -1240,7 +1308,6 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     z-index: 20;
     padding: 10px;
     margin-top: auto;
-    border-top: 3px solid var(--background-modifier-border);
     transform: translateY(2px);
 }
 
@@ -1853,6 +1920,16 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 .dayble-event-dim {
     opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.dayble-event-past-dim {
+    filter: grayscale(0.5);
+}
+
+.dayble-event-past-dim:hover {
+    opacity: 1 !important;
+    filter: grayscale(0);
 }
 
 .dayble-strikethrough .dayble-event-title,
@@ -2330,7 +2407,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .dayble-3day-header {
     display: grid;
     /* grid-template-columns set via JS sync from .dayble-focus-grid */
-    border-bottom: 1px solid var(--background-modifier-border);
+    border-bottom: none;
     background: var(--background-secondary);
 }
 
@@ -2365,6 +2442,13 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     flex-shrink: 0;
     background: var(--background-primary) !important;
     border-right: 1px solid var(--background-modifier-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-ui-smaller);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-weight: 500;
 }
 
 .dayble-3day-all-day-day {
@@ -2397,6 +2481,20 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .dayble-3day-mode .dayble-focus-scroll {
     height: 100% !important;
     flex: 1;
+}
+
+/* Fix 3-day mode vertical centering for timed events without affecting day mode */
+.dayble-3day-mode .dayble-focus-event-abs.dayble-event {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+}
+
+.dayble-3day-mode .dayble-focus-event-abs.dayble-event .dayble-event-inner {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
 }
 
 .dayble-all-day-section {
@@ -2497,6 +2595,32 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     align-items: center !important;
     padding: 0 6px !important;
     gap: 4px !important;
+}
+
+/* Current Time Indicator */
+.dayble-current-time-line {
+    position: absolute;
+    height: 3px;
+    background-color: var(--color-accent);
+    z-index: 100;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dayble-current-time-label {
+    background-color: var(--color-accent);
+    color: var(--text-on-accent);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    font-weight: bold;
+    white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
 /* Left align only if it has a description */
@@ -2632,6 +2756,11 @@ input[type="time"]::-webkit-calendar-picker-indicator {
    padding-bottom: 0 !important;
 }
 
+/* center 3 day events with desc */
+.dayble-3day-mode .dayble-focus-scroll .dayble-event-inner:has(.dayble-event-desc) {
+    flex: 0;
+}
+
 
 /* pin event icon */
 button.dayble-btn.db-btn.button {
@@ -2644,3 +2773,23 @@ button.dayble-btn.db-btn.button {
    padding-top: 6px !important;
 }
 
+/* 3 day refinement */
+.dayble-footer-day-mode { border: none !important; }
+.dayble-3day-mode .dayble-footer-day-mode { border: none !important; }
+.dayble-3day-container.dayble-modal-column.dayble-modal-full-height { border: 3px solid var(--background-modifier-border) !important; padding-bottom: 3px; }
+.dayble-3day-mode .dayble-focus-scroll { border: none !important; border-top: 3px solid var(--background-modifier-border) !important; border-bottom: 3px solid var(--background-modifier-border) !important; }
+.dayble-day-mode .dayble-footer-day-mode { border: none !important; margin: 0 !important; padding: 8px 0 !important; }
+.dayble-3day-header-spacer { background-color: var(--background-secondary) !important; border: none; }
+
+/* rotate all day text */
+.dayble-3day-all-day-spacer {
+    transform: rotate(270deg) scale(1.5);
+    background-color: transparent !important;
+    background: transparent !important;
+    border: none !important;
+}
+
+.dayble-3day-all-day-section {
+    background-color: var(--background-primary);
+    background: var(--background-primary);
+}

@@ -16,7 +16,7 @@ interface DaybleSettings {
     iconPlacement?: 'left' | 'right' | 'none' | 'top' | 'top-left' | 'top-right' | 'bottom' | 'bottom-left' | 'bottom-right';
     eventTitleAlign?: 'left' | 'center' | 'right' | 'center-left';
     eventDescAlign?: 'left' | 'center' | 'right' | 'center-left';
-    timeFormat?: '24h' | '12h';
+    timeFormat?: '24h' | '12h' | 'system';
     holderOpen?: boolean;
     holderWidth?: number; // in pixels
     weeklyNotesHeight?: number; // in pixels
@@ -59,6 +59,7 @@ interface DaybleSettings {
     threeDayDateFormat?: string;
     agendaTitleFormat?: string;
     agendaDateFormat?: string;
+    dimPastEvents?: number;
 } 
 
 const DEFAULT_SETTINGS: DaybleSettings = {
@@ -67,7 +68,7 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     iconPlacement: 'left',
     eventTitleAlign: 'center',
     eventDescAlign: 'center',
-    timeFormat: '24h',
+    timeFormat: 'system',
     holderOpen: true,
     weeklyNotesHeight: 200,
     preferUserColors: false,
@@ -105,6 +106,7 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     threeDayDateFormat: 'ddd D',
     agendaTitleFormat: 'MMMM YYYY',
     agendaDateFormat: 'dddd, D MMMM',
+    dimPastEvents: 0.60,
     swatches: [
         // { name: 'Red', color: '#eb3b5a', textColor: '#f9c6d0' },
         // { name: 'Orange', color: '#fa8231', textColor: '#fed8be' },
@@ -191,6 +193,18 @@ interface EventState {
 
 export default class DaybleCalendarPlugin extends Plugin {
     settings: DaybleSettings;
+    
+    getTimeFormat(): '12h' | '24h' {
+         const setting = this.settings.timeFormat;
+         if (setting === '12h') return '12h';
+         if (setting === '24h') return '24h';
+         // System or default
+         const is12h = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12;
+         if (is12h !== undefined) return is12h ? '12h' : '24h';
+         
+         const isMoment12h = moment.localeData().longDateFormat('LT').includes('A');
+         return isMoment12h ? '12h' : '24h';
+     }
 
     async fetchAllReleases() {
         const allReleases = [];
@@ -905,6 +919,10 @@ class DaybleCalendarView extends ItemView {
     }
 
     async render(titleEl?: HTMLElement) {
+        if (this.dayModeTodayModal) {
+            this.dayModeTodayModal.onClose();
+            this.dayModeTodayModal = undefined;
+        }
         if (this._dayModeRO) {
             this._dayModeRO.disconnect();
             this._dayModeRO = undefined;
@@ -2174,7 +2192,7 @@ class DaybleCalendarView extends ItemView {
     getEventTooltipText(ev: DaybleEvent): string {
         const title = (ev.title || 'Untitled').replace(/[#*`]/g, '');
         const description = (ev.description || '').replace(/[#*`]/g, '');
-        const timeFormatSetting = this.plugin.settings.timeFormat || '24h';
+        const timeFormatSetting = this.plugin.getTimeFormat();
         
         const parseTime = (timeStr: string) => {
             if (!timeStr) return null;
@@ -2808,6 +2826,125 @@ class EventModal extends Modal {
 
     setIcon(icon: string) { this.icon = icon; if (this.iconBtnEl) setIcon(this.iconBtnEl, icon || 'plus'); }
 
+    createCustomTimeInput(parent: HTMLElement, initialValue: string, format: '12h' | '24h') {
+        const wrap = parent.createDiv({ cls: 'dayble-custom-time-input' });
+        
+        const hInput = wrap.createEl('input', { type: 'text', cls: 'dayble-time-segment', attr: { maxlength: '2', placeholder: '00' } });
+        wrap.createSpan({ cls: 'dayble-time-separator', text: ':' });
+        const mInput = wrap.createEl('input', { type: 'text', cls: 'dayble-time-segment', attr: { maxlength: '2', placeholder: '00' } });
+        
+        let ampmInput: HTMLInputElement | null = null;
+        if (format === '12h') {
+            ampmInput = wrap.createEl('input', { type: 'text', cls: 'dayble-time-segment dayble-time-segment-ampm', attr: { readonly: 'true', value: 'AM' } });
+        }
+
+        const setValue = (val: string) => {
+            if (!val) {
+                hInput.value = '';
+                mInput.value = '';
+                if (ampmInput) ampmInput.value = 'AM';
+                return;
+            }
+            const parts = val.split(':');
+            let h = parseInt(parts[0] || '0', 10);
+            const m = parseInt(parts[1] || '0', 10);
+            
+            if (format === '12h') {
+                const isPM = h >= 12;
+                if (ampmInput) {
+                    ampmInput.value = isPM ? 'PM' : 'AM';
+                }
+                h = h % 12 || 12;
+                hInput.value = String(h).padStart(2, '0');
+            } else {
+                hInput.value = String(h).padStart(2, '0');
+            }
+            mInput.value = String(m).padStart(2, '0');
+        };
+
+        if (initialValue) setValue(initialValue);
+
+        const getValue = () => {
+            let h = parseInt(hInput.value || '0', 10);
+            const m = parseInt(mInput.value || '0', 10);
+            
+            if (format === '12h') {
+                const isPM = ampmInput?.value === 'PM';
+                if (isPM && h < 12) h += 12;
+                if (!isPM && h === 12) h = 0;
+            }
+            
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        };
+
+        const setupSegment = (el: HTMLInputElement, max: number, min: number = 0) => {
+            el.onfocus = () => el.select();
+            el.oninput = () => {
+                el.value = el.value.replace(/[^\d]/g, '');
+                if (el.value.length === 2) {
+                    if (el === hInput) mInput.focus();
+                    else if (el === mInput && ampmInput) ampmInput.focus();
+                }
+            };
+            el.onblur = () => {
+                let v = parseInt(el.value, 10);
+                if (isNaN(v)) v = min;
+                if (v > max) v = max;
+                if (v < min) v = min;
+                el.value = String(v).padStart(2, '0');
+            };
+            el.onkeydown = (e) => {
+                if (e.key === 'ArrowRight' && el === hInput) { e.preventDefault(); mInput.focus(); }
+                if (e.key === 'ArrowRight' && el === mInput && ampmInput) { e.preventDefault(); ampmInput.focus(); }
+                if (e.key === 'ArrowLeft' && el === mInput) { e.preventDefault(); hInput.focus(); }
+                if (e.key === 'ArrowLeft' && el === ampmInput) { e.preventDefault(); mInput.focus(); }
+                
+                if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    let v = parseInt(el.value, 10);
+                    if (isNaN(v)) v = 0;
+                    if (e.key === 'ArrowUp') v++; else v--;
+                    if (v > max) v = min;
+                    if (v < min) v = max;
+                    el.value = String(v).padStart(2, '0');
+                    el.select();
+                }
+                
+                if (e.key === 'Backspace' && el.value === '' && el === mInput) { e.preventDefault(); hInput.focus(); }
+                if (e.key === 'Backspace' && el === ampmInput) { e.preventDefault(); mInput.focus(); }
+            };
+        };
+
+        setupSegment(hInput, format === '12h' ? 12 : 23, format === '12h' ? 1 : 0);
+        setupSegment(mInput, 59);
+
+        if (ampmInput) {
+            ampmInput.onfocus = () => ampmInput?.select();
+            ampmInput.onkeydown = (e) => {
+                if (e.key === 'ArrowLeft') { e.preventDefault(); mInput.focus(); }
+                if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === ' ') {
+                    e.preventDefault();
+                    ampmInput!.value = ampmInput!.value === 'AM' ? 'PM' : 'AM';
+                    ampmInput?.select();
+                }
+                if (e.key.toLowerCase() === 'a') {
+                    e.preventDefault();
+                    ampmInput!.value = 'AM';
+                    ampmInput?.select();
+                }
+                if (e.key.toLowerCase() === 'p') {
+                    e.preventDefault();
+                    ampmInput!.value = 'PM';
+                    ampmInput?.select();
+                }
+            };
+        }
+
+        setValue(initialValue);
+        
+        return { getValue, setValue };
+    }
+
     onOpen() {
         const c = this.contentEl;
         c.empty();
@@ -3013,12 +3150,13 @@ class EventModal extends Modal {
         // Time row (start and end on same row)
         const rowTime = c.createDiv({ cls: 'dayble-modal-row' });
         rowTime.addClass('db-modal-row');
-        const startTime = rowTime.createEl('input', { type: 'time', cls: 'dayble-input' });
-        startTime.addClass('db-input');
-        startTime.value = this.ev?.time?.split('-')[0] ?? (this.defaultStartTime ?? '');
-        const endTime = rowTime.createEl('input', { type: 'time', cls: 'dayble-input' });
-        endTime.addClass('db-input');
-        endTime.value = this.ev?.time?.split('-')[1] ?? (this.defaultEndTime ?? '');
+
+        const timeFmt = this.plugin.getTimeFormat();
+        const startVal = this.ev?.time?.split('-')[0] ?? (this.defaultStartTime ?? '');
+        const endVal = this.ev?.time?.split('-')[1] ?? (this.defaultEndTime ?? '');
+
+        const customStart = this.createCustomTimeInput(rowTime, startVal, timeFmt);
+        const customEnd = this.createCustomTimeInput(rowTime, endVal, timeFmt);
         
         const descInput = c.createEl('textarea', { cls: 'dayble-textarea', attr: { placeholder: 'Description' } });
         descInput.addClass('db-textarea');
@@ -3086,20 +3224,17 @@ class EventModal extends Modal {
             }
             
             const finalIsMultiDay = startDate.value !== endDateInput.value;
+            const startTimeVal = customStart.getValue();
+            const endTimeVal = customEnd.getValue();
+            payload.time = (startTimeVal && endTimeVal) ? `${startTimeVal}-${endTimeVal}` : (startTimeVal || '');
             
-            if (finalIsMultiDay && endTime && endDateInput) {
+            if (finalIsMultiDay) {
                 // Multi-day event
-                const startTimeVal = startTime.value || '';
-                const endTimeVal = endTime.value || '';
-                payload.time = (startTimeVal && endTimeVal) ? `${startTimeVal}-${endTimeVal}` : (startTimeVal || '');
                 payload.startDate = startDate.value;
                 payload.endDate = endDateInput.value;
                 payload.date = undefined;
             } else {
                 // Single day event
-                const startTimeVal = startTime.value || '';
-                const endTimeVal = endTime?.value || '';
-                payload.time = (startTimeVal && endTimeVal) ? `${startTimeVal}-${endTimeVal}` : (startTimeVal || '');
                 payload.date = startDate.value;
                 payload.startDate = startDate.value;
                 payload.endDate = startDate.value;
@@ -3355,6 +3490,7 @@ class TodayModal extends Modal {
     afternoonGrid: HTMLElement;
     overlay: HTMLElement;
     scroller: HTMLElement;
+    currentTimeInterval?: any;
 
     constructor(app: App, date: string | string[], events: DaybleEvent[], view?: DaybleCalendarView) {
         super(app);
@@ -3386,7 +3522,7 @@ class TodayModal extends Modal {
             title.addClass('dayble-modal-title');
         }
 
-        const fmt = this.view?.plugin?.settings?.timeFormat ?? '24h';
+        const fmt = this.view?.plugin?.getTimeFormat() ?? '24h';
         const pad = (n: number) => String(n).padStart(2,'0');
         const nextDateStr = (s: string) => {
             const [yy, mm, dd] = s.split('-').map(Number);
@@ -3438,7 +3574,7 @@ class TodayModal extends Modal {
             });
 
             // All-Day Setup
-            allDaySection.createDiv({ cls: 'dayble-3day-all-day-spacer' });
+            allDaySection.createDiv({ cls: 'dayble-3day-all-day-spacer', text: 'All day' });
             dates.forEach(dStr => {
                 const dayCol = allDaySection!.createDiv({ cls: 'dayble-3day-all-day-day' });
                 dayCol.setAttr('data-date', dStr);
@@ -3449,13 +3585,20 @@ class TodayModal extends Modal {
                 
                 dayCol.ondragover = (e) => {
                     e.preventDefault();
-                    dayCol.addClass('drop-target');
+                    e.stopPropagation();
+                    if (this.dragId) {
+                        e.dataTransfer!.dropEffect = 'move';
+                        dayCol.addClass('drop-target');
+                    }
                 };
-                dayCol.ondragleave = () => {
+                dayCol.ondragleave = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     dayCol.removeClass('drop-target');
                 };
                 dayCol.ondrop = async (e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     dayCol.removeClass('drop-target');
                     const id = this.dragId;
                     if (!id) return;
@@ -3506,6 +3649,7 @@ class TodayModal extends Modal {
                     item.ondragstart = (e) => {
                         const dt = e.dataTransfer;
                         if (!dt) return;
+                        dt.effectAllowed = 'move';
                         this.dragId = ev.id;
                         this.dragEl = item;
                         this.dragDuration = 60; // Default 1 hour for all-day items dropped into grid
@@ -3531,6 +3675,18 @@ class TodayModal extends Modal {
                     };
 
                     dayCol.appendChild(item);
+
+                    // Dim past events if setting is enabled
+                    const dimOpacity = this.view?.plugin?.settings?.dimPastEvents ?? 1.0;
+                    if (dimOpacity < 1.0) {
+                        const todayStr = moment().format('YYYY-MM-DD');
+                        if (dStr < todayStr) {
+                            item.addClass('dayble-event-past-dim');
+                            item.style.opacity = dimOpacity.toString();
+                        }
+                        // All-day events for today aren't "past" in the same way, 
+                        // so we only dim them if the day is completely in the past.
+                    }
                 });
             });
 
@@ -3676,6 +3832,19 @@ class TodayModal extends Modal {
         // Container for grids
         const gridContainer = scroller.createDiv({ cls: 'dayble-focus-grid-container' });
         this.gridContainer = gridContainer;
+
+        // Current time line update
+        if (this.currentTimeInterval) clearInterval(this.currentTimeInterval);
+        this.currentTimeInterval = setInterval(() => this.renderCurrentTimeLine(), 60000);
+        
+        // Initial render and setup observer for layout changes
+        requestAnimationFrame(() => this.renderCurrentTimeLine());
+        const timeLineObs = new ResizeObserver(() => this.renderCurrentTimeLine());
+        timeLineObs.observe(gridContainer);
+        // @ts-ignore
+        if (!this._dayMode3ROs) this._dayMode3ROs = [];
+        this._dayMode3ROs.push(timeLineObs);
+
         let morningGrid: HTMLElement, afternoonGrid: HTMLElement;
         if (split && !isMulti) {
             morningGrid = gridContainer.createDiv({ cls: 'dayble-focus-grid morning' });
@@ -4042,9 +4211,16 @@ class TodayModal extends Modal {
 
         // Snap dragging to min15 increments, with magnetic indicator and day column awareness
         scroller.ondragover = (e) => {
-            e.preventDefault();
             const id = this.dragId;
             if (!id) return;
+            
+            // If dragging over all-day section, let it handle the event
+            if ((e.target as HTMLElement).closest('.dayble-3day-all-day-section')) {
+                return;
+            }
+
+            e.preventDefault();
+            e.dataTransfer!.dropEffect = 'move';
             const durationMin = this.dragDuration || 30;
             
             const info = getSlotInfo(e.clientX, e.clientY - (this.dragOffsetY || 0));
@@ -4089,11 +4265,16 @@ class TodayModal extends Modal {
             clearTargets();
         };
         scroller.ondrop = async (e) => {
-            e.preventDefault();
             const id = this.dragId;
             const el = this.dragEl;
             if (!id) return;
             
+            // If dropping on all-day section, let it handle the event
+            if ((e.target as HTMLElement).closest('.dayble-3day-all-day-section')) {
+                return;
+            }
+
+            e.preventDefault();
             const info = getSlotInfo(e.clientX, e.clientY - (this.dragOffsetY || 0));
             if (!info) return;
 
@@ -4162,6 +4343,77 @@ class TodayModal extends Modal {
         };
 
         this.renderEvents();
+    }
+
+    onClose() {
+        if (this.currentTimeInterval) {
+            clearInterval(this.currentTimeInterval);
+            this.currentTimeInterval = undefined;
+        }
+        // @ts-ignore
+        if (this._dayMode3ROs) {
+            // @ts-ignore
+            this._dayMode3ROs.forEach(obs => obs.disconnect());
+            // @ts-ignore
+            this._dayMode3ROs = [];
+        }
+    }
+
+    renderCurrentTimeLine() {
+        const gridContainer = this.gridContainer;
+        if (!gridContainer) return;
+
+        // Remove existing line
+        gridContainer.querySelectorAll('.dayble-current-time-line').forEach(el => el.remove());
+
+        const isMulti = Array.isArray(this.date);
+        const dates = isMulti ? (this.date as string[]) : [this.date as string];
+        const todayStr = moment().format('YYYY-MM-DD');
+        const dayIdx = dates.indexOf(todayStr);
+
+        if (dayIdx === -1) return;
+
+        const now = new Date();
+        const hh = now.getHours();
+        const mm = now.getMinutes();
+        const totalMin = (hh * 60) + mm;
+
+        const toIdx = (h: number, m: number) => (h * 2) + (m >= 30 ? 1 : 0);
+        const slotIdx = toIdx(hh, mm);
+        
+        const cell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${slotIdx}"][data-day="${dayIdx}"]`) as HTMLElement;
+        if (!cell) return;
+
+        const cellRect = cell.getBoundingClientRect();
+        const containerRect = gridContainer.getBoundingClientRect();
+        
+        // Skip if container or cell has no dimensions (likely not visible yet)
+        if (containerRect.width === 0 || cellRect.width === 0) return;
+        
+        const rowHeight = cell.offsetHeight || 60;
+        const pxPer15 = rowHeight / 2;
+        const withinMin = (mm % 30);
+        
+        const top = (cellRect.top - containerRect.top) + (withinMin / 15) * pxPer15;
+        
+        const line = gridContainer.createDiv({ cls: 'dayble-current-time-line' });
+        line.style.top = `${Math.round(top)}px`;
+        
+        // Position relative to the cell's horizontal position
+        line.style.left = `${cellRect.left - containerRect.left}px`;
+        line.style.width = `${cellRect.width}px`;
+
+        const timeLabel = line.createDiv({ cls: 'dayble-current-time-label' });
+        const fmt = this.view?.plugin?.getTimeFormat() ?? '24h';
+        let timeStr = '';
+        if (fmt === '12h') {
+            const h12 = ((hh % 12) || 12);
+            const ampm = hh >= 12 ? 'pm' : 'am';
+            timeStr = `${String(h12).padStart(2, '0')}:${String(mm).padStart(2, '0')}${ampm}`;
+        } else {
+            timeStr = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+        }
+        timeLabel.textContent = timeStr;
     }
 
     renderEvents() {
@@ -4261,6 +4513,23 @@ class TodayModal extends Modal {
 
                         const item = this.view?.createEventItem(ev, false, true) || document.createElement('div');
                         item.addClass('dayble-focus-event-abs');
+
+                        // Dim past events if setting is enabled
+                        const dimOpacity = this.view?.plugin?.settings?.dimPastEvents ?? 1.0;
+                        if (dimOpacity < 1.0) {
+                            const todayStr = moment().format('YYYY-MM-DD');
+                            if (dStr === todayStr) {
+                                const now = new Date();
+                                const currentTotalMin = (now.getHours() * 60) + now.getMinutes();
+                                if (endTotal <= currentTotalMin) {
+                                    item.addClass('dayble-event-past-dim');
+                                    item.style.opacity = dimOpacity.toString();
+                                }
+                            } else if (dStr < todayStr) {
+                                item.addClass('dayble-event-past-dim');
+                                item.style.opacity = dimOpacity.toString();
+                            }
+                        }
                         
                         if (segmentType === 'start') item.addClass('dayble-focus-event-split-start');
                         if (segmentType === 'end') item.addClass('dayble-focus-event-split-end');
@@ -4297,6 +4566,7 @@ class TodayModal extends Modal {
                         item.ondragstart = (e) => {
                             const dt = e.dataTransfer;
                             if (!dt) return;
+                            dt.effectAllowed = 'move';
                             this.dragId = ev.id;
                             this.dragEl = item;
                             
@@ -4617,11 +4887,12 @@ class DaybleSettingTab extends PluginSettingTab {
             .setName('Time format')
             .setDesc('Display times in 24h or 12h format')
             .addDropdown(d => {
-                d.addOption('24h', '24-hour')
+                d.addOption('system', 'System')
+                    .addOption('24h', '24-hour')
                     .addOption('12h', '12-hour')
-                    .setValue(this.plugin.settings.timeFormat ?? '24h')
+                    .setValue(this.plugin.settings.timeFormat ?? 'system')
                     .onChange(v => {
-                        this.plugin.settings.timeFormat = v as "24h" | "12h" | undefined;
+                        this.plugin.settings.timeFormat = v as "24h" | "12h" | "system" | undefined;
                         void this.plugin.saveSettings().then(async () => {
                             const view = this.plugin.getCalendarView();
                             await view?.render();
@@ -4876,6 +5147,23 @@ class DaybleSettingTab extends PluginSettingTab {
                         this.plugin.settings.agendaDateFormat = 'dddd, D MMMM';
                         await this.plugin.saveSettings();
                         this.display();
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
+                    });
+            });
+
+        new Setting(containerEl).setName('Day mode').setHeading();
+
+        new Setting(containerEl)
+            .setName('Dim past events opacity')
+            .setDesc('Set the opacity for events that have already passed in day and 3-day mode. Set to 1.0 to disable dimming.')
+            .addSlider(s => {
+                s.setLimits(0.1, 1, 0.05)
+                    .setValue(typeof this.plugin.settings.dimPastEvents === 'number' ? this.plugin.settings.dimPastEvents : 0.60)
+                    .setDynamicTooltip()
+                    .onChange(async v => {
+                        this.plugin.settings.dimPastEvents = v;
+                        await this.plugin.saveSettings();
                         const view = this.plugin.getCalendarView();
                         await view?.render();
                     });

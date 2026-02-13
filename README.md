@@ -53,3 +53,6 @@ Close and reopen Obsidian or reload the plugins from Obsidian Community Plugins 
 
 ## Feedback or Feature Request
 Found any bugs or want new features? Create an issue [here](https://github.com/Kazi-Aidah/dayble-calendar/issues/new)!
+
+---
+use .dayble-current-time-line and .dayble-current-time-label to change the style of the current time indicator.
