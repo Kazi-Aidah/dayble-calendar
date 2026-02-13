@@ -66,8 +66,8 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     weekStartDay: 0,
     entriesFolder: '',
     iconPlacement: 'left',
-    eventTitleAlign: 'center',
-    eventDescAlign: 'center',
+    eventTitleAlign: 'center-left',
+    eventDescAlign: 'center-left',
     timeFormat: 'system',
     holderOpen: true,
     weeklyNotesHeight: 200,
@@ -1112,23 +1112,23 @@ class DaybleCalendarView extends ItemView {
         ordered.forEach(d => header.createDiv({ text: d, cls: 'dayble-grid-header-cell' }));
 
         // Filter long events for week view
-        let longEventsPreset = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
-        if (this.plugin.settings.onlyShowPinnedEventsWeek) {
-            longEventsPreset = longEventsPreset.filter(ev => ev.pinned);
-        }
+        // let longEventsPreset = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
+        // if (this.plugin.settings.onlyShowPinnedEventsWeek) {
+        //     longEventsPreset = longEventsPreset.filter(ev => ev.pinned);
+        // }
 
         // Pre-calculate long event lanes (reused from month view logic)
-        const vPadding = this.plugin.settings.eventVerticalPadding ?? 2;
-        const segmentHeight = 24 + (vPadding * 2);
-        const segmentGap = 4;
-        const LANE_UNIT_HEIGHT = 4;
-        const lanesPerEvent = Math.ceil(segmentHeight / LANE_UNIT_HEIGHT);
-        const lanesPerGap = Math.ceil(segmentGap / LANE_UNIT_HEIGHT);
-        const lanesPerDesc = 5;
-        const lanesPerIcon = 7;
+        // const vPadding = this.plugin.settings.eventVerticalPadding ?? 2;
+        // const segmentHeight = 24 + (vPadding * 2);
+        // const segmentGap = 4;
+        // const LANE_UNIT_HEIGHT = 4;
+        // const lanesPerEvent = Math.ceil(segmentHeight / LANE_UNIT_HEIGHT);
+        // const lanesPerGap = Math.ceil(segmentGap / LANE_UNIT_HEIGHT);
+        // const lanesPerDesc = 5;
+        // const lanesPerIcon = 7;
 
-        const { maxLanesByDate } = this.calculateLongEventLanes(longEventsPreset, { lanesPerEvent, lanesPerGap, lanesPerDesc, lanesPerIcon });
-        const countsByDate = maxLanesByDate;
+        // const { maxLanesByDate } = this.calculateLongEventLanes(longEventsPreset, { lanesPerEvent, lanesPerGap, lanesPerDesc, lanesPerIcon });
+        // const countsByDate = maxLanesByDate;
 
         // Grid
         const fragment = document.createDocumentFragment();
@@ -1177,7 +1177,7 @@ class DaybleCalendarView extends ItemView {
             if (this.plugin.settings.onlyShowPinnedEventsWeek) {
                 dayEvents = dayEvents.filter(e => e.pinned);
             }
-            dayEvents.forEach(e => container.appendChild(this.createEventItem(e)));
+            dayEvents.forEach(e => container.appendChild(this.createEventItem(e, false, false, false)));
             
             // Drag and Drop (reused optimized logic from month view)
             container.ondragover = (e) => { 
@@ -1471,22 +1471,22 @@ class DaybleCalendarView extends ItemView {
         ordered.forEach(d => header.createDiv({ text: d, cls: 'dayble-grid-header-cell' }));
 
         // Filter long events for month view
-        let longEventsPreset = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
-        if (this.plugin.settings.onlyShowPinnedEventsMonth) {
-            longEventsPreset = longEventsPreset.filter(ev => ev.pinned);
-        }
+        // let longEventsPreset = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
+        // if (this.plugin.settings.onlyShowPinnedEventsMonth) {
+        //     longEventsPreset = longEventsPreset.filter(ev => ev.pinned);
+        // }
 
-        const vPadding = this.plugin.settings.eventVerticalPadding ?? 2;
-        const segmentHeight = 24 + (vPadding * 2);
-        const segmentGap = 4;
-        const LANE_UNIT_HEIGHT = 4;
-        const lanesPerEvent = Math.ceil(segmentHeight / LANE_UNIT_HEIGHT);
-        const lanesPerGap = Math.ceil(segmentGap / LANE_UNIT_HEIGHT);
-        const lanesPerDesc = 5;
-        const lanesPerIcon = 7;
+        // const vPadding = this.plugin.settings.eventVerticalPadding ?? 2;
+        // const segmentHeight = 24 + (vPadding * 2);
+        // const segmentGap = 4;
+        // const LANE_UNIT_HEIGHT = 4;
+        // const lanesPerEvent = Math.ceil(segmentHeight / LANE_UNIT_HEIGHT);
+        // const lanesPerGap = Math.ceil(segmentGap / LANE_UNIT_HEIGHT);
+        // const lanesPerDesc = 5;
+        // const lanesPerIcon = 7;
 
-        const { maxLanesByDate } = this.calculateLongEventLanes(longEventsPreset, { lanesPerEvent, lanesPerGap, lanesPerDesc, lanesPerIcon });
-        const countsByDate = maxLanesByDate;
+        // const { maxLanesByDate } = this.calculateLongEventLanes(longEventsPreset, { lanesPerEvent, lanesPerGap, lanesPerDesc, lanesPerIcon });
+        // const countsByDate = maxLanesByDate;
 
         for (let i = 0; i < leading; i++) {
             const c = this.gridEl.createDiv({ cls: 'dayble-day dayble-inactive' });
@@ -1525,7 +1525,7 @@ class DaybleCalendarView extends ItemView {
             if (this.plugin.settings.onlyShowPinnedEventsMonth) {
                 dayEvents = dayEvents.filter(e => e.pinned);
             }
-            dayEvents.forEach(e => container.appendChild(this.createEventItem(e)));
+            dayEvents.forEach(e => container.appendChild(this.createEventItem(e, false, false, false)));
             
             // Allow reordering events within the container
             container.ondragover = (e) => { 
@@ -1920,14 +1920,14 @@ class DaybleCalendarView extends ItemView {
                 });
 
                 dayEvents.forEach(ev => {
-                    const item = agendaContainer.appendChild(this.createEventItem(ev));
+                    const isMultiDay = ev.startDate && ev.endDate && ev.startDate !== ev.endDate;
+                    const isAllDay = !ev.time || isMultiDay;
+                    const item = agendaContainer.appendChild(this.createEventItem(ev, false, false, isAllDay));
                     const itemEl = item as HTMLElement;
                     itemEl.setCssProps({ 'width': '100%' });
                     
-                    // Add special class for long (multi-day) or all-day (no time) events
-                    const isMultiDay = ev.startDate && ev.endDate && ev.startDate !== ev.endDate;
-                    const isAllDay = !ev.time || isMultiDay;
                     if (isAllDay) {
+                        itemEl.addClass('dayble-agenda-all-day');
                         itemEl.addClass('dayble-agenda-long-events');
                     }
                 });
@@ -2112,7 +2112,7 @@ class DaybleCalendarView extends ItemView {
                 let item = this._longEls.get(key);
                 if (!item || item.dataset.styleSig !== styleSig || item.dataset.contentSig !== contentSig) {
                     if (item && item.parentElement) item.remove();
-                    item = this.createEventItem(ev, true); // isLong=true hides description
+                    item = this.createEventItem(ev, true, false, true); // isLong=true hides description, isAllDay=true for formatting
                     item.addClass('dayble-long-event', 'dayble-long-event-single', 'dayble-absolute-box');
                     item.dataset.longKey = key;
                     item.dataset.styleSig = styleSig;
@@ -2142,7 +2142,7 @@ class DaybleCalendarView extends ItemView {
                     let item = this._longEls.get(key);
                     if (!item || item.dataset.styleSig !== styleSig || item.dataset.contentSig !== contentSig) {
                         if (item && item.parentElement) item.remove();
-                        item = this.createEventItem(ev, true);
+                        item = this.createEventItem(ev, true, false, true);
                         item.addClass('dayble-long-event', 'dayble-absolute-box');
                         if (row === startRow) item.addClass('dayble-long-event-start');
                         if (row === endRow) item.addClass('dayble-long-event-end');
@@ -2268,7 +2268,7 @@ class DaybleCalendarView extends ItemView {
         return lines.join('\n');
     }
 
-    createEventItem(ev: DaybleEvent, isLong = false, isDayMode = false): HTMLElement {
+    createEventItem(ev: DaybleEvent, isLong = false, isDayMode = false, isAllDay = false): HTMLElement {
         const item = document.createElement('div');
         item.className = 'dayble-event';
         if (isLong) item.addClass('dayble-long-event');
@@ -2286,8 +2286,23 @@ class DaybleCalendarView extends ItemView {
         const eventSettings = ev.settings || {};
         const globalSettings = this.plugin.settings;
         
+        const isAllDaySection = isAllDay;
+
+        const isAgenda = item.parentElement?.classList.contains('dayble-agenda-container') || 
+                        item.parentElement?.closest('.dayble-agenda-container') !== null;
+
         let titleAlign = eventSettings.titleAlign || globalSettings.eventTitleAlign || 'center';
         let descAlign = eventSettings.descAlign || globalSettings.eventDescAlign || 'center';
+
+        // Agenda override: Force center if globally set to center-left
+        if (isAgenda && titleAlign === 'center-left') titleAlign = 'center';
+        if (isAgenda && descAlign === 'center-left') descAlign = 'center';
+
+        // FORCE LEFT for all-day sections
+        if (isAllDaySection) {
+            titleAlign = 'left';
+            descAlign = 'left';
+        }
 
         const isCenterLeftMode = titleAlign === 'center-left' && descAlign === 'center-left';
 
@@ -2315,41 +2330,35 @@ class DaybleCalendarView extends ItemView {
                 const checkAlignment = () => {
                     const titleEl = item.querySelector('.dayble-event-title') as HTMLElement;
                     if (!titleEl) return;
-
                     // Measure natural single-line width
                     const canvas = document.createElement('canvas');
                     const context = canvas.getContext('2d');
                     if (!context) return;
-                    
-                    const computedStyle = window.getComputedStyle(titleEl);
+                                        const computedStyle = window.getComputedStyle(titleEl);
                     context.font = `${computedStyle.fontWeight} ${computedStyle.fontSize} ${computedStyle.fontFamily}`;
                     const naturalWidth = context.measureText(titleEl.innerText).width;
-
                     const containerWidth = item.getBoundingClientRect().width;
                     const iconEl = item.querySelector('.dayble-event-icon') as HTMLElement;
                     let iconWidth = 0;
-                    if (iconEl && iconEl.offsetParent) {
+                    const isSideIcon = item.classList.contains('dayble-icon-placement-left') || item.classList.contains('dayble-icon-placement-right');
+                    
+                    if (iconEl && iconEl.offsetParent && isSideIcon) {
                         iconWidth = iconEl.getBoundingClientRect().width;
                         const iconStyle = window.getComputedStyle(iconEl);
                         iconWidth += parseFloat(iconStyle.marginLeft) + parseFloat(iconStyle.marginRight);
                     }
-                    
-                    const eventStyle = window.getComputedStyle(item);
+                                        const eventStyle = window.getComputedStyle(item);
                     const padding = parseFloat(eventStyle.paddingLeft) + parseFloat(eventStyle.paddingRight);
                     const gap = parseFloat(eventStyle.gap) || 0;
-                    
-                    const availableWidth = containerWidth - padding - (iconWidth > 0 ? iconWidth + gap : 0) - 4; // 4px extra buffer
-
+                                        const availableWidth = containerWidth - padding - (iconWidth > 0 ? iconWidth + gap : 0) - 4; // 4px extra buffer
                     if (naturalWidth >= availableWidth) {
                         item.addClass('dayble-force-left');
                     } else {
                         item.removeClass('dayble-force-left');
                     }
                 };
-
                 // Initial check
                 checkAlignment();
-
                 // Observe for size changes (e.g., window resize)
                 const observer = new ResizeObserver(() => checkAlignment());
                 observer.observe(item);
@@ -2473,9 +2482,9 @@ class DaybleCalendarView extends ItemView {
             item.addClass('dayble-long-event-complex');
         }
 
-        if (this.plugin.settings.iconPlacement !== 'none' && iconToUse) {
-            let place = this.plugin.settings.iconPlacement ?? 'left';
-            if (isDayMode) place = 'top'; // Force top in day mode
+        if ((isAllDaySection || this.plugin.settings.iconPlacement !== 'none') && iconToUse) {
+            let place = isAllDaySection ? 'left' : (this.plugin.settings.iconPlacement ?? 'left');
+            if (!isAllDaySection && isDayMode) place = 'top'; // Force top in day mode
             
 
 
@@ -2556,10 +2565,12 @@ class DaybleCalendarView extends ItemView {
                 const dragImg = item.cloneNode(true) as HTMLElement;
                 dragImg.addClass('dayble-drag-ghost');
                 // Ensure ghost is "visible" for browser capture but off-screen or behind
-                dragImg.style.position = 'fixed';
-                dragImg.style.top = '0';
-                dragImg.style.left = '0';
-                dragImg.style.zIndex = '-10000';
+                dragImg.setCssProps({
+                    'position': 'fixed',
+                    'top': '0',
+                    'left': '0',
+                    'z-index': '-10000'
+                });
                 const rect = item.getBoundingClientRect();
                 dragImg.setCssProps({
                     'width': `${rect.width}px`,
@@ -2684,7 +2695,7 @@ class DaybleCalendarView extends ItemView {
         if (!list) return;
         list.empty();
         this.holderEvents.forEach(ev => {
-            const item = this.createEventItem(ev);
+            const item = this.createEventItem(ev, false, false, false);
             item.dataset.source = 'holder';
             item.ondragstart = e => {
                 this.isDragging = true;
@@ -2696,10 +2707,12 @@ class DaybleCalendarView extends ItemView {
                     const dragImg = item.cloneNode(true) as HTMLElement;
                     dragImg.addClass('dayble-drag-ghost');
                     // Ensure ghost is "visible" for browser capture but off-screen or behind
-                    dragImg.style.position = 'fixed';
-                    dragImg.style.top = '0';
-                    dragImg.style.left = '0';
-                    dragImg.style.zIndex = '-10000';
+                    dragImg.setCssProps({
+                        'position': 'fixed',
+                        'top': '0',
+                        'left': '0',
+                        'z-index': '-10000'
+                    });
                     const rect = item.getBoundingClientRect();
                     dragImg.setCssProps({
                         'width': `${rect.width}px`,
@@ -3191,12 +3204,16 @@ class EventModal extends Modal {
         };
         
         // Date row (above times)
-        const rowDate = c.createDiv({ cls: 'dayble-modal-row' });
+        const rowDate = c.createDiv({ cls: 'dayble-modal-row dayble-modal-row-center' });
         rowDate.addClass('db-modal-row');
+        
+        rowDate.createSpan({ text: 'Start:', cls: 'dayble-modal-label' });
         const startDate = rowDate.createEl('input', { type: 'date', cls: 'dayble-input' });
         startDate.addClass('db-input');
+        startDate.style.setProperty('margin-right', '6px', 'important');
         startDate.value = this.ev?.date ?? this.ev?.startDate ?? this.date ?? '';
         
+        rowDate.createSpan({ text: 'End:', cls: 'dayble-modal-label' });
         // End date in same row
         const endDateInput = rowDate.createEl('input', { type: 'date', cls: 'dayble-input' });
         endDateInput.addClass('db-input');
@@ -3539,6 +3556,7 @@ class TodayModal extends Modal {
     dragEl?: HTMLElement;
     dragOffsetY?: number;
     lastScrollTop?: number;
+    _dayMode3ROs: ResizeObserver[] = [];
     
     gridContainer: HTMLElement;
     morningGrid: HTMLElement;
@@ -3692,7 +3710,7 @@ class TodayModal extends Modal {
                 });
 
                 dayEvents.forEach(ev => {
-                    const item = this.view?.createEventItem(ev) || document.createElement('div');
+                    const item = this.view?.createEventItem(ev, false, false, true) || document.createElement('div');
                     item.addClass('dayble-all-day-event-item');
                     item.setCssProps({
                         'width': '100%',
@@ -3841,7 +3859,7 @@ class TodayModal extends Modal {
                     'flex-shrink': '0'
                 });
                 allDayEvents.forEach(ev => {
-                    const item = this.view?.createEventItem(ev) || document.createElement('div');
+                    const item = this.view?.createEventItem(ev, false, false, true) || document.createElement('div');
                     item.addClass('dayble-all-day-event-item');
                     item.setCssProps({
                         'flex': '1 1 calc(50% - 4px)',
@@ -4248,7 +4266,7 @@ class TodayModal extends Modal {
         const addBtn = footer.createEl('button', { cls: 'dayble-today-add-btn', text: '+ add event' });
         addBtn.addClass('db-btn');
         addBtn.addClass('dayble-add-btn-full');
-        addBtn.onclick = async () => { await this.view?.openEventModal(undefined, this.date); };
+        addBtn.onclick = async () => { await this.view?.openEventModal(undefined, Array.isArray(this.date) ? this.date[0] : this.date); };
         this.contentEl.addEventListener('click', (ev) => {
             const a = (ev.target as HTMLElement).closest('a');
             if (!a) return;
@@ -4431,7 +4449,7 @@ class TodayModal extends Modal {
         const now = new Date();
         const hh = now.getHours();
         const mm = now.getMinutes();
-        const totalMin = (hh * 60) + mm;
+        // const totalMin = (hh * 60) + mm;
 
         const toIdx = (h: number, m: number) => (h * 2) + (m >= 30 ? 1 : 0);
         const slotIdx = toIdx(hh, mm);
@@ -4566,7 +4584,7 @@ class TodayModal extends Modal {
                         const left = (sRect.left - gRect.left) + (column * colWidth);
                         const width = colWidth;
 
-                        const item = this.view?.createEventItem(ev, false, true) || document.createElement('div');
+                        const item = this.view?.createEventItem(ev, false, true, false) || document.createElement('div');
                         item.addClass('dayble-focus-event-abs');
 
                         // Dim past events if setting is enabled
@@ -4879,7 +4897,7 @@ class DaybleSettingTab extends PluginSettingTab {
         
         
         ;
-        new Setting(containerEl).setName('General').setHeading();
+        // new Setting(containerEl).setName('').setHeading();
         ;
 
         new Setting(containerEl)
@@ -4958,7 +4976,7 @@ class DaybleSettingTab extends PluginSettingTab {
         const dateFormatHeading = new Setting(containerEl).setName('Date formats').setHeading();
         dateFormatHeading.descEl.createSpan({ text: 'Customize how dates appear in different views. ' });
         dateFormatHeading.descEl.createEl('a', {
-            text: 'Check here for more syntax',
+            text: 'Check here for more syntax.',
             href: 'https://momentjs.com/docs/#/displaying/format/'
         });
         
@@ -4969,12 +4987,14 @@ class DaybleSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Week title')
-            .setDesc('Format for the week view title')
+            .setDesc('Format for the week view title.')
             .addDropdown(d => {
                 d.addOption('month_year', now.format('MMMM YYYY'))
                     .addOption('week_number', `Week ${now.week()}`)
                     .addOption('full_range', `${startOfWeek.format('MMMM D')} to ${endOfWeek.format('MMMM D')}`)
                     .addOption('short_range', `${startOfWeek.format('MMM D')} to ${endOfWeek.format('MMM D')}`)
+                    .addOption('d_mmmm_rangeto', `${startOfWeek.format('D MMMM')} to ${endOfWeek.format('D MMMM')}`)
+                    .addOption('d_mmm_rangeto', `${startOfWeek.format('D MMM')} to ${endOfWeek.format('D MMM')}`)
                     .addOption('full_range_hyphen', `${startOfWeek.format('MMMM D')} - ${endOfWeek.format('MMMM D')}`)
                     .addOption('short_range_hyphen', `${startOfWeek.format('MMM D')} - ${endOfWeek.format('MMM D')}`)
                     .addOption('d_mmmm_range', `${startOfWeek.format('D MMMM')} - ${endOfWeek.format('D MMMM')}`)
@@ -5002,12 +5022,12 @@ class DaybleSettingTab extends PluginSettingTab {
         
 
         const threeDayTitleSetting = new Setting(containerEl)
-            .setName('3-Day title')
-            .setDesc('Format for the 3-day view title');
+            .setName('3-day title')
+            .setDesc('Format for the 3-day view title.');
         
         const update3DayTitleDesc = (val: string) => {
             threeDayTitleSetting.descEl.empty();
-            threeDayTitleSetting.descEl.createSpan({ text: 'Your current format for 3-Day View: ' });
+            threeDayTitleSetting.descEl.createSpan({ text: 'Your current format for 3-day view: ' });
             
             let label = '';
             const d = moment();
@@ -5015,6 +5035,8 @@ class DaybleSettingTab extends PluginSettingTab {
             if (val === 'month_year') label = d.format('MMMM YYYY');
             else if (val === 'full_range') label = `${d.format('MMMM D')} to ${d2.format('MMMM D')}`;
             else if (val === 'short_range') label = `${d.format('MMM D')} to ${d2.format('MMM D')}`;
+            else if (val === 'd_mmmm_rangeto') label = `${d.format('D MMMM')} to ${d2.format('D MMMM')}`;
+            else if (val === 'd_mmm_rangeto') label = `${d.format('D MMM')} to ${d2.format('D MMM')}`;
             else if (val === 'full_range_hyphen') label = `${d.format('MMMM D')} - ${d2.format('MMMM D')}`;
             else if (val === 'short_range_hyphen') label = `${d.format('MMM D')} - ${d2.format('MMM D')}`;
             else if (val === 'd_mmmm_range') label = `${d.format('D MMMM')} - ${d2.format('D MMMM')}`;
@@ -5034,6 +5056,8 @@ class DaybleSettingTab extends PluginSettingTab {
             d.addOption('month_year', d1.format('MMMM YYYY'))
              .addOption('full_range', `${d1.format('MMMM D')} to ${d2.format('MMMM D')}`)
              .addOption('short_range', `${d1.format('MMM D')} to ${d2.format('MMM D')}`)
+             .addOption('d_mmmm_rangeto', `${d1.format('D MMMM')} to ${d2.format('D MMMM')}`)
+             .addOption('d_mmm_rangeto', `${d1.format('D MMM')} to ${d2.format('D MMM')}`)
              .addOption('full_range_hyphen', `${d1.format('MMMM D')} - ${d2.format('MMMM D')}`)
              .addOption('short_range_hyphen', `${d1.format('MMM D')} - ${d2.format('MMM D')}`)
              .addOption('d_mmmm_range', `${d1.format('D MMMM')} - ${d2.format('D MMMM')}`)
@@ -5060,11 +5084,11 @@ class DaybleSettingTab extends PluginSettingTab {
         });
 
         const threeDayDateSetting = new Setting(containerEl)
-            .setName('3-Day dates');
+            .setName('3-day dates');
         
         const update3DayDateDesc = (val: string) => {
             threeDayDateSetting.descEl.empty();
-            threeDayDateSetting.descEl.createSpan({ text: 'Your current format for 3-Day Dates: ' });
+            threeDayDateSetting.descEl.createSpan({ text: 'Your current format for 3-day dates: ' });
             const span = threeDayDateSetting.descEl.createSpan({ text: moment().format(val || 'ddd D') });
             span.setCssStyles({
                 fontWeight: 'bold',
@@ -5075,7 +5099,7 @@ class DaybleSettingTab extends PluginSettingTab {
 
         threeDayDateSetting.addText(t => {
                 t.setValue(this.plugin.settings.threeDayDateFormat || 'ddd D')
-                    .setPlaceholder('ddd D')
+                    .setPlaceholder('Enter date format')
                     .onChange(async v => {
                         this.plugin.settings.threeDayDateFormat = v;
                         await this.plugin.saveSettings();
@@ -5207,22 +5231,7 @@ class DaybleSettingTab extends PluginSettingTab {
                     });
             });
 
-        new Setting(containerEl).setName('Day mode').setHeading();
-
-        new Setting(containerEl)
-            .setName('Dim past events opacity')
-            .setDesc('Set the opacity for events that have already passed in day and 3-day mode. Set to 1.0 to disable dimming.')
-            .addSlider(s => {
-                s.setLimits(0.1, 1, 0.05)
-                    .setValue(typeof this.plugin.settings.dimPastEvents === 'number' ? this.plugin.settings.dimPastEvents : 0.60)
-                    .setDynamicTooltip()
-                    .onChange(async v => {
-                        this.plugin.settings.dimPastEvents = v;
-                        await this.plugin.saveSettings();
-                        const view = this.plugin.getCalendarView();
-                        await view?.render();
-                    });
-            });
+        // new Setting(containerEl).setName('Day mode').setHeading();
 
         new Setting(containerEl).setName('Context menu').setHeading();
 
@@ -5785,6 +5794,21 @@ class DaybleSettingTab extends PluginSettingTab {
                     .onChange(async v => {
                         this.plugin.settings.todayModalSplitView = v;
                         await this.plugin.saveSettings();
+                    });
+            });
+
+            new Setting(containerEl)
+            .setName('Dim past events opacity')
+            .setDesc('Set the opacity for events that have already passed in day and 3-day mode. Set to 1.0 to disable dimming.')
+            .addSlider(s => {
+                s.setLimits(0.1, 1, 0.05)
+                    .setValue(typeof this.plugin.settings.dimPastEvents === 'number' ? this.plugin.settings.dimPastEvents : 0.60)
+                    .setDynamicTooltip()
+                    .onChange(async v => {
+                        this.plugin.settings.dimPastEvents = v;
+                        await this.plugin.saveSettings();
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
                     });
             });
 
