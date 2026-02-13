@@ -938,12 +938,17 @@ class DaybleCalendarView extends ItemView {
         // so we don't need manual margin adjustments anymore.
     }
 
-    calculateLongEventLanes(longEvents: DaybleEvent[], unitParams?: { lanesPerEvent: number, lanesPerGap: number, extraLanesForDesc: number }): { eventLanes: Map<string, number>, maxLanesByDate: Record<string, number> } {
+    calculateLongEventLanes(longEvents: DaybleEvent[], unitParams?: { lanesPerEvent: number, lanesPerGap: number, lanesPerDesc: number, lanesPerIcon: number }): { eventLanes: Map<string, number>, maxLanesByDate: Record<string, number> } {
         const eventLanes = new Map<string, number>();
         const maxLanesByDate: Record<string, number> = {};
         const occupiedLanesByDate = new Map<string, Set<number>>();
         
-        const { lanesPerEvent = 1, lanesPerGap = 0, extraLanesForDesc = 1 } = unitParams || {};
+        const { 
+            lanesPerEvent = 7, 
+            lanesPerGap = 1, 
+            lanesPerDesc = 5, 
+            lanesPerIcon = 7 
+        } = unitParams || {};
 
         // Sort long events: earlier start date first, then longer duration first
         const sorted = [...longEvents].sort((a, b) => {
@@ -970,8 +975,21 @@ class DaybleCalendarView extends ItemView {
                 dates.push(`${y}-${m}-${dd}`);
             }
 
-            const isDoubleLane = ev.description && ev.description.trim().length > 0;
-            const lanesNeeded = lanesPerEvent + lanesPerGap + (isDoubleLane ? extraLanesForDesc : 0);
+            const hasDescription = ev.description && ev.description.trim().length > 0;
+            const iconPlacement = this.plugin.settings.iconPlacement || 'left';
+            const isVerticalIcon = (iconPlacement === 'top' || iconPlacement === 'top-left' || iconPlacement === 'top-right' || 
+                                   iconPlacement === 'bottom' || iconPlacement === 'bottom-left' || iconPlacement === 'bottom-right');
+            
+            const category = this.plugin.settings.eventCategories?.find(c => c.id === ev.categoryId);
+            const state = ev.stateId ? (this.plugin.settings.eventStates || []).find(s => s.id === ev.stateId) : null;
+            const iconToUse = (state && state.icon) || ev.icon || (category?.icon || '');
+            const hasVerticalIcon = isVerticalIcon && iconToUse;
+
+            let extraLanes = 0;
+            if (hasDescription) extraLanes += lanesPerDesc;
+            if (hasVerticalIcon) extraLanes += lanesPerIcon;
+
+            const lanesNeeded = lanesPerEvent + lanesPerGap + extraLanes;
 
             let lane = 0;
             while (true) {
@@ -1052,18 +1070,23 @@ class DaybleCalendarView extends ItemView {
         const ordered = days.slice(weekStart).concat(days.slice(0, weekStart));
         ordered.forEach(d => header.createDiv({ text: d, cls: 'dayble-grid-header-cell' }));
 
-        // Pre-calculate long event lanes (reused from month view logic)
-        const vPadding = this.plugin.settings.eventVerticalPadding ?? 2;
-        const segmentHeight = 24 + (vPadding * 2);
-        const segmentGap = 6; // gappy
-        
         // Filter long events for week view
         let longEventsPreset = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
         if (this.plugin.settings.onlyShowPinnedEventsWeek) {
             longEventsPreset = longEventsPreset.filter(ev => ev.pinned);
         }
 
-        const { maxLanesByDate } = this.calculateLongEventLanes(longEventsPreset);
+        // Pre-calculate long event lanes (reused from month view logic)
+        const vPadding = this.plugin.settings.eventVerticalPadding ?? 2;
+        const segmentHeight = 24 + (vPadding * 2);
+        const segmentGap = 4;
+        const LANE_UNIT_HEIGHT = 4;
+        const lanesPerEvent = Math.ceil(segmentHeight / LANE_UNIT_HEIGHT);
+        const lanesPerGap = Math.ceil(segmentGap / LANE_UNIT_HEIGHT);
+        const lanesPerDesc = 5;
+        const lanesPerIcon = 7;
+
+        const { maxLanesByDate } = this.calculateLongEventLanes(longEventsPreset, { lanesPerEvent, lanesPerGap, lanesPerDesc, lanesPerIcon });
         const countsByDate = maxLanesByDate;
 
         // Grid
@@ -1405,17 +1428,23 @@ class DaybleCalendarView extends ItemView {
         const days = ['sun','mon','tue','wed','thu','fri','sat'];
         const ordered = days.slice(weekStart).concat(days.slice(0, weekStart));
         ordered.forEach(d => header.createDiv({ text: d, cls: 'dayble-grid-header-cell' }));
-        const vPadding = this.plugin.settings.eventVerticalPadding ?? 2;
-        const segmentHeight = 24 + (vPadding * 2);
-        const segmentGap = 6; // gappy
-        
+
         // Filter long events for month view
         let longEventsPreset = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
         if (this.plugin.settings.onlyShowPinnedEventsMonth) {
             longEventsPreset = longEventsPreset.filter(ev => ev.pinned);
         }
 
-        const { maxLanesByDate } = this.calculateLongEventLanes(longEventsPreset);
+        const vPadding = this.plugin.settings.eventVerticalPadding ?? 2;
+        const segmentHeight = 24 + (vPadding * 2);
+        const segmentGap = 4;
+        const LANE_UNIT_HEIGHT = 4;
+        const lanesPerEvent = Math.ceil(segmentHeight / LANE_UNIT_HEIGHT);
+        const lanesPerGap = Math.ceil(segmentGap / LANE_UNIT_HEIGHT);
+        const lanesPerDesc = 5;
+        const lanesPerIcon = 7;
+
+        const { maxLanesByDate } = this.calculateLongEventLanes(longEventsPreset, { lanesPerEvent, lanesPerGap, lanesPerDesc, lanesPerIcon });
         const countsByDate = maxLanesByDate;
 
         for (let i = 0; i < leading; i++) {
@@ -1909,7 +1938,8 @@ class DaybleCalendarView extends ItemView {
         const LANE_UNIT_HEIGHT = 4;
         const lanesPerEvent = Math.ceil(segmentHeight / LANE_UNIT_HEIGHT);
         const lanesPerGap = Math.ceil(segmentGap / LANE_UNIT_HEIGHT);
-        const extraLanesForDesc = 0; // Reduced from full lane to 8px extra
+        const lanesPerDesc = 5; // 20px extra for description
+        const lanesPerIcon = 7; // 28px extra for top/bottom icons
 
         let longEvents = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
         const isMonth = this.plugin.settings.calendarView === 'Month' || (!this.plugin.settings.calendarView && !this.plugin.settings.calendarWeekActive);
@@ -1919,7 +1949,7 @@ class DaybleCalendarView extends ItemView {
             longEvents = longEvents.filter(ev => ev.pinned);
         }
 
-        const { eventLanes, maxLanesByDate } = this.calculateLongEventLanes(longEvents, { lanesPerEvent, lanesPerGap, extraLanesForDesc });
+        const { eventLanes, maxLanesByDate } = this.calculateLongEventLanes(longEvents, { lanesPerEvent, lanesPerGap, lanesPerDesc, lanesPerIcon });
         const countsByDate = maxLanesByDate;
 
         const sortedLongEvents = [...longEvents].sort((a, b) => {
@@ -2285,6 +2315,13 @@ class DaybleCalendarView extends ItemView {
             renderMarkdown(ev.description, desc, this.plugin.app);
         }
         const iconToUse = (state && state.icon) || ev.icon || (category?.icon || '');
+        const hasDescription = ev.description && ev.description.trim().length > 0;
+        const hasIcon = this.plugin.settings.iconPlacement !== 'none' && iconToUse;
+
+        if (isLong && hasDescription && hasIcon) {
+            item.addClass('dayble-long-event-complex');
+        }
+
         if (this.plugin.settings.iconPlacement !== 'none' && iconToUse) {
             let place = this.plugin.settings.iconPlacement ?? 'left';
             if (isDayMode) place = 'top'; // Force top in day mode

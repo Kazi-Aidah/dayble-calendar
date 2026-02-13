@@ -98,11 +98,10 @@
     border: 1px solid var(--background-modifier-border);
     background: var(--background-primary);
     border-radius: var(--button-radius);
-    padding: 6px;
-    cursor: pointer;
-    background-color: transparent !important;
-    box-shadow: none !important;
-    border: none;
+}
+
+.dayble-long-event-complex {
+    transform: translateY(-2.5px) !important;
 }
 
 .dayble-icon-btn:hover {
