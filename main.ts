@@ -42,7 +42,7 @@ interface DaybleSettings {
     dayCellMinWidth?: number;
     holderPlacement?: 'left' | 'right' | 'hidden';
     calendarWeekActive?: boolean;
-    calendarView?: 'Month' | 'Week' | 'Day' | 'Agenda';
+    calendarView?: 'Month' | 'Week' | '3day' | 'Day' | 'Agenda';
     triggers?: { id?: string, pattern: string, categoryId: string, color?: string, textColor?: string, colorName?: string }[];
     weeklyNotesEnabled?: boolean;
     todayModalSplitView?: boolean;
@@ -427,6 +427,7 @@ class DaybleCalendarView extends ItemView {
     lastScrollTop?: number;
     dayModeTodayModal?: TodayModal;
     _dayModeRO?: ResizeObserver;
+    _dayMode3ROs?: ResizeObserver[];
     viewSelectEl: HTMLSelectElement;
     saveTimeout: any;
     isResizingWeeklyNotes = false;
@@ -500,7 +501,7 @@ class DaybleCalendarView extends ItemView {
         const viewSelect = document.createElement('select');
         this.viewSelectEl = viewSelect;
         viewSelect.className = 'dayble-view-select';
-        ['Month', 'Week', 'Day', 'Agenda'].forEach(mode => {
+        ['Month', 'Week', '3day', 'Day', 'Agenda'].forEach(mode => {
             const opt = viewSelect.createEl('option', { text: mode, value: mode });
             if (this.plugin.settings.calendarView === mode) opt.selected = true;
         });
@@ -882,6 +883,8 @@ class DaybleCalendarView extends ItemView {
         const view = this.plugin.settings.calendarView || (this.plugin.settings.calendarWeekActive ? 'Week' : 'Month');
         if (view === 'Week') {
             this.currentDate.setDate(this.currentDate.getDate() + (delta * 7));
+        } else if (view === '3day') {
+            this.currentDate.setDate(this.currentDate.getDate() + (delta * 3));
         } else if (view === 'Day') {
             this.currentDate.setDate(this.currentDate.getDate() + delta);
         } else if (view === 'Agenda') {
@@ -901,6 +904,10 @@ class DaybleCalendarView extends ItemView {
         if (this._dayModeRO) {
             this._dayModeRO.disconnect();
             this._dayModeRO = undefined;
+        }
+        if (this._dayMode3ROs) {
+            this._dayMode3ROs.forEach(ro => ro.disconnect());
+            this._dayMode3ROs = [];
         }
         if (this.rootEl) {
             this.rootEl.style.setProperty('--event-border-radius', `${this.plugin.settings.eventBorderRadius ?? 6}px`);
@@ -923,12 +930,16 @@ class DaybleCalendarView extends ItemView {
         if (this.viewSelectEl) this.viewSelectEl.value = view;
 
         this.gridEl.removeClass('dayble-week-mode');
+        this.gridEl.removeClass('dayble-3day-mode');
         this.gridEl.removeClass('dayble-day-mode');
         this.gridEl.removeClass('dayble-agenda-mode');
 
         if (view === 'Week') {
             this.gridEl.addClass('dayble-week-mode');
             await this.renderWeekView(titleEl);
+        } else if (view === '3day') {
+            this.gridEl.addClass('dayble-3day-mode');
+            await this.render3DayView(titleEl);
         } else if (view === 'Day') {
             this.gridEl.addClass('dayble-day-mode');
             await this.renderDayView(titleEl);
@@ -1713,12 +1724,6 @@ class DaybleCalendarView extends ItemView {
         const fullDate = `${yy}-${mm}-${dd}`;
 
         const dayContainer = this.gridEl.createDiv({ cls: 'dayble-day-mode-container' });
-        dayContainer.setCssProps({
-            'grid-column': '1 / span 7',
-            'height': '100%',
-            'display': 'flex',
-            'flex-direction': 'column'
-        });
 
         // Instantiate TodayModal but don't open it as a modal.
         // We will use its contentEl directly.
@@ -1744,15 +1749,6 @@ class DaybleCalendarView extends ItemView {
         // Fix jumble by re-triggering the rendering part of TodayModal after layout is stable
         requestAnimationFrame(() => {
             dayModeModal.renderEvents();
-            
-            // Re-adjust scroller height just in case
-            const scroller = dayContainer.querySelector('.dayble-focus-scroll') as HTMLElement;
-            if (scroller) {
-                scroller.setCssProps({
-                    'height': '100%',
-                    'flex': '1'
-                });
-            }
         });
         
         // Remove the default title added by TodayModal if we want to use the main title
@@ -1764,14 +1760,72 @@ class DaybleCalendarView extends ItemView {
         const dayLabel = moment(dateObj).format(this.plugin.settings.dayTitleFormat || 'dddd, D MMMM');
         if (this.monthTitleEl) this.monthTitleEl.setText(dayLabel);
 
-        // Adjust heights to be 100%
-        const scroller2 = dayContainer.querySelector('.dayble-focus-scroll') as HTMLElement;
-        if (scroller2) {
-            scroller2.setCssProps({
-                'height': '100%',
-                'flex': '1'
-            });
+        await this.renderHolder();
+    }
+
+    async render3DayView(titleEl?: HTMLElement): Promise<void> {
+        this.gridEl.empty();
+        this.weekHeaderEl.empty();
+        
+        const baseDate = new Date(this.currentDate);
+        const dates: string[] = [];
+        for (let i = 0; i < 3; i++) {
+            const d = new Date(baseDate);
+            d.setDate(baseDate.getDate() + i);
+            const yy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            dates.push(`${yy}-${mm}-${dd}`);
         }
+
+        const mainContainer = this.gridEl.createDiv({ cls: 'dayble-3day-container' });
+
+        // Clean up old observers
+        if (this._dayMode3ROs) {
+            this._dayMode3ROs.forEach(ro => ro.disconnect());
+        }
+        this._dayMode3ROs = [];
+
+        for (const fullDate of dates) {
+            const dayCol = mainContainer.createDiv({ cls: 'dayble-3day-col' });
+
+            // Sub-header for each day
+            const [year, month, dayNum] = fullDate.split('-').map(Number);
+            const dateObj = new Date(year, month - 1, dayNum);
+            const dayLabel = moment(dateObj).format('ddd, MMM D');
+            const subHeader = dayCol.createDiv({ cls: 'dayble-3day-subheader', text: dayLabel });
+
+            const dayContainer = dayCol.createDiv({ cls: 'dayble-day-mode-container' });
+
+            const dayModeModal = new TodayModal(this.app, fullDate, this.events, this);
+            
+            // Mock contentEl to our dayContainer
+            // @ts-ignore
+            dayModeModal.contentEl = dayContainer;
+            // @ts-ignore
+            dayModeModal.modalEl = dayContainer;
+            
+            dayModeModal.onOpen();
+
+            const ro = new ResizeObserver(() => {
+                dayModeModal.renderEvents();
+            });
+            ro.observe(dayContainer);
+            this._dayMode3ROs.push(ro);
+
+            requestAnimationFrame(() => {
+                dayModeModal.renderEvents();
+            });
+
+            // Remove the default title added by TodayModal
+            const modalTitle = dayContainer.querySelector('.dayble-modal-title');
+            if (modalTitle) modalTitle.remove();
+        }
+
+        const startLabel = moment(dates[0]).format('MMM D');
+        const endLabel = moment(dates[2]).format('MMM D');
+        const rangeLabel = `${startLabel} - ${endLabel}, ${baseDate.getFullYear()}`;
+        if (this.monthTitleEl) this.monthTitleEl.setText(rangeLabel);
 
         await this.renderHolder();
     }
@@ -2725,8 +2779,6 @@ class EventModal extends Modal {
     selectedTextColor?: string;
     selectedColorName?: string;
     isPinned: boolean = false;
-    selectedTitleAlign?: 'left' | 'center' | 'right' | 'center-left';
-    selectedDescAlign?: 'left' | 'center' | 'right' | 'center-left';
     selectedLayout?: string;
 
     constructor(app: App, plugin: DaybleCalendarPlugin, ev: DaybleEvent | undefined, date: string | undefined, endDate: string | undefined, defaultStartTime: string | undefined, defaultEndTime: string | undefined, onSubmit: (ev: Partial<DaybleEvent>) => Promise<void>, onDelete: () => Promise<void>, onPickIcon: () => Promise<void>) {
@@ -2745,8 +2797,6 @@ class EventModal extends Modal {
         this.selectedTextColor = ev?.textColor;
         this.selectedColorName = ev?.colorName;
         this.isPinned = ev?.pinned ?? false;
-        this.selectedTitleAlign = ev?.settings?.titleAlign;
-        this.selectedDescAlign = ev?.settings?.descAlign;
         this.selectedLayout = ev?.settings?.layout;
     }
 
@@ -2970,31 +3020,6 @@ class EventModal extends Modal {
         
         descInput.oninput = () => { showSuggestionsFor(descInput); };
 
-        // Per-event alignment settings
-        const alignRow = c.createDiv({ cls: 'dayble-modal-row dayble-align-row' });
-        alignRow.style.display = 'flex';
-        alignRow.style.gap = '10px';
-        alignRow.style.marginTop = '10px';
-
-        const createAlignSelect = (label: string, value: string | undefined, onChange: (v: any) => void) => {
-            const container = alignRow.createDiv({ cls: 'dayble-align-container' });
-            container.style.display = 'flex';
-            container.style.flexDirection = 'column';
-            container.style.flex = '1';
-            container.createEl('label', { text: label }).style.fontSize = '0.8em';
-            const sel = container.createEl('select', { cls: 'dropdown' });
-            const options = ['default', 'left', 'center', 'right', 'center-left'];
-            options.forEach(opt => {
-                const o = sel.createEl('option', { text: opt, value: opt === 'default' ? '' : opt });
-                if ((opt === 'default' && !value) || opt === value) o.selected = true;
-            });
-            sel.onchange = () => onChange(sel.value || undefined);
-            return sel;
-        };
-
-        createAlignSelect('Title align', this.selectedTitleAlign, (v) => this.selectedTitleAlign = v);
-        createAlignSelect('Desc align', this.selectedDescAlign, (v) => this.selectedDescAlign = v);
-
         // Add color swatches under description if setting says so
         if (colorSwatchPos === 'under-description') {
             createColorRow();
@@ -3032,8 +3057,8 @@ class EventModal extends Modal {
                 textColor: this.selectedTextColor,
                 colorName: this.selectedColorName,
                 settings: {
-                    titleAlign: this.selectedTitleAlign,
-                    descAlign: this.selectedDescAlign,
+                    titleAlign: this.ev?.settings?.titleAlign,
+                    descAlign: this.ev?.settings?.descAlign,
                     layout: this.selectedLayout
                 }
             };
@@ -3765,7 +3790,7 @@ class TodayModal extends Modal {
                 }
             });
         }
-        const footer = c.createDiv({ cls: 'dayble-modal-footer' });
+        const footer = c.createDiv({ cls: 'dayble-footer-day-mode' });
         const addBtn = footer.createEl('button', { cls: 'dayble-today-add-btn', text: '+ add event' });
         addBtn.addClass('db-btn');
         addBtn.addClass('dayble-add-btn-full');
