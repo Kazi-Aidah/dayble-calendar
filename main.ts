@@ -2,12 +2,20 @@ import { App, ItemView, Modal, Notice, Plugin, PluginSettingTab, Setting, Worksp
 
 const VIEW_TYPE = 'dayble-calendar-view';
 
+const timeToMinutes = (s: string): number => {
+    if (!s) return 0;
+    const parts = s.split(':');
+    const h = parseInt(parts[0] || '0', 10);
+    const m = parseInt(parts[1] || '0', 10);
+    return (h * 60) + m;
+};
+
 interface DaybleSettings {
     weekStartDay: number;
     entriesFolder: string;
-    iconPlacement?: 'left' | 'right' | 'none' | 'top' | 'top-left' | 'top-right';
-    eventTitleAlign?: 'left' | 'center' | 'right';
-    eventDescAlign?: 'left' | 'center' | 'right';
+    iconPlacement?: 'left' | 'right' | 'none' | 'top' | 'top-left' | 'top-right' | 'bottom' | 'bottom-left' | 'bottom-right';
+    eventTitleAlign?: 'left' | 'center' | 'right' | 'center-left';
+    eventDescAlign?: 'left' | 'center' | 'right' | 'center-left';
     timeFormat?: '24h' | '12h';
     holderOpen?: boolean;
     holderWidth?: number; // in pixels
@@ -1901,7 +1909,7 @@ class DaybleCalendarView extends ItemView {
         const LANE_UNIT_HEIGHT = 4;
         const lanesPerEvent = Math.ceil(segmentHeight / LANE_UNIT_HEIGHT);
         const lanesPerGap = Math.ceil(segmentGap / LANE_UNIT_HEIGHT);
-        const extraLanesForDesc = 1; // Reduced from full lane to 8px extra
+        const extraLanesForDesc = 0; // Reduced from full lane to 8px extra
 
         let longEvents = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
         const isMonth = this.plugin.settings.calendarView === 'Month' || (!this.plugin.settings.calendarView && !this.plugin.settings.calendarWeekActive);
@@ -1956,9 +1964,7 @@ class DaybleCalendarView extends ItemView {
             item.setCssProps({
                 'left': `${left}px`,
                 'top': `${top}px`,
-                'width': `${width}px`,
-                'height': `${segmentHeight}px`,
-                'min-height': `${segmentHeight}px`
+                'width': `${width}px`
             });
             
             return { top, left, width };
@@ -2146,9 +2152,11 @@ class DaybleCalendarView extends ItemView {
         return lines.join('\n');
     }
 
-    createEventItem(ev: DaybleEvent, isLong = false): HTMLElement {
+    createEventItem(ev: DaybleEvent, isLong = false, isDayMode = false): HTMLElement {
         const item = document.createElement('div');
         item.className = 'dayble-event';
+        if (isLong) item.addClass('dayble-long-event');
+        if (isDayMode) item.addClass('dayble-focus-event-abs');
         item.setAttribute('draggable', 'true');
         item.dataset.id = ev.id;
         item.dataset.categoryId = ev.categoryId || '';
@@ -2237,33 +2245,74 @@ class DaybleCalendarView extends ItemView {
             item.addClass(`dayble-anim-${anim2}`);
         }
         
-        const titleContainer = item.createDiv({ cls: 'dayble-event-title-container' });
-        const title = titleContainer.createDiv({ cls: 'dayble-event-title' });
-        renderMarkdown(ev.title || '', title, this.plugin.app);
-        const iconToUse = (state && state.icon) || ev.icon || (category?.icon || '');
-        if (this.plugin.settings.iconPlacement !== 'none' && iconToUse) {
-            const iconEl = item.createDiv({ cls: 'dayble-event-icon' });
-            setIcon(iconEl, iconToUse);
-            const place = this.plugin.settings.iconPlacement ?? 'left';
-            if (place === 'left') {
-                titleContainer.insertBefore(iconEl, title);
-            } else if (place === 'right') {
-                titleContainer.appendChild(iconEl);
-            } else if (place === 'top' || place === 'top-left' || place === 'top-right') {
-                iconEl.addClass('dayble-icon-top');
-                if (place === 'top-left') iconEl.addClass('dayble-icon-top-left');
-                else if (place === 'top-right') iconEl.addClass('dayble-icon-top-right');
-                else iconEl.addClass('dayble-icon-top-center');
-                item.insertBefore(iconEl, titleContainer);
+        if (!isLong && !isDayMode) {
+            item.addClass('dayble-month-week-event');
+            // @ts-ignore
+            if (ev.startTime && ev.endTime) {
+                // @ts-ignore
+                const start = timeToMinutes(ev.startTime);
+                // @ts-ignore
+                const end = timeToMinutes(ev.endTime);
+                if (end - start <= 30) {
+                    item.addClass('dayble-event-compact');
+                }
             }
         }
-        if (ev.description && !isLong) {
-            const desc = item.createDiv({ cls: 'dayble-event-desc' });
+
+        if (isDayMode && ev.time) {
+            const parts = ev.time.split('-');
+            if (parts.length === 2) {
+                const start = timeToMinutes(parts[0]);
+                const end = timeToMinutes(parts[1]);
+                const diff = end - start;
+                if (diff === 15) item.addClass('min15');
+                else if (diff === 30) item.addClass('min30');
+                else if (diff === 45) item.addClass('min45');
+            }
+        }
+        
+        const inner = item.createDiv({ cls: 'dayble-event-inner' });
+
+        const titleContainer = inner.createDiv({ cls: 'dayble-event-title-container' });
+        const title = titleContainer.createDiv({ cls: 'dayble-event-title' });
+        renderMarkdown(ev.title || '', title, this.plugin.app);
+        if (ev.description) {
+            const desc = inner.createDiv({ cls: 'dayble-event-desc' });
             // Description inherits text color
             if (bgColor && textColor) {
                 desc.setCssProps({ 'color': textColor });
             }
             renderMarkdown(ev.description, desc, this.plugin.app);
+        }
+        const iconToUse = (state && state.icon) || ev.icon || (category?.icon || '');
+        if (this.plugin.settings.iconPlacement !== 'none' && iconToUse) {
+            let place = this.plugin.settings.iconPlacement ?? 'left';
+            if (isDayMode) place = 'top'; // Force top in day mode
+            
+            item.addClass(`dayble-icon-placement-${place}`);
+            const iconEl = (place === 'left' || place === 'right') 
+                ? item.createDiv({ cls: 'dayble-event-icon' }) 
+                : inner.createDiv({ cls: 'dayble-event-icon' });
+            
+            setIcon(iconEl, iconToUse);
+            
+            if (place === 'left') {
+                item.insertBefore(iconEl, inner);
+            } else if (place === 'right') {
+                item.appendChild(iconEl);
+            } else if (place === 'top' || place === 'top-left' || place === 'top-right') {
+                iconEl.addClass('dayble-icon-top');
+                if (place === 'top-left') iconEl.addClass('dayble-icon-top-left');
+                else if (place === 'top-right') iconEl.addClass('dayble-icon-top-right');
+                else iconEl.addClass('dayble-icon-top-center');
+                inner.insertBefore(iconEl, titleContainer);
+            } else if (place === 'bottom' || place === 'bottom-left' || place === 'bottom-right') {
+                iconEl.addClass('dayble-icon-bottom');
+                if (place === 'bottom-left') iconEl.addClass('dayble-icon-bottom-left');
+                else if (place === 'bottom-right') iconEl.addClass('dayble-icon-bottom-right');
+                else iconEl.addClass('dayble-icon-bottom-center');
+                inner.appendChild(iconEl);
+            }
         }
         // Completed behavior
         if (ev.completed) {
@@ -3231,6 +3280,11 @@ class TodayModal extends Modal {
         this.scroller = scroller;
         scroller.style.setProperty('--event-border-radius', `${this.view?.plugin?.settings?.eventBorderRadius ?? 6}px`);
 
+        // Capture scroll position to prevent reset on re-render
+        scroller.addEventListener('scroll', () => {
+            this.lastScrollTop = scroller.scrollTop;
+        });
+
         // All-day / Multi-day events section above scroll
         const allDayEvents = (this.events || []).filter(e => {
             const isToday = (e.date === this.date) || (e.startDate === this.date) || 
@@ -3305,7 +3359,7 @@ class TodayModal extends Modal {
             if (cells.length === 0) return null;
 
             // Find the cell under the given clientY
-            // We use the first cell to get a base row height for 15-min sub-slot calculation
+            // We use the first cell to get a base row height for min15 sub-slot calculation
             const firstCellRect = cells[0].getBoundingClientRect();
             const pxPer30 = firstCellRect.height;
             const pxPer15 = pxPer30 / 2;
@@ -3337,7 +3391,7 @@ class TodayModal extends Modal {
             const relYInCell = clientY - targetCellRect.top;
             const isSecondHalf = relYInCell > pxPer15;
             
-            // n is the total number of 15-min increments from the start of the grid
+            // n is the total number of min15 increments from the start of the grid
             // (slotIdx - baseIdx) * 2 + (isSecondHalf ? 1 : 0)
             const baseIdx = (split && isAfternoon) ? 24 : 0;
             const n = (slotIdx - baseIdx) * 2 + (isSecondHalf ? 1 : 0);
@@ -3377,7 +3431,7 @@ class TodayModal extends Modal {
                 const s15 = Math.min(sel.start15, sel.end15);
                 const e15 = Math.max(sel.start15, sel.end15);
                 
-                // Visual Highlight on cells (15-min precision)
+                // Visual Highlight on cells (min15 precision)
                 for (let i = s15; i <= e15; i++) {
                     const slotIdx = Math.floor(i / 2);
                     const cell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${slotIdx}"]`) as HTMLElement;
@@ -3411,7 +3465,7 @@ class TodayModal extends Modal {
                     const left = sRect.left - gRect.left;
                     const top = (sRect.top - gRect.top) + (start15 % 2 === 0 ? 0 : pxPer15);
                     const width = startCell.offsetWidth;
-                    const height = Math.max(pxPer15, ((end15 - start15) + 1) * pxPer15);
+                    const height = Math.max(4, ((end15 - start15) + 1) * pxPer15);
                     
                     segment.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
                     segment.style.setProperty('--focus-item-top', `${Math.round(top)}px`);
@@ -3419,7 +3473,7 @@ class TodayModal extends Modal {
                     segment.style.setProperty('--focus-item-height', `${Math.round(height)}px`);
                 };
 
-                const boundary15 = 48; // 12:00 PM is at 15-min index 48
+                const boundary15 = 48; // 12:00 PM is at min15 index 48
                 if (split && s15 < boundary15 && e15 >= boundary15) {
                     renderMirrorSegment(s15, boundary15 - 1, 'start');
                     renderMirrorSegment(boundary15, e15, 'end');
@@ -3513,7 +3567,7 @@ class TodayModal extends Modal {
                 
                 sel.active = true; 
                 gridContainer.addClass('dayble-selecting');
-                sel.start15 = idx * 2; // Each slot is 30 mins, so 2x 15-min increments
+                sel.start15 = idx * 2; // Each slot is 30 mins, so 2x min15 increments
                 sel.end15 = sel.start15;
 
                 clearSelection(false); 
@@ -3638,12 +3692,12 @@ class TodayModal extends Modal {
             }
         }, { capture: true });
 
-        // Handle drop on scroller to reposition event by 15-min increments, with magnetic indicator
+        // Handle drop on scroller to reposition event by min15 increments, with magnetic indicator
         scroller.ondragover = (e) => {
             e.preventDefault();
             const id = this.dragId;
             if (!id) return;
-            const durationMin = Math.max(15, this.dragDuration || 30);
+            const durationMin = this.dragDuration || 30;
             
             const info = getSlotInfo(e.clientX, e.clientY - (this.dragOffsetY || 0));
             if (!info || !info.targetCell) return;
@@ -3656,7 +3710,7 @@ class TodayModal extends Modal {
             const topLocal = (targetCellRect.top - gRect.top) + (info.isSecondHalf ? info.pxPer15 : 0);
             
             const width = info.targetCell.offsetWidth;
-            const heightLocal = Math.max(info.pxPer15, Math.round((durationMin / 15) * info.pxPer15));
+            const heightLocal = Math.max(4, Math.round((durationMin / 15) * info.pxPer15));
             
             // Visual follow for the dragged element
             if (this.dragEl) {
@@ -3691,7 +3745,7 @@ class TodayModal extends Modal {
             const id = this.dragId;
             const el = this.dragEl;
             if (!id) return;
-            const durationMin = Math.max(15, this.dragDuration || 30);
+            const durationMin = this.dragDuration || 30;
             
             const info = getSlotInfo(e.clientX, e.clientY - (this.dragOffsetY || 0));
             if (!info) return;
@@ -3715,7 +3769,7 @@ class TodayModal extends Modal {
             
             const newH = Math.floor(startTotalMin / 60);
             const newM = startTotalMin % 60;
-            const endTotalMin = startTotalMin + Math.max(15, durationMin);
+            const endTotalMin = startTotalMin + durationMin;
             let endH = Math.floor(endTotalMin / 60);
             let endM = endTotalMin % 60;
             const pad2 = (n: number) => String(n).padStart(2, '0');
@@ -3833,13 +3887,13 @@ class TodayModal extends Modal {
                     const sRect = startCell.getBoundingClientRect();
                     const gRect = gridContainer.getBoundingClientRect();
                     
-                    const rowHeight = startCell.offsetHeight || 60;
+                    const rowHeight = startCell.offsetHeight || 60; // Use actual measured height
                     const pxPer15 = rowHeight / 2;
                     const withinMin = (sm % 30);
                     
                     const top = (sRect.top - gRect.top) + (withinMin / 15) * pxPer15;
                     const durationMin = eMin - sMin;
-                    const height = Math.max(pxPer15, Math.round((durationMin / 15) * pxPer15));
+                    const height = Math.max(4, Math.round((durationMin / 15) * pxPer15));
 
                     // Calculate width and left based on columns within the cell area
                     const fullWidth = startCell.offsetWidth;
@@ -3847,7 +3901,7 @@ class TodayModal extends Modal {
                     const left = (sRect.left - gRect.left) + (column * colWidth);
                     const width = colWidth;
 
-                    const item = this.view?.createEventItem(ev) || document.createElement('div');
+                    const item = this.view?.createEventItem(ev, false, true) || document.createElement('div');
                     item.addClass('dayble-focus-event-abs');
                     
                     if (segmentType === 'start') item.addClass('dayble-focus-event-split-start');
@@ -3860,9 +3914,20 @@ class TodayModal extends Modal {
                         'border-color': 'var(--event-border-color, var(--background-modifier-border))',
                         'pointer-events': 'auto'
                     });
-                    // For events <= 30 mins, make them compact
+                    // For events <= 30 mins, in day mode we don't want the compact class to limit height
                     if (durationMin <= 30) {
-                        item.addClass('dayble-event-compact');
+                        item.removeClass('dayble-event-compact');
+                    } else {
+                        item.removeClass('dayble-event-compact');
+                        item.addClass('dayble-layout-center-flex');
+                    }
+
+                    // Special case: 30 min events should show description if they aren't forced to be compact
+                    // Actually, the user wants descriptions for 30 min intervals too.
+                    // Let's allow 30 min events to have descriptions by NOT making them compact if they have one.
+                    if (durationMin === 30 && ev.description) {
+                        item.removeClass('dayble-event-compact');
+                        item.addClass('dayble-layout-center-flex');
                     }
 
                     // Add rich tooltip
@@ -3875,7 +3940,7 @@ class TodayModal extends Modal {
                     item.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
                     item.style.setProperty('--focus-item-height', `${Math.round(height)}px`);
                     item.onclick = async (e) => { e.stopPropagation(); await this.view?.openEventModal(ev.id, ev.date || ev.startDate, ev.endDate); };
-                    // Drag to reposition within today modal (15-min granularity)
+                    // Drag to reposition within today modal (min15 granularity)
                     item.ondragstart = (e) => {
                         const dt = e.dataTransfer;
                         if (!dt) return;
@@ -4552,21 +4617,26 @@ class DaybleSettingTab extends PluginSettingTab {
                     alignItems: 'center'
                 });
                 eventBox.prepend(eventIcon);
-            } else if (placement.startsWith('top')) {
+            } else if (placement.startsWith('top') || placement.startsWith('bottom')) {
                 eventBox.setCssStyles({ flexDirection: 'column' });
-                eventBox.prepend(eventIcon);
+                
+                if (placement.startsWith('top')) {
+                    eventBox.prepend(eventIcon);
+                } else {
+                    eventBox.appendChild(eventIcon);
+                }
                 
                 // Horizontal alignment of the icon itself within the column
-                if (placement === 'top-left') {
+                if (placement.endsWith('-left')) {
                     eventBox.setCssStyles({ alignItems: 'flex-start' });
-                } else if (placement === 'top-right') {
+                } else if (placement.endsWith('-right')) {
                     eventBox.setCssStyles({ alignItems: 'flex-end' });
                 } else {
                     eventBox.setCssStyles({ alignItems: 'center' });
                 }
 
                 // Text container alignment
-                if (titleAlign === 'center') {
+                if (titleAlign === 'center' || titleAlign === 'center-left') {
                     eventTextContainer.setCssStyles({ alignItems: 'center' });
                 } else if (titleAlign === 'right') {
                     eventTextContainer.setCssStyles({ alignItems: 'flex-end' });
@@ -4657,9 +4727,12 @@ class DaybleSettingTab extends PluginSettingTab {
                     .addOption('top', 'Top center')
                     .addOption('top-left', 'Top left')
                     .addOption('top-right', 'Top right')
+                    .addOption('bottom', 'Bottom center')
+                    .addOption('bottom-left', 'Bottom left')
+                    .addOption('bottom-right', 'Bottom right')
                     .setValue(this.plugin.settings.iconPlacement ?? 'left')
                     .onChange(v => {
-                        this.plugin.settings.iconPlacement = v as "none" | "left" | "top" | "right" | "top-left" | "top-right" | undefined;
+                        this.plugin.settings.iconPlacement = v as any;
                         void this.plugin.saveSettings().then(async () => {
                             updateEventPreview();
                             const view = this.plugin.getCalendarView();
@@ -4675,9 +4748,10 @@ class DaybleSettingTab extends PluginSettingTab {
                 d.addOption('left', 'Left')
                     .addOption('center', 'Center')
                     .addOption('right', 'Right')
+                    .addOption('center-left', 'Center-left')
                     .setValue(this.plugin.settings.eventTitleAlign ?? 'left')
                     .onChange(v => {
-                        this.plugin.settings.eventTitleAlign = v as "center" | "left" | "right" | undefined;
+                        this.plugin.settings.eventTitleAlign = v as any;
                         void this.plugin.saveSettings().then(async () => {
                             updateEventPreview();
                             const view = this.plugin.getCalendarView();
@@ -4692,9 +4766,10 @@ class DaybleSettingTab extends PluginSettingTab {
                 d.addOption('left', 'Left')
                     .addOption('center', 'Center')
                     .addOption('right', 'Right')
+                    .addOption('center-left', 'Center-left')
                     .setValue(this.plugin.settings.eventDescAlign ?? 'left')
                     .onChange(v => {
-                        this.plugin.settings.eventDescAlign = v as "center" | "left" | "right" | undefined;
+                        this.plugin.settings.eventDescAlign = v as any;
                         void this.plugin.saveSettings().then(() => {
                             updateEventPreview();
                             const view = this.plugin.getCalendarView();
