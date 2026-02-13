@@ -955,9 +955,11 @@ class DaybleCalendarView extends ItemView {
         this.gridEl.removeClass('dayble-3day-mode');
         this.gridEl.removeClass('dayble-day-mode');
         this.gridEl.removeClass('dayble-agenda-mode');
+        this.gridEl.removeClass('dayble-month-mode');
 
         if (view === 'Week') {
             this.gridEl.addClass('dayble-week-mode');
+            this.gridEl.addClass('dayble-day-mode');
             await this.renderWeekView(titleEl);
         } else if (view === '3day') {
             this.gridEl.addClass('dayble-3day-mode');
@@ -969,6 +971,7 @@ class DaybleCalendarView extends ItemView {
             this.gridEl.addClass('dayble-agenda-mode');
             await this.renderAgendaView(titleEl);
         } else {
+            this.gridEl.addClass('dayble-month-mode');
             await this.renderMonthView(titleEl);
         }
 
@@ -2281,28 +2284,78 @@ class DaybleCalendarView extends ItemView {
         
         // Apply title/description alignment
         const eventSettings = ev.settings || {};
-        let titleAlign = eventSettings.titleAlign || this.plugin.settings.eventTitleAlign || 'center';
-        let descAlign = eventSettings.descAlign || this.plugin.settings.eventDescAlign || 'center';
+        const globalSettings = this.plugin.settings;
+        
+        let titleAlign = eventSettings.titleAlign || globalSettings.eventTitleAlign || 'center';
+        let descAlign = eventSettings.descAlign || globalSettings.eventDescAlign || 'center';
 
-        // CRITICAL: Apply the conditional logic HERE
-        // When BOTH settings are set to "center-left", description mimics title alignment
-        if (titleAlign === 'center-left' && descAlign === 'center-left') {
-            descAlign = titleAlign; // OVERRIDE the description alignment
+        const isCenterLeftMode = titleAlign === 'center-left' && descAlign === 'center-left';
+
+        // Strip '-left' for actual alignment classes
+        let actualTitleAlign = titleAlign.replace('-left', '') as 'left' | 'center' | 'right';
+        let actualDescAlign = descAlign.replace('-left', '') as 'left' | 'center' | 'right';
+
+        // If in center-left mode, description MUST follow title's alignment
+        if (isCenterLeftMode) {
+            actualDescAlign = actualTitleAlign;
         }
 
-        // Debugging logs
-        console.log('Event ID:', ev.id);
-        console.log('Title Align:', titleAlign);
-        console.log('Desc Align (original):', eventSettings.descAlign || this.plugin.settings.eventDescAlign);
-        console.log('Condition met:', titleAlign === 'center-left' && (eventSettings.descAlign || this.plugin.settings.eventDescAlign) === 'center-left');
-        console.log('Desc Align (final):', descAlign);
-
-        item.addClass(`dayble-title-align-${titleAlign}`);
-        item.addClass(`dayble-desc-align-${descAlign}`);
-        if (titleAlign === 'center' || titleAlign === 'center-left') {
+        item.addClass(`dayble-title-align-${actualTitleAlign}`);
+        item.addClass(`dayble-desc-align-${actualDescAlign}`);
+        
+        // CRITICAL: Add layout class when title is centered OR in center-left mode
+        if (actualTitleAlign === 'center' || titleAlign === 'center-left') {
             item.addClass('dayble-layout-center-flex');
         }
-        
+
+        // Dynamic "center-left" transition logic
+        if (titleAlign === 'center-left') {
+            // Use a slightly longer timeout and a more robust measurement
+            setTimeout(() => {
+                const checkAlignment = () => {
+                    const titleEl = item.querySelector('.dayble-event-title') as HTMLElement;
+                    if (!titleEl) return;
+
+                    // Measure natural single-line width
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    if (!context) return;
+                    
+                    const computedStyle = window.getComputedStyle(titleEl);
+                    context.font = `${computedStyle.fontWeight} ${computedStyle.fontSize} ${computedStyle.fontFamily}`;
+                    const naturalWidth = context.measureText(titleEl.innerText).width;
+
+                    const containerWidth = item.getBoundingClientRect().width;
+                    const iconEl = item.querySelector('.dayble-event-icon') as HTMLElement;
+                    let iconWidth = 0;
+                    if (iconEl && iconEl.offsetParent) {
+                        iconWidth = iconEl.getBoundingClientRect().width;
+                        const iconStyle = window.getComputedStyle(iconEl);
+                        iconWidth += parseFloat(iconStyle.marginLeft) + parseFloat(iconStyle.marginRight);
+                    }
+                    
+                    const eventStyle = window.getComputedStyle(item);
+                    const padding = parseFloat(eventStyle.paddingLeft) + parseFloat(eventStyle.paddingRight);
+                    const gap = parseFloat(eventStyle.gap) || 0;
+                    
+                    const availableWidth = containerWidth - padding - (iconWidth > 0 ? iconWidth + gap : 0) - 4; // 4px extra buffer
+
+                    if (naturalWidth >= availableWidth) {
+                        item.addClass('dayble-force-left');
+                    } else {
+                        item.removeClass('dayble-force-left');
+                    }
+                };
+
+                // Initial check
+                checkAlignment();
+
+                // Observe for size changes (e.g., window resize)
+                const observer = new ResizeObserver(() => checkAlignment());
+                observer.observe(item);
+            }, 150);
+        }
+
         // Determine which colors to use: user-set or category
         const category = this.plugin.settings.eventCategories?.find(c => c.id === ev.categoryId);
         
@@ -2424,6 +2477,8 @@ class DaybleCalendarView extends ItemView {
             let place = this.plugin.settings.iconPlacement ?? 'left';
             if (isDayMode) place = 'top'; // Force top in day mode
             
+
+
             item.addClass(`dayble-icon-placement-${place}`);
             const iconEl = (place === 'left' || place === 'right') 
                 ? item.createDiv({ cls: 'dayble-event-icon' }) 
@@ -6586,7 +6641,7 @@ class DaybleSettingTab extends PluginSettingTab {
         };
         renderTriggers();
 
-        new Setting(containerEl).setName('States').setDesc('Adds state options to the event context menu.').setHeading();
+        new Setting(containerEl).setName('States').setDesc('Adds state options to the event context menu to quickly apply styling.').setHeading();
         const statesWrap = containerEl.createDiv();
         const renderStates = () => {
             statesWrap.empty();

@@ -3,6 +3,72 @@
     display: none;
 }
 
+/* ===== EVENT ALIGNMENT ===== */
+
+/* Base text alignment - these MUST work */
+.dayble-title-align-left { text-align: left !important; }
+.dayble-title-align-center { text-align: center !important; }
+.dayble-title-align-right { text-align: right !important; }
+
+.dayble-desc-align-left { text-align: left !important; }
+.dayble-desc-align-center { text-align: center !important; }
+.dayble-desc-align-right { text-align: right !important; }
+
+/* Center-left layout - this centers the entire block */
+.dayble-layout-center-flex .dayble-event-inner {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+}
+
+/* Inside center-left layout, text alignment is controlled by the classes above */
+.dayble-layout-center-flex .dayble-event-title,
+.dayble-layout-center-flex .dayble-event-desc {
+    width: 100% !important;
+    text-align: inherit !important; /* Inherits from the alignment classes on the event item */
+}
+
+/* Force Left override for dynamic center-left transition */
+.dayble-event.dayble-force-left {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+}
+
+.dayble-event.dayble-force-left .dayble-event-inner {
+    align-items: flex-start !important;
+    text-align: left !important;
+}
+
+.dayble-event.dayble-force-left .dayble-event-title,
+.dayble-event.dayble-force-left .dayble-event-desc {
+    text-align: left !important;
+    width: 100% !important;
+}
+
+.dayble-event.dayble-force-left .dayble-event-title-container {
+    justify-content: flex-start !important;
+}
+
+/* Base alignment classes for the actual elements to ensure they don't have overrides */
+.dayble-event-title, .dayble-event-desc {
+    text-align: inherit !important;
+}
+
+/* Ensure title container uses flex for internal title alignment if needed */
+.dayble-title-align-left .dayble-event-title-container { justify-content: flex-start !important; }
+.dayble-title-align-center .dayble-event-title-container { justify-content: center !important; }
+.dayble-title-align-right .dayble-event-title-container { justify-content: flex-end !important; }
+
+/* Ensure the inner container doesn't override our alignment */
+.dayble-event-inner {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
 .dayble-root {
     display: flex;
     flex-direction: column;
@@ -2792,4 +2858,26 @@ button.dayble-btn.db-btn.button {
 .dayble-3day-all-day-section {
     background-color: var(--background-primary);
     background: var(--background-primary);
+}
+
+/* Month and Week mode icon placement fixes */
+.dayble-month-mode .dayble-event,
+.dayble-week-mode .dayble-event {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+}
+
+.dayble-month-mode .dayble-event .dayble-event-icon,
+.dayble-week-mode .dayble-event .dayble-event-icon {
+    order: -1 !important;
+    margin-right: 6px !important;
+    margin-left: 0 !important;
+}
+
+/* Ensure the inner container also aligns left if it's month/week mode */
+.dayble-month-mode .dayble-event .dayble-event-inner,
+.dayble-week-mode .dayble-event .dayble-event-inner {
+    align-items: flex-start !important;
+    text-align: left !important;
 }
