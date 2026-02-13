@@ -157,6 +157,11 @@ interface DaybleEvent {
     effect?: string;
     animation?: string;
     animation2?: string;
+    settings?: {
+        titleAlign?: 'left' | 'center' | 'right' | 'center-left';
+        descAlign?: 'left' | 'center' | 'right' | 'center-left';
+        layout?: string;
+    };
 }
 
 interface EventCategory {
@@ -2197,11 +2202,26 @@ class DaybleCalendarView extends ItemView {
         }
         
         // Apply title/description alignment
-        const titleAlign = this.plugin.settings.eventTitleAlign || 'left';
-        const descAlign = this.plugin.settings.eventDescAlign || 'left';
+        const eventSettings = ev.settings || {};
+        let titleAlign = eventSettings.titleAlign || this.plugin.settings.eventTitleAlign || 'center';
+        let descAlign = eventSettings.descAlign || this.plugin.settings.eventDescAlign || 'center';
+
+        // CRITICAL: Apply the conditional logic HERE
+        // When BOTH settings are set to "center-left", description mimics title alignment
+        if (titleAlign === 'center-left' && descAlign === 'center-left') {
+            descAlign = titleAlign; // OVERRIDE the description alignment
+        }
+
+        // Debugging logs
+        console.log('Event ID:', ev.id);
+        console.log('Title Align:', titleAlign);
+        console.log('Desc Align (original):', eventSettings.descAlign || this.plugin.settings.eventDescAlign);
+        console.log('Condition met:', titleAlign === 'center-left' && (eventSettings.descAlign || this.plugin.settings.eventDescAlign) === 'center-left');
+        console.log('Desc Align (final):', descAlign);
+
         item.addClass(`dayble-title-align-${titleAlign}`);
         item.addClass(`dayble-desc-align-${descAlign}`);
-        if (titleAlign === 'center') {
+        if (titleAlign === 'center' || titleAlign === 'center-left') {
             item.addClass('dayble-layout-center-flex');
         }
         
@@ -2705,6 +2725,9 @@ class EventModal extends Modal {
     selectedTextColor?: string;
     selectedColorName?: string;
     isPinned: boolean = false;
+    selectedTitleAlign?: 'left' | 'center' | 'right' | 'center-left';
+    selectedDescAlign?: 'left' | 'center' | 'right' | 'center-left';
+    selectedLayout?: string;
 
     constructor(app: App, plugin: DaybleCalendarPlugin, ev: DaybleEvent | undefined, date: string | undefined, endDate: string | undefined, defaultStartTime: string | undefined, defaultEndTime: string | undefined, onSubmit: (ev: Partial<DaybleEvent>) => Promise<void>, onDelete: () => Promise<void>, onPickIcon: () => Promise<void>) {
         super(app);
@@ -2722,6 +2745,9 @@ class EventModal extends Modal {
         this.selectedTextColor = ev?.textColor;
         this.selectedColorName = ev?.colorName;
         this.isPinned = ev?.pinned ?? false;
+        this.selectedTitleAlign = ev?.settings?.titleAlign;
+        this.selectedDescAlign = ev?.settings?.descAlign;
+        this.selectedLayout = ev?.settings?.layout;
     }
 
     setIcon(icon: string) { this.icon = icon; if (this.iconBtnEl) setIcon(this.iconBtnEl, icon || 'plus'); }
@@ -2943,7 +2969,32 @@ class EventModal extends Modal {
         descInput.value = this.ev?.description ?? '';
         
         descInput.oninput = () => { showSuggestionsFor(descInput); };
-        
+
+        // Per-event alignment settings
+        const alignRow = c.createDiv({ cls: 'dayble-modal-row dayble-align-row' });
+        alignRow.style.display = 'flex';
+        alignRow.style.gap = '10px';
+        alignRow.style.marginTop = '10px';
+
+        const createAlignSelect = (label: string, value: string | undefined, onChange: (v: any) => void) => {
+            const container = alignRow.createDiv({ cls: 'dayble-align-container' });
+            container.style.display = 'flex';
+            container.style.flexDirection = 'column';
+            container.style.flex = '1';
+            container.createEl('label', { text: label }).style.fontSize = '0.8em';
+            const sel = container.createEl('select', { cls: 'dropdown' });
+            const options = ['default', 'left', 'center', 'right', 'center-left'];
+            options.forEach(opt => {
+                const o = sel.createEl('option', { text: opt, value: opt === 'default' ? '' : opt });
+                if ((opt === 'default' && !value) || opt === value) o.selected = true;
+            });
+            sel.onchange = () => onChange(sel.value || undefined);
+            return sel;
+        };
+
+        createAlignSelect('Title align', this.selectedTitleAlign, (v) => this.selectedTitleAlign = v);
+        createAlignSelect('Desc align', this.selectedDescAlign, (v) => this.selectedDescAlign = v);
+
         // Add color swatches under description if setting says so
         if (colorSwatchPos === 'under-description') {
             createColorRow();
@@ -2979,7 +3030,12 @@ class EventModal extends Modal {
                 categoryId: selectedCategoryId,
                 color: this.selectedColor,
                 textColor: this.selectedTextColor,
-                colorName: this.selectedColorName
+                colorName: this.selectedColorName,
+                settings: {
+                    titleAlign: this.selectedTitleAlign,
+                    descAlign: this.selectedDescAlign,
+                    layout: this.selectedLayout
+                }
             };
             if (!payload.categoryId && !payload.color && !payload.colorName) {
                 const triggers = this.plugin.settings.triggers || [];
@@ -4238,7 +4294,7 @@ class DaybleSettingTab extends PluginSettingTab {
         
         
         ;
-
+        new Setting(containerEl).setName('General').setHeading();
         ;
 
         new Setting(containerEl)
@@ -4581,8 +4637,13 @@ class DaybleSettingTab extends PluginSettingTab {
             const borderOpacity = settings.eventBorderOpacity ?? 1;
             const borderWidth = settings.eventBorderWidth ?? 2;
             const borderRadius = settings.eventBorderRadius ?? 6;
-            const titleAlign = settings.eventTitleAlign ?? 'left';
-            const descAlign = settings.eventDescAlign ?? 'left';
+            const titleAlign = settings.eventTitleAlign ?? 'center';
+            const descAlign = settings.eventDescAlign ?? 'center';
+
+            let finalDescAlign = descAlign;
+            if (titleAlign === 'center-left' && descAlign === 'center-left') {
+                finalDescAlign = titleAlign;
+            }
 
             if (selectedSwatch) {
                 const baseColor = selectedSwatch.color;
@@ -4631,8 +4692,8 @@ class DaybleSettingTab extends PluginSettingTab {
             eventBox.setCssStyles({ borderRadius: `${borderRadius}px` });
             
             // Align title and desc
-            eventTitle.setCssStyles({ textAlign: titleAlign });
-            eventDesc.setCssStyles({ textAlign: descAlign });
+            eventTitle.setCssStyles({ textAlign: titleAlign === 'center-left' ? 'left' : titleAlign });
+            eventDesc.setCssStyles({ textAlign: finalDescAlign === 'center-left' ? 'left' : finalDescAlign });
             
             // Handle overall flex alignment based on title alignment
             eventBox.setCssStyles({ justifyContent: titleAlign === 'center' ? 'center' : (titleAlign === 'right' ? 'flex-end' : 'flex-start') });
