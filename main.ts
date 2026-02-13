@@ -55,6 +55,8 @@ interface DaybleSettings {
     eventStates?: EventState[];
     weekTitleFormat?: 'month_year' | 'week_number' | 'full_range' | 'short_range';
     dayTitleFormat?: string;
+    threeDayTitleFormat?: 'month_year' | 'full_range' | 'short_range' | 'full_range_hyphen' | 'short_range_hyphen' | 'd_mmmm_range' | 'd_mmm_range';
+    threeDayDateFormat?: string;
     agendaTitleFormat?: string;
     agendaDateFormat?: string;
 } 
@@ -99,6 +101,8 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     eventStates: [],
     weekTitleFormat: 'month_year',
     dayTitleFormat: 'dddd, D MMMM',
+    threeDayTitleFormat: 'full_range',
+    threeDayDateFormat: 'ddd D',
     agendaTitleFormat: 'MMMM YYYY',
     agendaDateFormat: 'dddd, D MMMM',
     swatches: [
@@ -884,7 +888,7 @@ class DaybleCalendarView extends ItemView {
         if (view === 'Week') {
             this.currentDate.setDate(this.currentDate.getDate() + (delta * 7));
         } else if (view === '3day') {
-            this.currentDate.setDate(this.currentDate.getDate() + (delta * 3));
+            this.currentDate.setDate(this.currentDate.getDate() + delta);
         } else if (view === 'Day') {
             this.currentDate.setDate(this.currentDate.getDate() + delta);
         } else if (view === 'Agenda') {
@@ -1786,45 +1790,47 @@ class DaybleCalendarView extends ItemView {
         }
         this._dayMode3ROs = [];
 
-        for (const fullDate of dates) {
-            const dayCol = mainContainer.createDiv({ cls: 'dayble-3day-col' });
+        const dayModeModal = new TodayModal(this.app, dates, this.events, this);
+        
+        // Mock contentEl to our mainContainer
+        // @ts-ignore
+        dayModeModal.contentEl = mainContainer;
+        // @ts-ignore
+        dayModeModal.modalEl = mainContainer;
+        
+        dayModeModal.onOpen();
 
-            // Sub-header for each day
-            const [year, month, dayNum] = fullDate.split('-').map(Number);
-            const dateObj = new Date(year, month - 1, dayNum);
-            const dayLabel = moment(dateObj).format('ddd, MMM D');
-            const subHeader = dayCol.createDiv({ cls: 'dayble-3day-subheader', text: dayLabel });
+        const ro = new ResizeObserver(() => {
+            dayModeModal.renderEvents();
+        });
+        ro.observe(mainContainer);
+        this._dayMode3ROs.push(ro);
 
-            const dayContainer = dayCol.createDiv({ cls: 'dayble-day-mode-container' });
+        requestAnimationFrame(() => {
+            dayModeModal.renderEvents();
+        });
 
-            const dayModeModal = new TodayModal(this.app, fullDate, this.events, this);
-            
-            // Mock contentEl to our dayContainer
-            // @ts-ignore
-            dayModeModal.contentEl = dayContainer;
-            // @ts-ignore
-            dayModeModal.modalEl = dayContainer;
-            
-            dayModeModal.onOpen();
-
-            const ro = new ResizeObserver(() => {
-                dayModeModal.renderEvents();
-            });
-            ro.observe(dayContainer);
-            this._dayMode3ROs.push(ro);
-
-            requestAnimationFrame(() => {
-                dayModeModal.renderEvents();
-            });
-
-            // Remove the default title added by TodayModal
-            const modalTitle = dayContainer.querySelector('.dayble-modal-title');
-            if (modalTitle) modalTitle.remove();
+        const startMoment = moment(dates[0]);
+        const endMoment = moment(dates[2]);
+        let rangeLabel = '';
+        const format = this.plugin.settings.threeDayTitleFormat || 'full_range';
+        
+        if (format === 'month_year') {
+            rangeLabel = startMoment.format('MMMM YYYY');
+        } else if (format === 'short_range') {
+            rangeLabel = `${startMoment.format('MMM D')} to ${endMoment.format('MMM D')}`;
+        } else if (format === 'full_range_hyphen') {
+            rangeLabel = `${startMoment.format('MMMM D')} - ${endMoment.format('MMMM D')}`;
+        } else if (format === 'short_range_hyphen') {
+            rangeLabel = `${startMoment.format('MMM D')} - ${endMoment.format('MMM D')}`;
+        } else if (format === 'd_mmmm_range') {
+            rangeLabel = `${startMoment.format('D MMMM')} - ${endMoment.format('D MMMM')}`;
+        } else if (format === 'd_mmm_range') {
+            rangeLabel = `${startMoment.format('D MMM')} - ${endMoment.format('D MMM')}`;
+        } else {
+            rangeLabel = `${startMoment.format('MMMM D')} to ${endMoment.format('MMMM D')}`;
         }
-
-        const startLabel = moment(dates[0]).format('MMM D');
-        const endLabel = moment(dates[2]).format('MMM D');
-        const rangeLabel = `${startLabel} - ${endLabel}, ${baseDate.getFullYear()}`;
+        
         if (this.monthTitleEl) this.monthTitleEl.setText(rangeLabel);
 
         await this.renderHolder();
@@ -3335,7 +3341,7 @@ class PromptSearchModal extends Modal {
 }
 
 class TodayModal extends Modal {
-    date: string;
+    date: string | string[];
     events: DaybleEvent[];
     view?: DaybleCalendarView;
     dragId?: string;
@@ -3350,7 +3356,7 @@ class TodayModal extends Modal {
     overlay: HTMLElement;
     scroller: HTMLElement;
 
-    constructor(app: App, date: string, events: DaybleEvent[], view?: DaybleCalendarView) {
+    constructor(app: App, date: string | string[], events: DaybleEvent[], view?: DaybleCalendarView) {
         super(app);
         this.date = date;
         this.events = events;
@@ -3360,17 +3366,26 @@ class TodayModal extends Modal {
     onOpen() {
         const c = this.contentEl;
         const split = this.view?.plugin?.settings?.todayModalSplitView ?? true;
-        if (split) this.modalEl.addClass('dayble-modal-wide');
+        const isMulti = Array.isArray(this.date);
+        const dates = isMulti ? (this.date as string[]) : [this.date as string];
+        const primaryDate = dates[0];
+
+        if (split && !isMulti) this.modalEl.addClass('dayble-modal-wide');
         c.empty();
         c.addClass('dayble-modal-column');
         c.addClass('dayble-modal-full-height');
         c.addClass('db-modal');
-        const [year, month, day] = this.date.split('-').map(Number);
+
+        const [year, month, day] = primaryDate.split('-').map(Number);
         const dateObj = new Date(year, month - 1, day);
         const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-        const title = c.createEl('h3', { text: `${monthNames[dateObj.getMonth()]} ${day}` });
-        title.addClass('db-modal-title');
-        title.addClass('dayble-modal-title');
+        
+        if (!isMulti) {
+            const title = c.createEl('h3', { text: `${monthNames[dateObj.getMonth()]} ${day}` });
+            title.addClass('db-modal-title');
+            title.addClass('dayble-modal-title');
+        }
+
         const fmt = this.view?.plugin?.settings?.timeFormat ?? '24h';
         const pad = (n: number) => String(n).padStart(2,'0');
         const nextDateStr = (s: string) => {
@@ -3394,66 +3409,280 @@ class TodayModal extends Modal {
             slots.push({ hour: h, minute: 30 });
         }
 
+        let allDaySection: HTMLElement | null = null;
+        if (isMulti) {
+            const header = c.createDiv({ cls: 'dayble-3day-header' });
+            allDaySection = document.createElement('div');
+            allDaySection.className = 'dayble-3day-all-day-section';
+            
+            // Sync column widths from the focus grid
+            const syncWidths = () => {
+                const grid = c.querySelector('.dayble-focus-grid');
+                if (grid && allDaySection) {
+                    const style = window.getComputedStyle(grid);
+                    const gridTemplate = style.getPropertyValue('grid-template-columns');
+                    if (gridTemplate) {
+                        header.style.gridTemplateColumns = gridTemplate;
+                        allDaySection.style.gridTemplateColumns = gridTemplate;
+                    }
+                }
+            };
+
+            // Header Setup
+            header.createDiv({ cls: 'dayble-3day-header-spacer', text: '' });
+            dates.forEach(dStr => {
+                const [y, m, d] = dStr.split('-').map(Number);
+                const dateObj = new Date(y, m - 1, d);
+                const label = moment(dateObj).format(this.view?.plugin?.settings?.threeDayDateFormat || 'ddd D');
+                header.createDiv({ cls: 'dayble-3day-header-day', text: label });
+            });
+
+            // All-Day Setup
+            allDaySection.createDiv({ cls: 'dayble-3day-all-day-spacer' });
+            dates.forEach(dStr => {
+                const dayCol = allDaySection!.createDiv({ cls: 'dayble-3day-all-day-day' });
+                dayCol.setAttr('data-date', dStr);
+                dayCol.onclick = (e) => {
+                    if ((e.target as HTMLElement).closest('.dayble-event')) return;
+                    this.view?.openEventModal(undefined, dStr);
+                };
+                
+                dayCol.ondragover = (e) => {
+                    e.preventDefault();
+                    dayCol.addClass('drop-target');
+                };
+                dayCol.ondragleave = () => {
+                    dayCol.removeClass('drop-target');
+                };
+                dayCol.ondrop = async (e) => {
+                    e.preventDefault();
+                    dayCol.removeClass('drop-target');
+                    const id = this.dragId;
+                    if (!id) return;
+
+                    try {
+                        const evIdx = (this.view?.events || []).findIndex(ev => ev.id === id);
+                        if (evIdx !== -1 && this.view) {
+                            const originalEv = this.view.events[evIdx];
+                            const updatedEv = JSON.parse(JSON.stringify(originalEv));
+                            
+                            updatedEv.date = dStr;
+                            updatedEv.startDate = dStr;
+                            updatedEv.endDate = dStr;
+                            updatedEv.time = undefined; // Make it all-day
+                            
+                            this.view.events[evIdx] = updatedEv;
+                            await this.view.saveAllEntries();
+                            await this.view.render();
+                            this.onOpen();
+                        }
+                    } catch (err) { console.debug('[Dayble] All-day drop update:', err); }
+                    this.dragId = undefined; this.dragDuration = undefined; this.dragEl = undefined;
+                };
+
+                const dayEvents = (this.events || []).filter(e => {
+                    const isToday = (e.date === dStr) || (e.startDate === dStr) || 
+                                    (e.startDate && e.endDate && dStr >= e.startDate && dStr <= e.endDate);
+                    if (!isToday) return false;
+                    const isMultiDay = e.startDate && e.endDate && e.startDate !== e.endDate;
+                    return !e.time || isMultiDay;
+                }).sort((a, b) => {
+                    const ad = a.startDate && a.endDate ? (new Date(a.endDate).getTime() - new Date(a.startDate).getTime()) : 0;
+                    const bd = b.startDate && b.endDate ? (new Date(b.endDate).getTime() - new Date(b.startDate).getTime()) : 0;
+                    if (ad !== bd) return bd - ad; 
+                    return (a.title || '').localeCompare(b.title || '');
+                });
+
+                dayEvents.forEach(ev => {
+                    const item = this.view?.createEventItem(ev) || document.createElement('div');
+                    item.addClass('dayble-all-day-event-item');
+                    item.setCssProps({
+                        'width': '100%',
+                        'cursor': 'pointer',
+                        'overflow': 'hidden'
+                    });
+                    item.onclick = (e) => { e.stopPropagation(); this.view?.openEventModal(ev.id, ev.date || ev.startDate, ev.endDate); };
+                    
+                    item.ondragstart = (e) => {
+                        const dt = e.dataTransfer;
+                        if (!dt) return;
+                        this.dragId = ev.id;
+                        this.dragEl = item;
+                        this.dragDuration = 60; // Default 1 hour for all-day items dropped into grid
+                        
+                        const itemRect = item.getBoundingClientRect();
+                        this.dragOffsetY = e.clientY - itemRect.top;
+
+                        item.addClass('dragging');
+                        try {
+                            const img = new Image();
+                            img.width = 1; img.height = 1;
+                            dt.setDragImage(img, 0, 0);
+                        } catch {}
+                    };
+                    item.ondragend = () => {
+                        const currentIndicator = this.contentEl.querySelector('.dayble-focus-drop');
+                        if (currentIndicator) currentIndicator.remove();
+                        this.gridContainer.querySelectorAll('.dayble-focus-cell.drop-target').forEach(el => el.removeClass('drop-target'));
+                        item.removeClass('dragging');
+                        this.dragId = undefined;
+                        this.dragDuration = undefined;
+                        this.dragEl = undefined;
+                    };
+
+                    dayCol.appendChild(item);
+                });
+            });
+
+            // Sync and Observers
+            requestAnimationFrame(syncWidths);
+            const obs = new ResizeObserver(syncWidths);
+            obs.observe(c);
+            // @ts-ignore
+            if (!this._dayMode3ROs) this._dayMode3ROs = [];
+            this._dayMode3ROs.push(obs);
+        }
+
         const scroller = c.createDiv({ cls: 'dayble-focus-scroll' });
         this.scroller = scroller;
         scroller.style.setProperty('--event-border-radius', `${this.view?.plugin?.settings?.eventBorderRadius ?? 6}px`);
 
+        if (allDaySection) {
+            scroller.appendChild(allDaySection);
+        }
+
         // Capture scroll position to prevent reset on re-render
         scroller.addEventListener('scroll', () => {
-            this.lastScrollTop = scroller.scrollTop;
+            if (this.view) {
+                this.view.lastScrollTop = scroller.scrollTop;
+            }
         });
 
-        // All-day / Multi-day events section above scroll
-        const allDayEvents = (this.events || []).filter(e => {
-            const isToday = (e.date === this.date) || (e.startDate === this.date) || 
-                            (e.startDate && e.endDate && this.date >= e.startDate && this.date <= e.endDate);
-            if (!isToday) return false;
-            // It's an all-day event if it has no time OR if it's a multi-day event
-            const isMultiDay = e.startDate && e.endDate && e.startDate !== e.endDate;
-            return !e.time || isMultiDay;
-        }).sort((a, b) => {
-            const ad = a.startDate && a.endDate ? (new Date(a.endDate).getTime() - new Date(a.startDate).getTime()) : 0;
-            const bd = b.startDate && b.endDate ? (new Date(b.endDate).getTime() - new Date(b.startDate).getTime()) : 0;
-            if (ad !== bd) return bd - ad; // longer first
-            return (a.title || '').localeCompare(b.title || '');
-        });
-
-        if (allDayEvents.length > 0) {
-            const allDaySection = c.createDiv({ cls: 'dayble-all-day-section' });
-            allDaySection.setCssProps({
-                'padding': '8px',
-                'border-bottom': '1px solid var(--background-modifier-border)',
-                'display': 'flex',
-                'flex-direction': 'row',
-                'flex-wrap': 'wrap',
-                'gap': '4px',
-                'flex-shrink': '0'
+        if (this.view && this.view.lastScrollTop !== undefined) {
+            requestAnimationFrame(() => {
+                scroller.scrollTop = this.view?.lastScrollTop || 0;
             });
-            allDayEvents.forEach(ev => {
-                const item = this.view?.createEventItem(ev) || document.createElement('div');
-                item.addClass('dayble-all-day-event-item');
-                item.setCssProps({
-                    'flex': '1 1 calc(50% - 4px)',
-                    'min-width': '120px',
-                    'cursor': 'pointer',
-                    'overflow': 'hidden'
-                });
-                item.onclick = (e) => { e.stopPropagation(); this.view?.openEventModal(ev.id, ev.date || ev.startDate, ev.endDate); };
-                allDaySection.appendChild(item);
-            });
-            c.appendChild(scroller);
         }
+
+        // All-day section (for single day mode)
+        if (!isMulti) {
+            const allDayEvents = (this.events || []).filter(e => {
+                const isToday = (e.date === primaryDate) || (e.startDate === primaryDate) || 
+                                (e.startDate && e.endDate && primaryDate >= e.startDate && primaryDate <= e.endDate);
+                if (!isToday) return false;
+                const isMultiDay = e.startDate && e.endDate && e.startDate !== e.endDate;
+                return !e.time || isMultiDay;
+            }).sort((a, b) => {
+                const ad = a.startDate && a.endDate ? (new Date(a.endDate).getTime() - new Date(a.startDate).getTime()) : 0;
+                const bd = b.startDate && b.endDate ? (new Date(b.endDate).getTime() - new Date(b.startDate).getTime()) : 0;
+                if (ad !== bd) return bd - ad; 
+                return (a.title || '').localeCompare(b.title || '');
+            });
+
+            if (allDayEvents.length > 0) {
+                const allDaySection = c.createDiv({ cls: 'dayble-all-day-section' });
+                allDaySection.setAttr('data-date', primaryDate);
+                allDaySection.onclick = (e) => {
+                    if ((e.target as HTMLElement).closest('.dayble-event')) return;
+                    this.view?.openEventModal(undefined, primaryDate);
+                };
+                
+                allDaySection.ondragover = (e) => {
+                    e.preventDefault();
+                    allDaySection.addClass('drop-target');
+                };
+                allDaySection.ondragleave = () => {
+                    allDaySection.removeClass('drop-target');
+                };
+                allDaySection.ondrop = async (e) => {
+                    e.preventDefault();
+                    allDaySection.removeClass('drop-target');
+                    const id = this.dragId;
+                    if (!id) return;
+
+                    try {
+                        const evIdx = (this.view?.events || []).findIndex(ev => ev.id === id);
+                        if (evIdx !== -1 && this.view) {
+                            const originalEv = this.view.events[evIdx];
+                            const updatedEv = JSON.parse(JSON.stringify(originalEv));
+                            
+                            updatedEv.date = primaryDate;
+                            updatedEv.startDate = primaryDate;
+                            updatedEv.endDate = primaryDate;
+                            updatedEv.time = undefined; // Make it all-day
+                            
+                            this.view.events[evIdx] = updatedEv;
+                            await this.view.saveAllEntries();
+                            await this.view.render();
+                            this.onOpen();
+                        }
+                    } catch (err) { console.debug('[Dayble] All-day drop update:', err); }
+                    this.dragId = undefined; this.dragDuration = undefined; this.dragEl = undefined;
+                };
+
+                allDaySection.setCssProps({
+                    'padding': '8px',
+                    'border-bottom': '1px solid var(--background-modifier-border)',
+                    'display': 'flex',
+                    'flex-direction': 'row',
+                    'flex-wrap': 'wrap',
+                    'gap': '4px',
+                    'flex-shrink': '0'
+                });
+                allDayEvents.forEach(ev => {
+                    const item = this.view?.createEventItem(ev) || document.createElement('div');
+                    item.addClass('dayble-all-day-event-item');
+                    item.setCssProps({
+                        'flex': '1 1 calc(50% - 4px)',
+                        'min-width': '120px',
+                        'cursor': 'pointer',
+                        'overflow': 'hidden'
+                    });
+                    item.onclick = (e) => { e.stopPropagation(); this.view?.openEventModal(ev.id, ev.date || ev.startDate, ev.endDate); };
+                    
+                    item.ondragstart = (e) => {
+                        const dt = e.dataTransfer;
+                        if (!dt) return;
+                        this.dragId = ev.id;
+                        this.dragEl = item;
+                        this.dragDuration = 60; // Default 1 hour for all-day items dropped into grid
+                        
+                        const itemRect = item.getBoundingClientRect();
+                        this.dragOffsetY = e.clientY - itemRect.top;
+
+                        item.addClass('dragging');
+                        try {
+                            const img = new Image();
+                            img.width = 1; img.height = 1;
+                            dt.setDragImage(img, 0, 0);
+                        } catch {}
+                    };
+                    item.ondragend = () => {
+                        const currentIndicator = this.contentEl.querySelector('.dayble-focus-drop');
+                        if (currentIndicator) currentIndicator.remove();
+                        this.gridContainer.querySelectorAll('.dayble-focus-cell.drop-target').forEach(el => el.removeClass('drop-target'));
+                        item.removeClass('dragging');
+                        this.dragId = undefined;
+                        this.dragDuration = undefined;
+                        this.dragEl = undefined;
+                    };
+
+                    allDaySection.appendChild(item);
+                });
+            }
+        }
+        c.appendChild(scroller);
 
         // Container for grids
         const gridContainer = scroller.createDiv({ cls: 'dayble-focus-grid-container' });
         this.gridContainer = gridContainer;
         let morningGrid: HTMLElement, afternoonGrid: HTMLElement;
-        if (split) {
+        if (split && !isMulti) {
             morningGrid = gridContainer.createDiv({ cls: 'dayble-focus-grid morning' });
             afternoonGrid = gridContainer.createDiv({ cls: 'dayble-focus-grid afternoon' });
         } else {
             morningGrid = gridContainer.createDiv({ cls: 'dayble-focus-grid' });
-            afternoonGrid = morningGrid; // both point to same in single mode
+            afternoonGrid = morningGrid; 
         }
         this.morningGrid = morningGrid;
         this.afternoonGrid = afternoonGrid;
@@ -3467,41 +3696,40 @@ class TodayModal extends Modal {
             const morningRect = morningGrid.getBoundingClientRect();
             const afternoonRect = afternoonGrid.getBoundingClientRect();
             
-            const isAfternoon = split && (clientX > (morningRect.right + afternoonRect.left) / 2);
+            const isAfternoon = !isMulti && split && (clientX > (morningRect.right + afternoonRect.left) / 2);
             const targetGrid = isAfternoon ? afternoonGrid : morningGrid;
-            
-            // Calculate correct target Rect for width/left boundaries
             const targetRect = targetGrid.getBoundingClientRect();
             
             const cells = Array.from(targetGrid.querySelectorAll('.dayble-focus-cell')) as HTMLElement[];
             if (cells.length === 0) return null;
 
-            // Find the cell under the given clientY
-            // We use the first cell to get a base row height for min15 sub-slot calculation
             const firstCellRect = cells[0].getBoundingClientRect();
             const pxPer30 = firstCellRect.height;
             const pxPer15 = pxPer30 / 2;
 
             let targetCell: HTMLElement | null = null;
             let slotIdx = -1;
+            let dayIdx = 0;
 
             for (const cell of cells) {
                 const r = cell.getBoundingClientRect();
-                if (clientY >= r.top && clientY <= r.bottom) {
+                if (clientY >= r.top && clientY <= r.bottom && clientX >= r.left && clientX <= r.right) {
                     targetCell = cell;
                     slotIdx = parseInt(cell.getAttribute('data-idx') || '-1', 10);
+                    dayIdx = parseInt(cell.getAttribute('data-day') || '0', 10);
                     break;
                 }
             }
 
-            // Fallback to first or last cell if out of bounds
             if (!targetCell) {
                 if (clientY < targetRect.top) {
                     targetCell = cells[0];
                     slotIdx = parseInt(targetCell.getAttribute('data-idx') || '0', 10);
+                    dayIdx = parseInt(targetCell.getAttribute('data-day') || '0', 10);
                 } else {
                     targetCell = cells[cells.length - 1];
                     slotIdx = parseInt(targetCell.getAttribute('data-idx') || '47', 10);
+                    dayIdx = parseInt(targetCell.getAttribute('data-day') || '0', 10);
                 }
             }
 
@@ -3509,13 +3737,12 @@ class TodayModal extends Modal {
             const relYInCell = clientY - targetCellRect.top;
             const isSecondHalf = relYInCell > pxPer15;
             
-            // n is the total number of min15 increments from the start of the grid
-            // (slotIdx - baseIdx) * 2 + (isSecondHalf ? 1 : 0)
-            const baseIdx = (split && isAfternoon) ? 24 : 0;
+            const baseIdx = (split && !isMulti && isAfternoon) ? 24 : 0;
             const n = (slotIdx - baseIdx) * 2 + (isSecondHalf ? 1 : 0);
 
             return {
                 slotIdx,
+                dayIdx,
                 isSecondHalf,
                 pxPer15,
                 isAfternoon,
@@ -3530,7 +3757,7 @@ class TodayModal extends Modal {
             gridContainer.querySelectorAll('.dayble-focus-cell.drop-target').forEach(el => el.removeClass('drop-target'));
         };
         // snapping via pxPer15 computed per dragover/drop
-        const sel: { active: boolean, start15?: number, end15?: number } = { active: false };
+        const sel: { active: boolean, start15?: number, end15?: number, startDayIdx?: number, endDayIdx?: number } = { active: false };
         const clearSelection = (resetData = true) => { 
             gridContainer.querySelectorAll('.dayble-focus-cell').forEach(el => {
                 el.removeClass('sel-top');
@@ -3541,18 +3768,21 @@ class TodayModal extends Modal {
                 sel.active = false;
                 sel.start15 = undefined;
                 sel.end15 = undefined;
+                sel.startDayIdx = undefined;
+                sel.endDayIdx = undefined;
             }
             if (selectionMirror) { selectionMirror.remove(); selectionMirror = null; }
         };
         const applySelection = () => {
-            if (sel.active && typeof sel.start15 === 'number' && typeof sel.end15 === 'number') {
+            if (sel.active && typeof sel.start15 === 'number' && typeof sel.end15 === 'number' && typeof sel.startDayIdx === 'number' && typeof sel.endDayIdx === 'number') {
                 const s15 = Math.min(sel.start15, sel.end15);
                 const e15 = Math.max(sel.start15, sel.end15);
-                
+                const dIdx = sel.endDayIdx; // Use the current day index for visual highlight
+
                 // Visual Highlight on cells (min15 precision)
                 for (let i = s15; i <= e15; i++) {
                     const slotIdx = Math.floor(i / 2);
-                    const cell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${slotIdx}"]`) as HTMLElement;
+                    const cell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${slotIdx}"][data-day="${dIdx}"]`) as HTMLElement;
                     if (cell) {
                         if (i % 2 === 0) cell.addClass('sel-top');
                         else cell.addClass('sel-bottom');
@@ -3566,7 +3796,7 @@ class TodayModal extends Modal {
 
                 const renderMirrorSegment = (start15: number, end15: number, type: 'full'|'start'|'end') => {
                     const startSlotIdx = Math.floor(start15 / 2);
-                    const startCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${startSlotIdx}"]`) as HTMLElement;
+                    const startCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${startSlotIdx}"][data-day="${dIdx}"]`) as HTMLElement;
                     if (!startCell) return;
 
                     const gRect = gridContainer.getBoundingClientRect();
@@ -3638,7 +3868,7 @@ class TodayModal extends Modal {
         };
         const toTime = (h: number, m: number) => `${pad(h)}:${pad(m)}`;
         const finalizeSelection = async () => {
-            if (typeof sel.start15 !== 'number' || typeof sel.end15 !== 'number') return;
+            if (typeof sel.start15 !== 'number' || typeof sel.end15 !== 'number' || typeof sel.endDayIdx !== 'number') return;
             const sIdx15 = Math.min(sel.start15, sel.end15);
             const eIdx15 = Math.max(sel.start15, sel.end15);
             
@@ -3655,8 +3885,12 @@ class TodayModal extends Modal {
             const endIsMidnightNext = (endTotalMin >= 24 * 60);
             if (endIsMidnightNext) eTime = '00:00';
             
-            const sDate = this.date;
-            const eDate = endIsMidnightNext ? nextDateStr(this.date) : this.date;
+            const isMulti = Array.isArray(this.date);
+            const dates = isMulti ? (this.date as string[]) : [this.date as string];
+            const targetDate = dates[sel.endDayIdx] || dates[0];
+
+            const sDate = targetDate;
+            const eDate = endIsMidnightNext ? nextDateStr(targetDate) : targetDate;
             await this.view?.openEventModal(undefined, sDate, eDate, sTime, eTime);
         };
         // Global mouseup to catch releases outside the specific cell
@@ -3671,7 +3905,7 @@ class TodayModal extends Modal {
         };
 
         slots.forEach((slot, idx) => {
-            const targetGrid = (split && slot.hour >= 12) ? afternoonGrid : morningGrid;
+            const targetGrid = (!isMulti && split && slot.hour >= 12) ? afternoonGrid : morningGrid;
             const row = targetGrid.createDiv({ cls: 'dayble-focus-row' });
             const time = row.createDiv({ cls: 'dayble-focus-time' });
             time.addClass('dayble-time-el-style');
@@ -3685,8 +3919,10 @@ class TodayModal extends Modal {
                 
                 sel.active = true; 
                 gridContainer.addClass('dayble-selecting');
-                sel.start15 = idx * 2; // Each slot is 30 mins, so 2x min15 increments
+                sel.start15 = idx * 2; 
                 sel.end15 = sel.start15;
+                sel.startDayIdx = 0;
+                sel.endDayIdx = 0;
 
                 clearSelection(false); 
                 applySelection();
@@ -3698,52 +3934,46 @@ class TodayModal extends Modal {
                 e.stopPropagation();
                 
                 sel.end15 = idx * 2;
+                sel.endDayIdx = 0;
                 
                 clearSelection(false); 
                 applySelection();
             };
-            time.onmouseup = (e) => {
-                e.stopPropagation();
-            };
-            time.onclick = (e) => {
-                e.stopPropagation();
-            };
 
-            const cell = row.createDiv({ cls: 'dayble-focus-cell' });
-            cell.setAttr('data-idx', String(idx));
-            
-            cell.onmousedown = (e) => {
-                if ((e as MouseEvent).button !== 0) return;
-                const info = getSlotInfo(e.clientX, e.clientY);
-                if (!info) return;
+            dates.forEach((dStr, dIdx) => {
+                const cell = row.createDiv({ cls: 'dayble-focus-cell' });
+                cell.setAttr('data-idx', String(idx));
+                cell.setAttr('data-day', String(dIdx));
                 
-                sel.active = true; 
-                gridContainer.addClass('dayble-selecting');
-                sel.start15 = info.isAfternoon ? (24*2 + (info.n % 48)) : info.n;
-                sel.end15 = sel.start15;
+                cell.onmousedown = (e) => {
+                    if ((e as MouseEvent).button !== 0) return;
+                    const info = getSlotInfo(e.clientX, e.clientY);
+                    if (!info) return;
+                    
+                    sel.active = true; 
+                    gridContainer.addClass('dayble-selecting');
+                    sel.start15 = info.isAfternoon ? (24*2 + (info.n % 48)) : info.n;
+                    sel.end15 = sel.start15;
+                    sel.startDayIdx = info.dayIdx;
+                    sel.endDayIdx = info.dayIdx;
 
-                clearSelection(false); 
-                applySelection();
-                window.addEventListener('mouseup', onGlobalMouseUp);
-            };
-            cell.onmouseover = (e) => {
-                if (!sel.active) return;
-                
-                const info = getSlotInfo(e.clientX, e.clientY);
-                if (!info) return;
+                    clearSelection(false); 
+                    applySelection();
+                    window.addEventListener('mouseup', onGlobalMouseUp);
+                };
+                cell.onmouseover = (e) => {
+                    if (!sel.active) return;
+                    
+                    const info = getSlotInfo(e.clientX, e.clientY);
+                    if (!info) return;
 
-                sel.end15 = info.isAfternoon ? (24*2 + (info.n % 48)) : info.n;
-                
-                clearSelection(false); 
-                applySelection();
-            };
-            cell.onmouseup = (e) => {
-                e.stopPropagation();
-            };
-            // Use click only as a fallback for mobile or when mousedown/mouseup are interrupted
-            cell.onclick = (e) => {
-                e.stopPropagation();
-            };
+                    sel.end15 = info.isAfternoon ? (24*2 + (info.n % 48)) : info.n;
+                    sel.endDayIdx = info.dayIdx;
+                    
+                    clearSelection(false); 
+                    applySelection();
+                };
+            });
         });
         scroller.onmouseleave = () => { if (sel.active) { sel.active = false; clearSelection(); } };
         
@@ -3810,7 +4040,7 @@ class TodayModal extends Modal {
             }
         }, { capture: true });
 
-        // Handle drop on scroller to reposition event by min15 increments, with magnetic indicator
+        // Snap dragging to min15 increments, with magnetic indicator and day column awareness
         scroller.ondragover = (e) => {
             e.preventDefault();
             const id = this.dragId;
@@ -3863,51 +4093,56 @@ class TodayModal extends Modal {
             const id = this.dragId;
             const el = this.dragEl;
             if (!id) return;
-            const durationMin = this.dragDuration || 30;
             
             const info = getSlotInfo(e.clientX, e.clientY - (this.dragOffsetY || 0));
             if (!info) return;
 
             // ANIMATION START: Settle the element to its new slot
             if (el) {
-                    const gRect = gridContainer.getBoundingClientRect();
-                    const targetCellRect = info.targetCell.getBoundingClientRect();
-                    const left = targetCellRect.left - gRect.left;
-                    const topLocal = (targetCellRect.top - gRect.top) + (info.isSecondHalf ? info.pxPer15 : 0);
-                    
-                    el.removeClass('dragging');
-                    el.addClass('settling');
-                    el.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
-                    el.style.setProperty('--focus-item-top', `${Math.round(topLocal)}px`);
-                    el.style.setProperty('--focus-item-width', `${Math.round(info.targetCell.offsetWidth)}px`);
-                }
+                const gRect = gridContainer.getBoundingClientRect();
+                const targetCellRect = info.targetCell.getBoundingClientRect();
+                const left = targetCellRect.left - gRect.left;
+                const topLocal = (targetCellRect.top - gRect.top) + (info.isSecondHalf ? info.pxPer15 : 0);
+                
+                el.removeClass('dragging');
+                el.addClass('settling');
+                el.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
+                el.style.setProperty('--focus-item-top', `${Math.round(topLocal)}px`);
+                el.style.setProperty('--focus-item-width', `${Math.round(info.targetCell.offsetWidth)}px`);
+            }
 
-            const baseMin = info.isAfternoon ? 12 * 60 : 0;
+            const dates = Array.isArray(this.date) ? (this.date as string[]) : [this.date as string];
+            const targetDate = dates[info.dayIdx] || dates[0];
+
+            const baseMin = (!Array.isArray(this.date) && split && info.isAfternoon) ? 12 * 60 : 0;
             const startTotalMin = baseMin + (info.n * 15);
             
             const newH = Math.floor(startTotalMin / 60);
             const newM = startTotalMin % 60;
+            const durationMin = this.dragDuration || 30;
             const endTotalMin = startTotalMin + durationMin;
             let endH = Math.floor(endTotalMin / 60);
             let endM = endTotalMin % 60;
             const pad2 = (n: number) => String(n).padStart(2, '0');
             const startStr = `${pad2(newH)}:${pad2(newM)}`;
             let endStr = `${pad2(endH)}:${pad2(endM)}`;
-            let endDate = this.date;
+            let endDate = targetDate;
             if (endTotalMin >= 24 * 60) {
                 endH = 0; endM = 0; endStr = '00:00';
-                endDate = nextDateStr(this.date);
+                endDate = nextDateStr(targetDate);
             }
             try {
-                const currentScroller = this.contentEl.querySelector('.dayble-focus-scroll') as HTMLElement | null;
-                this.lastScrollTop = currentScroller ? currentScroller.scrollTop : 0;
+                const currentScroller = this.scroller;
+                if (this.view) {
+                    this.view.lastScrollTop = currentScroller ? currentScroller.scrollTop : 0;
+                }
                 const evIdx = (this.view?.events || []).findIndex(ev => ev.id === id);
                 if (evIdx !== -1 && this.view) {
                     const originalEv = this.view.events[evIdx];
                     
                     const updatedEv = JSON.parse(JSON.stringify(originalEv));
-                    updatedEv.date = this.date;
-                    updatedEv.startDate = this.date;
+                    updatedEv.date = targetDate;
+                    updatedEv.startDate = targetDate;
                     updatedEv.endDate = endDate;
                     updatedEv.time = `${startStr}-${endStr}`;
                     
@@ -3935,6 +4170,9 @@ class TodayModal extends Modal {
         if (!gridContainer || !overlay) return;
         overlay.empty();
 
+        const isMulti = Array.isArray(this.date);
+        const dates = isMulti ? (this.date as string[]) : [this.date as string];
+
         // Render existing events for this date spanning above the grid
         try {
             const toIdx = (hh: number, mm: number) => (hh * 2) + (mm >= 30 ? 1 : 0);
@@ -3943,159 +4181,156 @@ class TodayModal extends Modal {
                 return (h * 60) + m;
             };
 
-            const dayEvents = (this.events || []).filter(e => {
-                const isToday = (e.date === this.date) || (e.startDate === this.date) || 
-                                (e.startDate && e.endDate && this.date >= e.startDate && this.date <= e.endDate);
-                if (!isToday) return false;
-                
-                // If it's an all-day/multi-day event, we skip it here because it's in the all-day section
-                const isMultiDay = e.startDate && e.endDate && e.startDate !== e.endDate;
-                const isAllDay = !e.time || isMultiDay;
-                return !isAllDay;
-            });
-            
-            // Overlap detection and column calculation
-            const processedEvents = dayEvents.map(ev => {
-                const range = String(ev.time || '');
-                const parts = range.split('-');
-                const startStr = parts[0] || '';
-                const endStr = parts[1] || '';
-                if (!startStr) return null;
-                const startTotal = parseHM(startStr);
-                let endTotal = startTotal + 30;
-                if (endStr) endTotal = parseHM(endStr);
-                return { ev, startTotal, endTotal, column: 0, totalColumns: 1 };
-            }).filter(item => item !== null) as { ev: DaybleEvent, startTotal: number, endTotal: number, column: number, totalColumns: number }[];
-
-            // Simple greedy column assignment
-            processedEvents.sort((a, b) => a.startTotal - b.startTotal || (b.endTotal - b.startTotal) - (a.endTotal - a.startTotal));
-            
-            const columns: { endTotal: number }[][] = [];
-            processedEvents.forEach(item => {
-                let colIdx = columns.findIndex(col => col.every(placed => placed.endTotal <= item.startTotal));
-                if (colIdx === -1) {
-                    colIdx = columns.length;
-                    columns.push([]);
-                }
-                item.column = colIdx;
-                columns[colIdx].push(item);
-            });
-
-            // Calculate total columns for each overlapping group
-            processedEvents.forEach(item => {
-                const overlaps = processedEvents.filter(other => 
-                    (item.startTotal < other.endTotal && item.endTotal > other.startTotal)
-                );
-                const maxCol = Math.max(...overlaps.map(o => o.column));
-                overlaps.forEach(o => o.totalColumns = Math.max(o.totalColumns, maxCol + 1));
-            });
-
-            processedEvents.forEach(data => {
-                const { ev, startTotal, endTotal, column, totalColumns } = data;
-                
-                const split = this.view?.plugin?.settings?.todayModalSplitView ?? true;
-                const boundary = 12 * 60; // 12:00 PM
-                
-                const renderSegment = (sMin: number, eMin: number, segmentType: 'full' | 'start' | 'end') => {
-                    const sh = Math.floor(sMin / 60);
-                    const sm = sMin % 60;
-                    let startIdx = toIdx(sh, sm);
-                    const startCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${startIdx}"]`) as HTMLElement;
-                    if (!startCell) return;
-                    const sRect = startCell.getBoundingClientRect();
-                    const gRect = gridContainer.getBoundingClientRect();
+            dates.forEach((dStr, dIdx) => {
+                const dayEvents = (this.events || []).filter(e => {
+                    const isToday = (e.date === dStr) || (e.startDate === dStr) || 
+                                    (e.startDate && e.endDate && dStr >= e.startDate && dStr <= e.endDate);
+                    if (!isToday) return false;
                     
-                    const rowHeight = startCell.offsetHeight || 60; // Use actual measured height
-                    const pxPer15 = rowHeight / 2;
-                    const withinMin = (sm % 30);
+                    // If it's an all-day/multi-day event, we skip it here because it's in the all-day section
+                    const isMultiDay = e.startDate && e.endDate && e.startDate !== e.endDate;
+                    const isAllDay = !e.time || isMultiDay;
+                    return !isAllDay;
+                });
+                
+                // Overlap detection and column calculation
+                const processedEvents = dayEvents.map(ev => {
+                    const range = String(ev.time || '');
+                    const parts = range.split('-');
+                    const startStr = parts[0] || '';
+                    const endStr = parts[1] || '';
+                    if (!startStr) return null;
+                    const startTotal = parseHM(startStr);
+                    let endTotal = startTotal + 30;
+                    if (endStr) endTotal = parseHM(endStr);
+                    return { ev, startTotal, endTotal, column: 0, totalColumns: 1 };
+                }).filter(item => item !== null) as { ev: DaybleEvent, startTotal: number, endTotal: number, column: number, totalColumns: number }[];
+
+                // Simple greedy column assignment
+                processedEvents.sort((a, b) => a.startTotal - b.startTotal || (b.endTotal - b.startTotal) - (a.endTotal - a.startTotal));
+                
+                const columns: { endTotal: number }[][] = [];
+                processedEvents.forEach(item => {
+                    let colIdx = columns.findIndex(col => col.every(placed => placed.endTotal <= item.startTotal));
+                    if (colIdx === -1) {
+                        colIdx = columns.length;
+                        columns.push([]);
+                    }
+                    item.column = colIdx;
+                    columns[colIdx].push(item);
+                });
+
+                // Calculate total columns for each overlapping group
+                processedEvents.forEach(item => {
+                    const overlaps = processedEvents.filter(other => 
+                        (item.startTotal < other.endTotal && item.endTotal > other.startTotal)
+                    );
+                    const maxCol = Math.max(...overlaps.map(o => o.column));
+                    overlaps.forEach(o => o.totalColumns = Math.max(o.totalColumns, maxCol + 1));
+                });
+
+                processedEvents.forEach(data => {
+                    const { ev, startTotal, endTotal, column, totalColumns } = data;
                     
-                    const top = (sRect.top - gRect.top) + (withinMin / 15) * pxPer15;
-                    const durationMin = eMin - sMin;
-                    const height = Math.max(4, Math.round((durationMin / 15) * pxPer15));
-
-                    // Calculate width and left based on columns within the cell area
-                    const fullWidth = startCell.offsetWidth;
-                    const colWidth = fullWidth / totalColumns;
-                    const left = (sRect.left - gRect.left) + (column * colWidth);
-                    const width = colWidth;
-
-                    const item = this.view?.createEventItem(ev, false, true) || document.createElement('div');
-                    item.addClass('dayble-focus-event-abs');
+                    const split = this.view?.plugin?.settings?.todayModalSplitView ?? true;
+                    const boundary = 12 * 60; // 12:00 PM
                     
-                    if (segmentType === 'start') item.addClass('dayble-focus-event-split-start');
-                    if (segmentType === 'end') item.addClass('dayble-focus-event-split-end');
-
-                    // Override background-color to use the variable set by createEventItem
-                    item.setCssProps({
-                        'background-color': 'var(--event-bg-color, var(--background-primary))',
-                        'color': 'var(--event-text-color, var(--text-normal))',
-                        'border-color': 'var(--event-border-color, var(--background-modifier-border))',
-                        'pointer-events': 'auto'
-                    });
-                    // For events <= 30 mins, in day mode we don't want the compact class to limit height
-                    if (durationMin <= 30) {
-                        item.removeClass('dayble-event-compact');
-                    } else {
-                        item.removeClass('dayble-event-compact');
-                        item.addClass('dayble-layout-center-flex');
-                    }
-
-                    // Special case: 30 min events should show description if they aren't forced to be compact
-                    // Actually, the user wants descriptions for 30 min intervals too.
-                    // Let's allow 30 min events to have descriptions by NOT making them compact if they have one.
-                    if (durationMin === 30 && ev.description) {
-                        item.removeClass('dayble-event-compact');
-                        item.addClass('dayble-layout-center-flex');
-                    }
-
-                    // Add rich tooltip
-                    if (this.view && this.view.plugin.settings.tooltipEnabled) {
-                        setTooltip(item, this.view.getEventTooltipText(ev));
-                    }
-
-                    item.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
-                    item.style.setProperty('--focus-item-top', `${Math.round(top)}px`);
-                    item.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
-                    item.style.setProperty('--focus-item-height', `${Math.round(height)}px`);
-                    item.onclick = async (e) => { e.stopPropagation(); await this.view?.openEventModal(ev.id, ev.date || ev.startDate, ev.endDate); };
-                    // Drag to reposition within today modal (min15 granularity)
-                    item.ondragstart = (e) => {
-                        const dt = e.dataTransfer;
-                        if (!dt) return;
-                        this.dragId = ev.id;
-                        this.dragEl = item;
+                    const renderSegment = (sMin: number, eMin: number, segmentType: 'full' | 'start' | 'end') => {
+                        const sh = Math.floor(sMin / 60);
+                        const sm = sMin % 60;
+                        let startIdx = toIdx(sh, sm);
+                        // Multi-day: find the correct cell by both slot index and day index
+                        const startCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${startIdx}"][data-day="${dIdx}"]`) as HTMLElement;
+                        if (!startCell) return;
+                        const sRect = startCell.getBoundingClientRect();
+                        const gRect = gridContainer.getBoundingClientRect();
                         
-                        // Capture EXACT distance from mouse to top of event
-                        const itemRect = item.getBoundingClientRect();
-                        this.dragOffsetY = e.clientY - itemRect.top;
+                        const rowHeight = startCell.offsetHeight || 60; 
+                        const pxPer15 = rowHeight / 2;
+                        const withinMin = (sm % 30);
+                        
+                        const top = (sRect.top - gRect.top) + (withinMin / 15) * pxPer15;
+                        const durationMin = eMin - sMin;
+                        const height = Math.max(4, Math.round((durationMin / 15) * pxPer15));
 
-                        item.addClass('dragging');
-                        try {
-                            const img = new Image();
-                            img.width = 1; img.height = 1;
-                            dt.setDragImage(img, 0, 0);
-                        } catch {}
-                        let duration = (endTotal - startTotal); // Original full duration
-                        this.dragDuration = duration;
-                    };
-                    item.ondragend = () => { 
-                        const currentIndicator = this.contentEl.querySelector('.dayble-focus-drop');
-                        if (currentIndicator) currentIndicator.remove();
-                        this.gridContainer.querySelectorAll('.dayble-focus-cell.drop-target').forEach(el => el.removeClass('drop-target'));
-                        item.removeClass('dragging'); 
-                        this.dragId = undefined; 
-                        this.dragDuration = undefined; 
-                        this.dragEl = undefined; 
-                    };
-                    overlay.appendChild(item);
-                };
+                        // Calculate width and left based on columns within the cell area
+                        const fullWidth = startCell.offsetWidth;
+                        const colWidth = fullWidth / totalColumns;
+                        const left = (sRect.left - gRect.left) + (column * colWidth);
+                        const width = colWidth;
 
-                if (split && startTotal < boundary && endTotal > boundary) {
-                    renderSegment(startTotal, boundary, 'start');
-                    renderSegment(boundary, endTotal, 'end');
-                } else {
-                    renderSegment(startTotal, endTotal, 'full');
-                }
+                        const item = this.view?.createEventItem(ev, false, true) || document.createElement('div');
+                        item.addClass('dayble-focus-event-abs');
+                        
+                        if (segmentType === 'start') item.addClass('dayble-focus-event-split-start');
+                        if (segmentType === 'end') item.addClass('dayble-focus-event-split-end');
+
+                        item.setCssProps({
+                            'background-color': 'var(--event-bg-color, var(--background-primary))',
+                            'color': 'var(--event-text-color, var(--text-normal))',
+                            'border-color': 'var(--event-border-color, var(--background-modifier-border))',
+                            'pointer-events': 'auto'
+                        });
+                        
+                        if (durationMin <= 30) {
+                            item.removeClass('dayble-event-compact');
+                        } else {
+                            item.removeClass('dayble-event-compact');
+                            item.addClass('dayble-layout-center-flex');
+                        }
+
+                        if (durationMin === 30 && ev.description) {
+                            item.removeClass('dayble-event-compact');
+                            item.addClass('dayble-layout-center-flex');
+                        }
+
+                        if (this.view && this.view.plugin.settings.tooltipEnabled) {
+                            setTooltip(item, this.view.getEventTooltipText(ev));
+                        }
+
+                        item.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
+                        item.style.setProperty('--focus-item-top', `${Math.round(top)}px`);
+                        item.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
+                        item.style.setProperty('--focus-item-height', `${Math.round(height)}px`);
+                        item.onclick = async (e) => { e.stopPropagation(); await this.view?.openEventModal(ev.id, ev.date || ev.startDate, ev.endDate); };
+                        
+                        item.ondragstart = (e) => {
+                            const dt = e.dataTransfer;
+                            if (!dt) return;
+                            this.dragId = ev.id;
+                            this.dragEl = item;
+                            
+                            const itemRect = item.getBoundingClientRect();
+                            this.dragOffsetY = e.clientY - itemRect.top;
+
+                            item.addClass('dragging');
+                            try {
+                                const img = new Image();
+                                img.width = 1; img.height = 1;
+                                dt.setDragImage(img, 0, 0);
+                            } catch {}
+                            let duration = (endTotal - startTotal); 
+                            this.dragDuration = duration;
+                        };
+                        item.ondragend = () => { 
+                            const currentIndicator = this.contentEl.querySelector('.dayble-focus-drop');
+                            if (currentIndicator) currentIndicator.remove();
+                            this.gridContainer.querySelectorAll('.dayble-focus-cell.drop-target').forEach(el => el.removeClass('drop-target'));
+                            item.removeClass('dragging'); 
+                            this.dragId = undefined; 
+                            this.dragDuration = undefined; 
+                            this.dragEl = undefined; 
+                        };
+                        overlay.appendChild(item);
+                    };
+
+                    if (!isMulti && split && startTotal < boundary && endTotal > boundary) {
+                        renderSegment(startTotal, boundary, 'start');
+                        renderSegment(boundary, endTotal, 'end');
+                    } else {
+                        renderSegment(startTotal, endTotal, 'full');
+                    }
+                });
             });
         } catch (e) { console.debug('[Dayble] Focus grid event render:', e); }
     }
@@ -4431,6 +4666,103 @@ class DaybleSettingTab extends PluginSettingTab {
                     .setTooltip('Reset to default')
                     .onClick(async () => {
                         this.plugin.settings.weekTitleFormat = 'month_year';
+                        await this.plugin.saveSettings();
+                        this.display();
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
+                    });
+            });
+
+        
+
+        const threeDayTitleSetting = new Setting(containerEl)
+            .setName('3-Day title')
+            .setDesc('Format for the 3-day view title');
+        
+        const update3DayTitleDesc = (val: string) => {
+            threeDayTitleSetting.descEl.empty();
+            threeDayTitleSetting.descEl.createSpan({ text: 'Your current format for 3-Day View: ' });
+            
+            let label = '';
+            const d = moment();
+            const d2 = moment().add(2, 'days');
+            if (val === 'month_year') label = d.format('MMMM YYYY');
+            else if (val === 'full_range') label = `${d.format('MMMM D')} to ${d2.format('MMMM D')}`;
+            else if (val === 'short_range') label = `${d.format('MMM D')} to ${d2.format('MMM D')}`;
+            else if (val === 'full_range_hyphen') label = `${d.format('MMMM D')} - ${d2.format('MMMM D')}`;
+            else if (val === 'short_range_hyphen') label = `${d.format('MMM D')} - ${d2.format('MMM D')}`;
+            else if (val === 'd_mmmm_range') label = `${d.format('D MMMM')} - ${d2.format('D MMMM')}`;
+            else if (val === 'd_mmm_range') label = `${d.format('D MMM')} - ${d2.format('D MMM')}`;
+            
+            const span = threeDayTitleSetting.descEl.createSpan({ text: label });
+            span.setCssStyles({
+                fontWeight: 'bold',
+                color: 'var(--color-accent)'
+            });
+        };
+        update3DayTitleDesc(this.plugin.settings.threeDayTitleFormat || 'full_range');
+
+        threeDayTitleSetting.addDropdown(d => {
+            const d1 = moment();
+            const d2 = moment().add(2, 'days');
+            d.addOption('month_year', d1.format('MMMM YYYY'))
+             .addOption('full_range', `${d1.format('MMMM D')} to ${d2.format('MMMM D')}`)
+             .addOption('short_range', `${d1.format('MMM D')} to ${d2.format('MMM D')}`)
+             .addOption('full_range_hyphen', `${d1.format('MMMM D')} - ${d2.format('MMMM D')}`)
+             .addOption('short_range_hyphen', `${d1.format('MMM D')} - ${d2.format('MMM D')}`)
+             .addOption('d_mmmm_range', `${d1.format('D MMMM')} - ${d2.format('D MMMM')}`)
+             .addOption('d_mmm_range', `${d1.format('D MMM')} - ${d2.format('D MMM')}`)
+             .setValue(this.plugin.settings.threeDayTitleFormat || 'full_range')
+             .onChange(async v => {
+                 this.plugin.settings.threeDayTitleFormat = v as any;
+                 await this.plugin.saveSettings();
+                 update3DayTitleDesc(v);
+                 const view = this.plugin.getCalendarView();
+                 await view?.render();
+             });
+        })
+        .addExtraButton(b => {
+            b.setIcon('reset')
+                .setTooltip('Reset to default')
+                .onClick(async () => {
+                    this.plugin.settings.threeDayTitleFormat = 'full_range';
+                    await this.plugin.saveSettings();
+                    this.display();
+                    const view = this.plugin.getCalendarView();
+                    await view?.render();
+                });
+        });
+
+        const threeDayDateSetting = new Setting(containerEl)
+            .setName('3-Day dates');
+        
+        const update3DayDateDesc = (val: string) => {
+            threeDayDateSetting.descEl.empty();
+            threeDayDateSetting.descEl.createSpan({ text: 'Your current format for 3-Day Dates: ' });
+            const span = threeDayDateSetting.descEl.createSpan({ text: moment().format(val || 'ddd D') });
+            span.setCssStyles({
+                fontWeight: 'bold',
+                color: 'var(--color-accent)'
+            });
+        };
+        update3DayDateDesc(this.plugin.settings.threeDayDateFormat || 'ddd D');
+
+        threeDayDateSetting.addText(t => {
+                t.setValue(this.plugin.settings.threeDayDateFormat || 'ddd D')
+                    .setPlaceholder('ddd D')
+                    .onChange(async v => {
+                        this.plugin.settings.threeDayDateFormat = v;
+                        await this.plugin.saveSettings();
+                        update3DayDateDesc(v);
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
+                    });
+            })
+            .addExtraButton(b => {
+                b.setIcon('reset')
+                    .setTooltip('Reset to default')
+                    .onClick(async () => {
+                        this.plugin.settings.threeDayDateFormat = 'ddd D';
                         await this.plugin.saveSettings();
                         this.display();
                         const view = this.plugin.getCalendarView();

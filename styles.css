@@ -2311,16 +2311,13 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     overflow: hidden;
 }
 
+:root {
+    --dayble-time-col-width: 80px;
+}
+
 .dayble-3day-container {
     margin-top: 6px;
     grid-column: 1 / span 7;
-    height: 100%;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-}
-
-.dayble-3day-col {
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -2330,27 +2327,76 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     background: var(--background-primary);
 }
 
-.dayble-3day-subheader {
+.dayble-3day-header {
+    display: grid;
+    /* grid-template-columns set via JS sync from .dayble-focus-grid */
+    border-bottom: 1px solid var(--background-modifier-border);
+    background: var(--background-secondary);
+}
+
+.dayble-3day-header .dayble-3day-header-day {
+   border-left: 0 !important;
+   border-right: 0 !important;
+}
+
+.dayble-3day-header-day {
     padding: 8px;
     text-align: center;
     font-weight: bold;
-    border-bottom: 1px solid var(--background-modifier-border);
-    background: var(--background-secondary);
     font-size: var(--font-ui-small);
+    border-left: 1px solid var(--background-modifier-border);
 }
 
-.dayble-3day-col .dayble-day-mode-container {
-    grid-column: auto; /* Reset grid-column when inside 3day-col */
-    flex: 1;
+.dayble-3day-header-day:nth-child(2) {
+    border-left: none;
 }
 
-.dayble-3day-col .dayble-focus-scroll {
+.dayble-3day-all-day-section {
+    display: grid;
+    /* grid-template-columns set via JS sync from .dayble-focus-grid */
+    border-bottom: 1px solid var(--background-modifier-border);
+    background: var(--background-primary-alt);
+    flex-shrink: 0;
+}
+
+.dayble-3day-header-spacer,
+.dayble-3day-all-day-spacer {
+    width: var(--dayble-time-col-width);
+    flex-shrink: 0;
+    background: var(--background-primary) !important;
+    border-right: 1px solid var(--background-modifier-border);
+}
+
+.dayble-3day-all-day-day {
+    padding: 4px;
+    border-left: 1px solid var(--background-modifier-border);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 40px; /* Slightly taller for all-day cells */
+    background: var(--background-primary);
+}
+
+.dayble-3day-all-day-day:nth-child(2) {
+    border-left: none;
+}
+
+.dayble-3day-mode .dayble-focus-grid {
+    grid-template-columns: var(--dayble-time-col-width) 1fr 1fr 1fr !important;
+}
+
+.dayble-3day-mode .dayble-focus-cell {
+    border-left: 1px solid var(--background-modifier-border);
+}
+
+.dayble-3day-mode .dayble-focus-time {
+    width: var(--dayble-time-col-width);
+    flex-shrink: 0;
+}
+
+.dayble-3day-mode .dayble-focus-scroll {
     height: 100% !important;
     flex: 1;
-}
-
-.dayble-3day-col .dayble-all-day-event-item {
-    flex: 1 1 100% !important;
 }
 
 .dayble-all-day-section {
@@ -2394,7 +2440,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     flex-shrink: 0;
 }
 
-.dayble-all-day-section .dayble-event-inner {
+.dayble-all-day-section .dayble-event-inner,
+.dayble-3day-all-day-day .dayble-event-inner {
     display: flex !important;
     flex-direction: row !important;
     justify-content: flex-start !important;
@@ -2403,7 +2450,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     gap: 6px !important;
 }
 
-.dayble-all-day-section .dayble-event-inner .dayble-event-icon {
+.dayble-all-day-section .dayble-event-inner .dayble-event-icon,
+.dayble-3day-all-day-day .dayble-event-inner .dayble-event-icon {
     order: -1 !important;
     flex-shrink: 0 !important;
     width: 14px !important;
@@ -2414,12 +2462,14 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     margin: 0 !important;
 }
 
-.dayble-all-day-section .dayble-event-inner .dayble-event-icon svg {
+.dayble-all-day-section .dayble-event-inner .dayble-event-icon svg,
+.dayble-3day-all-day-day .dayble-event-inner .dayble-event-icon svg {
     width: 14px !important;
     height: 14px !important;
 }
 
-.dayble-all-day-section .dayble-event-inner .dayble-event-title-container {
+.dayble-all-day-section .dayble-event-inner .dayble-event-title-container,
+.dayble-3day-all-day-day .dayble-event-inner .dayble-event-title-container {
     flex: 1 !important;
     display: flex !important;
     justify-content: flex-start !important;
@@ -2427,14 +2477,16 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     overflow: hidden !important;
 }
 
-.dayble-all-day-section .dayble-event-inner .dayble-event-title {
+.dayble-all-day-section .dayble-event-inner .dayble-event-title,
+.dayble-3day-all-day-day .dayble-event-inner .dayble-event-title {
     text-align: left !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
 }
 
-.dayble-all-day-section .dayble-event-inner .dayble-event-desc {
+.dayble-all-day-section .dayble-event-inner .dayble-event-desc,
+.dayble-3day-all-day-day .dayble-event-inner .dayble-event-desc {
     display: none !important;
 }
 
@@ -2566,10 +2618,18 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     padding-bottom: 4px !important;
 }
 
-.dayble-all-day-section .dayble-event-inner:has(.dayble-event-icon) .dayble-event-title {
+.dayble-all-day-section .dayble-event-inner:has(.dayble-event-icon) .dayble-event-title,
+.dayble-3day-all-day-day .dayble-event-inner:has(.dayble-event-icon) .dayble-event-title {
    margin: 0 !important;
    padding: 0 !important;
    align-self: center !important;
+}
+
+
+.dayble-3day-all-day-day .dayble-event-icon {
+   padding-top: 3px !important;
+   margin-bottom: 0 !important;
+   padding-bottom: 0 !important;
 }
 
 
@@ -2583,3 +2643,4 @@ button.dayble-btn.db-btn.button {
    padding-bottom: 6px !important;
    padding-top: 6px !important;
 }
+
