@@ -2231,10 +2231,29 @@ class DaybleCalendarView extends ItemView {
         };
 
         sortedLongEvents.forEach(ev => {
-            const startIdx = cells.findIndex(c => c.getAttr('data-date') === ev.startDate);
+            // Determine the visible date range in the current grid
+            const gridStartStr = cells[0]?.getAttr('data-date');
+            const gridEndStr = cells[cells.length - 1]?.getAttr('data-date');
+            if (!gridStartStr || !gridEndStr) return;
+
+            const evStartFull = new Date(ev.startDate);
+            const evEndFull = new Date(ev.endDate);
+            const gridStart = new Date(gridStartStr);
+            const gridEnd = new Date(gridEndStr);
+
+            // Clamp event range to the visible grid range (supports events starting in previous/next week)
+            const clampedStart = evStartFull < gridStart ? gridStart : evStartFull;
+            const clampedEnd = evEndFull > gridEnd ? gridEnd : evEndFull;
+
+            // If no overlap with current grid, skip
+            if (clampedStart > clampedEnd) return;
+
+            const clampedStartStr = `${clampedStart.getFullYear()}-${String(clampedStart.getMonth() + 1).padStart(2, '0')}-${String(clampedStart.getDate()).padStart(2, '0')}`;
+
+            const startIdx = cells.findIndex(c => c.getAttr('data-date') === clampedStartStr);
             if (startIdx === -1) return;
-            const start = new Date(ev.startDate);
-            const end = new Date(ev.endDate);
+            const start = clampedStart;
+            const end = clampedEnd;
             
             const stackIndex = eventLanes.get(ev.id) ?? 0;
             const span = Math.floor((end.getTime() - start.getTime())/86400000) + 1;
