@@ -656,6 +656,24 @@ class DaybleCalendarView extends ItemView {
         right.appendChild(settingsBtn);
         right.appendChild(searchBtn);
         if (placement === 'right') right.appendChild(holderToggle);
+        const navRow = document.createElement('div');
+        navRow.className = 'dayble-nav-row';
+        const applyHeaderLayout = () => {
+            const isMobile = window.innerWidth <= 700;
+            if (isMobile) {
+                if (left.parentElement !== navRow) navRow.appendChild(left);
+                if (right.parentElement !== navRow) navRow.appendChild(right);
+                if (this.monthTitleEl.parentElement !== this.headerEl) this.headerEl.appendChild(this.monthTitleEl);
+                if (navRow.parentElement !== this.headerEl) this.headerEl.appendChild(navRow);
+                if (this.headerEl.firstChild !== this.monthTitleEl) this.headerEl.insertBefore(this.monthTitleEl, this.headerEl.firstChild);
+            } else {
+                if (left.parentElement !== this.headerEl) this.headerEl.insertBefore(left, this.monthTitleEl);
+                if (right.parentElement !== this.headerEl) this.headerEl.appendChild(right);
+                if (navRow.parentElement) navRow.remove();
+            }
+        };
+        applyHeaderLayout();
+        window.addEventListener('resize', applyHeaderLayout);
         this.bodyEl = this.rootEl.createDiv({ cls: 'dayble-body' });
         if (placement === 'right') {
             this.bodyEl.addClass('dayble-holder-right');
@@ -2493,24 +2511,25 @@ class DaybleCalendarView extends ItemView {
             if (bgColor && textColor) {
                 const opacity = this.plugin.settings.eventBgOpacity ?? 1;
                 const rgbaColor = hexToRgba(bgColor, opacity);
-                item.style.setProperty('--event-bg-color', rgbaColor);
-                item.style.setProperty('--event-text-color', textColor);
+                item.setCssProps({ '--event-bg-color': rgbaColor, '--event-text-color': textColor });
                 const bOpacity = this.plugin.settings.eventBorderOpacity ?? 1;
                 const borderColor = hexToRgba(textColor, bOpacity);
-                item.style.setProperty('--event-border-color', borderColor);
+                item.setCssProps({ '--event-border-color': borderColor });
                 item.classList.add('dayble-event-colored');
             }
         }
         
         // Use background-primary-alt for focus scroll modes if no color is set
         if (!bgColor && isDayMode) {
-            item.style.setProperty('--event-bg-color', 'var(--dayble-focus-event-default-bg)');
+            item.setCssProps({ '--event-bg-color': 'var(--dayble-focus-event-default-bg)' });
         }
         
         // Apply border width settings
-        item.style.setProperty('--event-border-width', `${this.plugin.settings.eventBorderWidth ?? 2}px`);
-        item.style.setProperty('--event-border-radius', `${this.plugin.settings.eventBorderRadius ?? 6}px`);
-        item.style.setProperty('--event-vertical-padding', `${this.plugin.settings.eventVerticalPadding ?? 2}px`);
+        item.setCssProps({
+            '--event-border-width': `${this.plugin.settings.eventBorderWidth ?? 2}px`,
+            '--event-border-radius': `${this.plugin.settings.eventBorderRadius ?? 6}px`,
+            '--event-vertical-padding': `${this.plugin.settings.eventVerticalPadding ?? 2}px`
+        });
         
         // Apply effect and animation from state or category
         const state = ev.stateId ? (this.plugin.settings.eventStates || []).find(s => s.id === ev.stateId) : null;
@@ -3825,7 +3844,7 @@ class TodayModal extends Modal {
                 const dateObj = new Date(y, m - 1, d);
                 const label = moment(dateObj).format(this.view?.plugin?.settings?.threeDayDateFormat || 'ddd D');
                 const headerDay = header.createDiv({ cls: 'dayble-3day-header-day', text: label });
-                headerDay.style.cursor = 'pointer';
+                headerDay.setCssProps({ cursor: 'pointer' });
                 headerDay.onclick = () => {
                     this.view?.openEventModal(undefined, dStr, dStr);
                 };
@@ -3953,17 +3972,14 @@ class TodayModal extends Modal {
             });
 
             if (maxAllDayEvents > 0) {
-                allDaySpacer.setText('ALL DAY');
-                allDaySpacer.style.fontWeight = 'bold';
+                allDaySpacer.setText('All day');
+                allDaySpacer.setCssProps({ fontWeight: 'bold' });
                 if (maxAllDayEvents === 1) {
-                    allDaySpacer.style.fontSize = '0.5em';
-                    allDaySpacer.style.transform = 'rotate(0deg)';
+                    allDaySpacer.setCssProps({ fontSize: '0.5em', transform: 'rotate(0deg)' });
                 } else if (maxAllDayEvents === 2) {
-                    allDaySpacer.style.fontSize = '0.7em';
-                    allDaySpacer.style.transform = 'rotate(270deg)';
+                    allDaySpacer.setCssProps({ fontSize: '0.7em', transform: 'rotate(270deg)' });
                 } else {
-                    allDaySpacer.style.fontSize = '1em';
-                    allDaySpacer.style.transform = 'rotate(270deg)';
+                    allDaySpacer.setCssProps({ fontSize: '1em', transform: 'rotate(270deg)' });
                 }
             } else {
                 allDaySpacer.setText('');
@@ -4104,6 +4120,8 @@ class TodayModal extends Modal {
 
                     allDaySection.appendChild(item);
                 });
+            } else {
+                scroller.addClass('dayble-no-all-day-margin');
             }
         }
         c.appendChild(scroller);
@@ -4128,6 +4146,7 @@ class TodayModal extends Modal {
         if (split && !isMulti) {
             morningGrid = gridContainer.createDiv({ cls: 'dayble-focus-grid morning' });
             afternoonGrid = gridContainer.createDiv({ cls: 'dayble-focus-grid afternoon' });
+            gridContainer.addClass('dayble-split');
         } else {
             morningGrid = gridContainer.createDiv({ cls: 'dayble-focus-grid' });
             afternoonGrid = morningGrid; 
@@ -4170,15 +4189,19 @@ class TodayModal extends Modal {
             }
 
             if (!targetCell) {
-                if (clientY < targetRect.top) {
-                    targetCell = cells[0];
-                    slotIdx = parseInt(targetCell.getAttribute('data-idx') || '0', 10);
-                    dayIdx = parseInt(targetCell.getAttribute('data-day') || '0', 10);
-                } else {
-                    targetCell = cells[cells.length - 1];
-                    slotIdx = parseInt(targetCell.getAttribute('data-idx') || '47', 10);
-                    dayIdx = parseInt(targetCell.getAttribute('data-day') || '0', 10);
+                const relY = clientY - targetRect.top;
+                const clampedRelY = Math.max(0, Math.min(relY, targetRect.height - 1));
+                const baseIdx = (split && !isMulti && isAfternoon) ? 24 : 0;
+                const localSlot = Math.floor(clampedRelY / pxPer30);
+                slotIdx = baseIdx + localSlot;
+                const rowCells = Array.from(targetGrid.querySelectorAll(`.dayble-focus-cell[data-idx="${slotIdx}"]`)) as HTMLElement[];
+                let chosen: HTMLElement | null = null;
+                for (const rc of rowCells) {
+                    const rr = rc.getBoundingClientRect();
+                    if (clientX >= rr.left && clientX <= rr.right) { chosen = rc; break; }
                 }
+                targetCell = chosen || rowCells[0] || cells[0];
+                dayIdx = parseInt(targetCell.getAttribute('data-day') || '0', 10);
             }
 
             const targetCellRect = targetCell.getBoundingClientRect();
@@ -6164,7 +6187,7 @@ class DaybleSettingTab extends PluginSettingTab {
             });
 
         new Setting(containerEl)
-            .setName('Scroll to current time in Day View')
+            .setName('Scroll to current time in day view')
             .setDesc('Automatically scroll to the current time when opening day or 3-day view.')
             .addToggle(t => {
                 t.setValue(this.plugin.settings.scrollToCurrentTime ?? true)
