@@ -1,3 +1,7 @@
+:root {
+    --dayble-focus-event-default-bg: var(--background-secondary);
+}
+
 .workspace-leaf:has(.dayble-root) .view-content,
 .workspace-leaf:has(.dayble-root) .view-header {
     display: none;
@@ -827,9 +831,9 @@
     margin-bottom: 0 !important;
 }
 
-.dayble-event:has(.dayble-event-desc) .dayble-event-title {
+/* .dayble-event:has(.dayble-event-desc) .dayble-event-title {
     margin-bottom: 2px !important;
-}
+} */
 
 .dayble-long-event:has(.dayble-event-desc) .dayble-event-title {
     margin-bottom: 0 !important;
@@ -2380,7 +2384,6 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .dayble-focus-event-abs.resizing {
     z-index: 10000 !important;
     opacity: 0.8;
-    pointer-events: none;
 }
 
 .dayble-focus-event-split-start {
@@ -2474,6 +2477,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 :root {
     --dayble-time-col-width: 80px;
+    --dayble-focus-event-default-bg: var(--background-primary-alt);
 }
 
 .dayble-3day-container {
@@ -2534,6 +2538,13 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     text-transform: uppercase;
     font-weight: 500;
 }
+
+.dayble-3day-all-day-spacer {
+    border: none !important;
+    background: transparent !important;
+    background-color: transparent !important;
+}
+
 
 .dayble-3day-all-day-day {
     padding: 4px;
@@ -2908,12 +2919,12 @@ button.dayble-btn.db-btn.button {
 .dayble-3day-header-spacer { background-color: var(--background-secondary) !important; border: none; }
 
 /* rotate all day text */
-.dayble-3day-all-day-spacer {
+/* .dayble-3day-all-day-spacer {
     transform: rotate(270deg) scale(1.5);
     background-color: transparent !important;
     background: transparent !important;
     border: none !important;
-}
+} */
 
 .dayble-3day-all-day-section {
     background-color: var(--background-primary);
@@ -2964,7 +2975,11 @@ button.dayble-btn.db-btn.button {
 }
 
 /* fix all day icon placement */
-.dayble-all-day-section .dayble-event:has(.dayble-event-icon) .dayble-event-icon,
+/* .dayble-all-day-section .dayble-event:has(.dayble-event-icon) .dayble-event-icon,
 .dayble-3day-all-day-section .dayble-event:has(.dayble-event-icon) .dayble-event-icon {
     padding-bottom: 4px !important;
+} */
+
+.dayble-focus-event-abs .dayble-event-inner {
+    flex: 0 !important;
 }

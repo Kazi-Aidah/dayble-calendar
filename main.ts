@@ -45,6 +45,7 @@ interface DaybleSettings {
     calendarView?: 'Month' | 'Week' | '3day' | 'Day' | 'Agenda';
     triggers?: { id?: string, pattern: string, categoryId: string, color?: string, textColor?: string, colorName?: string }[];
     weeklyNotesEnabled?: boolean;
+    scrollToCurrentTime?: boolean;
     todayModalSplitView?: boolean;
     tooltipEnabled?: boolean;
     showCopyTextOption?: boolean;
@@ -92,6 +93,7 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     calendarWeekActive: false,
     calendarView: 'Month',
     weeklyNotesEnabled: false,
+    scrollToCurrentTime: true,
     todayModalSplitView: true,
     tooltipEnabled: true,
     showCopyTextOption: false,
@@ -269,8 +271,53 @@ export default class DaybleCalendarPlugin extends Plugin {
 
         this.addCommand({ id: 'open-calendar', name: 'Open calendar', callback: () => void this.openDayble() });
         this.addCommand({ 
+            id: 'open-monthly-view', 
+            name: 'Open month view', 
+            callback: async () => { 
+                await this.openDayble(); 
+                const view = this.getCalendarView();
+                if (view) {
+                    this.settings.calendarView = 'Month';
+                    this.settings.calendarWeekActive = false;
+                    await this.saveSettings();
+                    await view.loadAllEntries();
+                    try { await view.render(); } catch (e) { console.error(e); }
+                }
+            } 
+        });
+        this.addCommand({ 
+            id: 'open-weekly-view', 
+            name: 'Open week view', 
+            callback: async () => { 
+                await this.openDayble(); 
+                const view = this.getCalendarView();
+                if (view) {
+                    this.settings.calendarView = 'Week';
+                    this.settings.calendarWeekActive = true;
+                    await this.saveSettings();
+                    await view.loadAllEntries();
+                    try { await view.render(); } catch (e) { console.error(e); }
+                }
+            } 
+        });
+        this.addCommand({ 
+            id: 'open-3day-view', 
+            name: 'Open 3-day view', 
+            callback: async () => { 
+                await this.openDayble(); 
+                const view = this.getCalendarView();
+                if (view) {
+                    this.settings.calendarView = '3day';
+                    this.settings.calendarWeekActive = false;
+                    await this.saveSettings();
+                    await view.loadAllEntries();
+                    try { await view.render(); } catch (e) { console.error(e); }
+                }
+            } 
+        });
+        this.addCommand({ 
             id: 'open-daily-view', 
-            name: 'Open daily view', 
+            name: 'Open day view', 
             callback: async () => { 
                 await this.openDayble(); 
                 const view = this.getCalendarView();
@@ -285,7 +332,7 @@ export default class DaybleCalendarPlugin extends Plugin {
         });
         this.addCommand({ 
             id: 'open-agenda-view', 
-            name: 'Open agenda view', 
+            name: 'Open agenda', 
             callback: async () => { 
                 await this.openDayble(); 
                 const view = this.getCalendarView();
@@ -299,6 +346,56 @@ export default class DaybleCalendarPlugin extends Plugin {
             } 
         });
         this.addCommand({ 
+            id: 'toggle-pinned-month', 
+            name: 'Show only pinned events for month view', 
+            callback: async () => {
+                this.settings.onlyShowPinnedEventsMonth = !this.settings.onlyShowPinnedEventsMonth;
+                await this.saveSettings();
+                const view = this.getCalendarView();
+                if (view) {
+                    await view.loadAllEntries();
+                    try { await view.render(); } catch (e) { console.error(e); }
+                }
+            }
+        });
+        this.addCommand({ 
+            id: 'toggle-pinned-week', 
+            name: 'Show only pinned events for week view', 
+            callback: async () => {
+                this.settings.onlyShowPinnedEventsWeek = !this.settings.onlyShowPinnedEventsWeek;
+                await this.saveSettings();
+                const view = this.getCalendarView();
+                if (view) {
+                    await view.loadAllEntries();
+                    try { await view.render(); } catch (e) { console.error(e); }
+                }
+            }
+        });
+        this.addCommand({ 
+            id: 'toggle-pinned-agenda', 
+            name: 'Show only pinned events for agenda view', 
+            callback: async () => {
+                this.settings.onlyShowPinnedEventsAgenda = !this.settings.onlyShowPinnedEventsAgenda;
+                await this.saveSettings();
+                const view = this.getCalendarView();
+                if (view) {
+                    await view.loadAllEntries();
+                    try { await view.render(); } catch (e) { console.error(e); }
+                }
+            }
+        });
+        this.addCommand({ 
+            id: 'refresh-calendar', 
+            name: 'Refresh calendar', 
+            callback: async () => {
+                const view = this.getCalendarView();
+                if (view) {
+                    await view.loadAllEntries();
+                    try { await view.render(); } catch (e) { console.error(e); }
+                }
+            }
+        });
+        this.addCommand({ 
             id: 'add-new-event', 
             name: 'Add new event', 
             callback: async () => { 
@@ -310,36 +407,6 @@ export default class DaybleCalendarPlugin extends Plugin {
             } 
         });
         this.addCommand({ id: 'focus-today', name: 'Focus on today', callback: () => void this.focusToday() });
-        this.addCommand({ 
-            id: 'open-weekly-view', 
-            name: 'Open weekly view', 
-            callback: async () => { 
-                await this.openDayble(); 
-                const view = this.getCalendarView();
-                if (view) {
-                    this.settings.calendarView = 'Week';
-                    this.settings.calendarWeekActive = true;
-                    await this.saveSettings();
-                    await view.loadAllEntries();
-                    try { await view.render(); } catch (e) { console.error(e); }
-                }
-            } 
-        });
-        this.addCommand({ 
-            id: 'open-monthly-view', 
-            name: 'Open monthly view', 
-            callback: async () => { 
-                await this.openDayble(); 
-                const view = this.getCalendarView();
-                if (view) {
-                    this.settings.calendarView = 'Month';
-                    this.settings.calendarWeekActive = false;
-                    await this.saveSettings();
-                    await view.loadAllEntries();
-                    try { await view.render(); } catch (e) { console.error(e); }
-                }
-            } 
-        });
 this.addSettingTab(new DaybleSettingTab(this.app, this));
 try { await this.ensureEntriesFolder(); } catch (e) { console.error(e); }
     void this.openDayble();
@@ -565,7 +632,16 @@ class DaybleCalendarView extends ItemView {
         left.appendChild(nextBtn);
         // left.appendChild(weekToggle);
         
+        const settingsBtn = document.createElement('button');
+        settingsBtn.className = 'dayble-btn dayble-header-buttons dayble-settings-toggle';
+        setIcon(settingsBtn, 'settings');
+        settingsBtn.onclick = () => {
+            (this.app as any).setting.open();
+            (this.app as any).setting.openTabById(this.plugin.manifest.id);
+        };
+        
         right.appendChild(viewSelect);
+        right.appendChild(settingsBtn);
         right.appendChild(searchBtn);
         if (placement === 'right') right.appendChild(holderToggle);
         this.bodyEl = this.rootEl.createDiv({ cls: 'dayble-body' });
@@ -2414,6 +2490,11 @@ class DaybleCalendarView extends ItemView {
             }
         }
         
+        // Use background-primary-alt for focus scroll modes if no color is set
+        if (!bgColor && isDayMode) {
+            item.style.setProperty('--event-bg-color', 'var(--dayble-focus-event-default-bg)');
+        }
+        
         // Apply border width settings
         item.style.setProperty('--event-border-width', `${this.plugin.settings.eventBorderWidth ?? 2}px`);
         item.style.setProperty('--event-border-radius', `${this.plugin.settings.eventBorderRadius ?? 6}px`);
@@ -3210,7 +3291,7 @@ class EventModal extends Modal {
         rowDate.createSpan({ text: 'Start:', cls: 'dayble-modal-label' });
         const startDate = rowDate.createEl('input', { type: 'date', cls: 'dayble-input' });
         startDate.addClass('db-input');
-        startDate.style.setProperty('margin-right', '6px', 'important');
+        (startDate as any).setCssProps({ 'margin-right': '6px !important' });
         startDate.value = this.ev?.date ?? this.ev?.startDate ?? this.date ?? '';
         
         rowDate.createSpan({ text: 'End:', cls: 'dayble-modal-label' });
@@ -3647,7 +3728,9 @@ class TodayModal extends Modal {
             });
 
             // All-Day Setup
-            allDaySection.createDiv({ cls: 'dayble-3day-all-day-spacer', text: 'All day' });
+            const allDaySpacer = allDaySection.createDiv({ cls: 'dayble-3day-all-day-spacer', text: '' });
+            let maxAllDayEvents = 0;
+
             dates.forEach(dStr => {
                 const dayCol = allDaySection!.createDiv({ cls: 'dayble-3day-all-day-day' });
                 dayCol.setAttr('data-date', dStr);
@@ -3709,6 +3792,8 @@ class TodayModal extends Modal {
                     return (a.title || '').localeCompare(b.title || '');
                 });
 
+                maxAllDayEvents = Math.max(maxAllDayEvents, dayEvents.length);
+
                 dayEvents.forEach(ev => {
                     const item = this.view?.createEventItem(ev, false, false, true) || document.createElement('div');
                     item.addClass('dayble-all-day-event-item');
@@ -3762,6 +3847,23 @@ class TodayModal extends Modal {
                     }
                 });
             });
+
+            if (maxAllDayEvents > 0) {
+                allDaySpacer.setText('ALL DAY');
+                allDaySpacer.style.fontWeight = 'bold';
+                if (maxAllDayEvents === 1) {
+                    allDaySpacer.style.fontSize = '0.5em';
+                    allDaySpacer.style.transform = 'rotate(0deg)';
+                } else if (maxAllDayEvents === 2) {
+                    allDaySpacer.style.fontSize = '0.7em';
+                    allDaySpacer.style.transform = 'rotate(270deg)';
+                } else {
+                    allDaySpacer.style.fontSize = '1em';
+                    allDaySpacer.style.transform = 'rotate(270deg)';
+                }
+            } else {
+                allDaySpacer.setText('');
+            }
 
             // Sync and Observers
             requestAnimationFrame(syncWidths);
@@ -4416,6 +4518,10 @@ class TodayModal extends Modal {
         };
 
         this.renderEvents();
+
+        if ((this.view?.plugin.settings.scrollToCurrentTime ?? true) && this.view.lastScrollTop === undefined) {
+            requestAnimationFrame(() => this.scrollToCurrentTime());
+        }
     }
 
     onClose() {
@@ -4487,6 +4593,43 @@ class TodayModal extends Modal {
             timeStr = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
         }
         timeLabel.textContent = timeStr;
+    }
+
+    scrollToCurrentTime() {
+        if (!this.scroller || !this.gridContainer) return;
+        
+        // Only scroll if one of the dates being displayed is Today
+        const isMulti = Array.isArray(this.date);
+        const dates = isMulti ? (this.date as string[]) : [this.date as string];
+        const todayStr = moment().format('YYYY-MM-DD');
+        if (!dates.includes(todayStr)) return;
+
+        const now = new Date();
+        const hh = now.getHours();
+        const mm = now.getMinutes();
+        
+        const toIdx = (h: number, m: number) => (h * 2) + (m >= 30 ? 1 : 0);
+        const slotIdx = toIdx(hh, mm);
+        
+        // Find the cell for the current time (on any day, since we just care about the vertical scroll)
+        const cell = this.gridContainer.querySelector(`.dayble-focus-cell[data-idx="${slotIdx}"]`) as HTMLElement;
+        if (!cell) return;
+
+        const cellRect = cell.getBoundingClientRect();
+        const containerRect = this.gridContainer.getBoundingClientRect();
+        
+        if (containerRect.width === 0 || cellRect.width === 0) return;
+        
+        const rowHeight = cell.offsetHeight || 60;
+        const pxPer15 = rowHeight / 2;
+        const withinMin = (mm % 30);
+        
+        const top = (cellRect.top - containerRect.top) + (withinMin / 15) * pxPer15;
+        
+        // Scroll so the current time is at the center of the scroller
+        const scrollerHeight = this.scroller.offsetHeight;
+        const scrollAmount = Math.max(0, top - (scrollerHeight / 2));
+        this.scroller.scrollTop = scrollAmount;
     }
 
     renderEvents() {
@@ -4586,6 +4729,7 @@ class TodayModal extends Modal {
 
                         const item = this.view?.createEventItem(ev, false, true, false) || document.createElement('div');
                         item.addClass('dayble-focus-event-abs');
+                        let isResizingCurrently = false;
 
                         // Dim past events if setting is enabled
                         const dimOpacity = this.view?.plugin?.settings?.dimPastEvents ?? 1.0;
@@ -4642,10 +4786,10 @@ class TodayModal extends Modal {
                             const rect = item.getBoundingClientRect();
                             const y = e.clientY - rect.top;
                             if (y < EDGE_SIZE || y > rect.height - EDGE_SIZE) {
-                                item.style.cursor = 'ns-resize';
+                                (item as any).setCssProps({ 'cursor': 'ns-resize' });
                                 item.setAttribute('draggable', 'false');
                             } else {
-                                item.style.cursor = 'pointer';
+                                (item as any).setCssProps({ 'cursor': 'pointer' });
                                 item.setAttribute('draggable', 'true');
                             }
                         });
@@ -4662,6 +4806,7 @@ class TodayModal extends Modal {
 
                             e.preventDefault();
                             e.stopPropagation();
+                            isResizingCurrently = true;
 
                             const initialY = e.clientY;
                             const initialTop = parseFloat(item.style.getPropertyValue('--focus-item-top'));
@@ -4701,6 +4846,7 @@ class TodayModal extends Modal {
                                 window.removeEventListener('mousemove', onMove);
                                 window.removeEventListener('mouseup', onUp);
                                 item.removeClass('resizing');
+                                setTimeout(() => { isResizingCurrently = false; }, 100);
 
                                 const finalTop = parseFloat(item.style.getPropertyValue('--focus-item-top'));
                                 const finalHeight = parseFloat(item.style.getPropertyValue('--focus-item-height'));
@@ -4747,7 +4893,15 @@ class TodayModal extends Modal {
                             window.addEventListener('mouseup', onUp);
                         });
 
-                        item.onclick = async (e) => { e.stopPropagation(); await this.view?.openEventModal(ev.id, ev.date || ev.startDate, ev.endDate); };
+                        item.onclick = async (e) => { 
+                             e.stopPropagation(); 
+                             const rect = item.getBoundingClientRect();
+                             const y = e.clientY - rect.top;
+                             if (y < EDGE_SIZE || y > rect.height - EDGE_SIZE || item.hasClass('resizing') || isResizingCurrently) {
+                                 return;
+                             }
+                             await this.view?.openEventModal(ev.id, ev.date || ev.startDate, ev.endDate); 
+                         };
                         
                         item.ondragstart = (e) => {
                             const dt = e.dataTransfer;
@@ -5900,6 +6054,17 @@ class DaybleSettingTab extends PluginSettingTab {
             });
 
         new Setting(containerEl)
+            .setName('Scroll to current time in Day View')
+            .setDesc('Automatically scroll to the current time when opening day or 3-day view.')
+            .addToggle(t => {
+                t.setValue(this.plugin.settings.scrollToCurrentTime ?? true)
+                    .onChange(async v => {
+                        this.plugin.settings.scrollToCurrentTime = v;
+                        await this.plugin.saveSettings();
+                    });
+            });
+
+        new Setting(containerEl)
             .setName('Day split view')
             .setDesc('Split the day view into morning and afternoon columns on desktop.')
             .addToggle(t => {
@@ -5912,7 +6077,7 @@ class DaybleSettingTab extends PluginSettingTab {
 
             new Setting(containerEl)
             .setName('Dim past events opacity')
-            .setDesc('Set the opacity for events that have already passed in day and 3-day mode. Set to 1.0 to disable dimming.')
+            .setDesc('Set the opacity for events that have already passed in day and 3-day view. Set to 1.0 to disable dimming.')
             .addSlider(s => {
                 s.setLimits(0.1, 1, 0.05)
                     .setValue(typeof this.plugin.settings.dimPastEvents === 'number' ? this.plugin.settings.dimPastEvents : 0.60)
@@ -6522,7 +6687,7 @@ class DaybleSettingTab extends PluginSettingTab {
         });
         renderRules();
 
-        new Setting(containerEl).setName('Triggers').setDesc('Assigns a category and color when the event description matches defined text.').setHeading();
+        new Setting(containerEl).setName('Triggers').setDesc('Assigns a category and color when the event information matches defined text.').setHeading();
         const triggersWrap = containerEl.createDiv();
         const renderTriggers = () => {
             triggersWrap.empty();
