@@ -1129,10 +1129,10 @@ class DaybleCalendarView extends ItemView {
         const occupiedLanesByDate = new Map<string, Set<number>>();
         
         const { 
-            lanesPerEvent = 7, 
-            lanesPerGap = 1, 
-            lanesPerDesc = 5, 
-            lanesPerIcon = 7 
+            lanesPerEvent = 7, // LN
+            lanesPerGap = 1, // LN
+            lanesPerDesc = 5, // LN
+            lanesPerIcon = 0 // LN
         } = unitParams || {};
 
         // Sort long events: earlier start date first, then longer duration first
@@ -1171,10 +1171,10 @@ class DaybleCalendarView extends ItemView {
             const hasVerticalIcon = isVerticalIcon && iconToUse;
 
             let extraLanes = 0;
-            if (hasDescription) extraLanes += lanesPerDesc;
-            if (hasVerticalIcon) extraLanes += lanesPerIcon;
+            if (hasDescription) extraLanes += lanesPerDesc; // LN
+            if (hasVerticalIcon) extraLanes += lanesPerIcon; // LN
 
-            const lanesNeeded = lanesPerEvent + lanesPerGap + extraLanes;
+            const lanesNeeded = lanesPerEvent + lanesPerGap + extraLanes; // LN
 
             let lane = 0;
             while (true) {
@@ -2159,17 +2159,24 @@ class DaybleCalendarView extends ItemView {
         const cells = Array.from(this.gridEl.children).filter(el => (el as HTMLElement).hasClass?.('dayble-day')) as HTMLElement[];
         
         // Fixed buffer from the top of the day cell to the first long event
-        const HEADER_BUFFER = 38; 
+        const HEADER_BUFFER = 38; // LN
         const vPadding = this.plugin.settings.eventVerticalPadding ?? 2;
-        const segmentHeight = 24 + (vPadding * 2);
-        const segmentGap = 4;
+        const segmentHeight = 24 + (vPadding * 2); // LN
+        const segmentGap = 4; // LN
         
         // Fine-grained lane system using units
-        const LANE_UNIT_HEIGHT = 4;
-        const lanesPerEvent = Math.ceil(segmentHeight / LANE_UNIT_HEIGHT);
-        const lanesPerGap = Math.ceil(segmentGap / LANE_UNIT_HEIGHT);
-        const lanesPerDesc = 5; // 20px extra for description
-        const lanesPerIcon = 7; // 28px extra for top/bottom icons
+        const LANE_UNIT_HEIGHT = 4; // LN
+        const lanesPerEvent = Math.ceil(segmentHeight / LANE_UNIT_HEIGHT); // LN
+        const lanesPerGap = Math.ceil(segmentGap / LANE_UNIT_HEIGHT); // LN
+        const lanesPerDesc = 3; // 20px extra for description // LN
+        const lanesPerIcon = 0; // 28px extra for top/bottom icons // LN
+        const COMPLEX_ICON_DESC_ADJUST_PX = 4; // LN new: reduce spacer by 2px when icon+description
+
+        const ICON_ONLY_TOP_ADJUST_PX = 0; // LN new: title + icon (top) adjustment
+        const ICON_ONLY_BOTTOM_ADJUST_PX = 6; // LN new: title + icon (bottom) adjustment
+
+        // const ICON_ONLY_TOP_LANE_ADJUST_PX = 60; // LN new: title + icon at top lane
+        // const ICON_ONLY_BOTTOM_LANE_ADJUST_PX = 6; // LN new: title + icon at bottom lane
 
         let longEvents = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
         const isMonth = this.plugin.settings.calendarView === 'Month' || (!this.plugin.settings.calendarView && !this.plugin.settings.calendarWeekActive);
@@ -2181,6 +2188,63 @@ class DaybleCalendarView extends ItemView {
 
         const { eventLanes, maxLanesByDate } = this.calculateLongEventLanes(longEvents, { lanesPerEvent, lanesPerGap, lanesPerDesc, lanesPerIcon });
         const countsByDate = maxLanesByDate;
+
+        // Compute per-date adjustment for complex long events (icon + description)
+        const cellDateSet = new Set(cells.map(c => c.getAttr('data-date')));
+        const complexAdjustByDate: Record<string, number> = {};
+        const adjustByEventId: Record<string, number> = {}; // LN
+        longEvents.forEach(ev => {
+            const stackIndex = eventLanes.get(ev.id) ?? 0; // LN
+            const hasDescription = !!(ev.description && ev.description.trim().length > 0);
+            const category = this.plugin.settings.eventCategories?.find(c => c.id === ev.categoryId);
+            const state = ev.stateId ? (this.plugin.settings.eventStates || []).find(s => s.id === ev.stateId) : null;
+            const iconToUse = (state && state.icon) || ev.icon || (category?.icon || '');
+            const hasIcon = !!iconToUse;
+            const iconPlacement = this.plugin.settings.iconPlacement || 'left';
+            const isTopIcon = iconPlacement.startsWith('top');
+            const isBottomIcon = iconPlacement.startsWith('bottom');
+            // Clamp to visible grid range
+            const gridStartStr = cells[0]?.getAttr('data-date');
+            const gridEndStr = cells[cells.length - 1]?.getAttr('data-date');
+            if (!gridStartStr || !gridEndStr) return;
+            const evStartFull = new Date(ev.startDate);
+            const evEndFull = new Date(ev.endDate);
+            const gridStart = new Date(gridStartStr);
+            const gridEnd = new Date(gridEndStr);
+            const clampedStart = evStartFull < gridStart ? gridStart : evStartFull;
+            const clampedEnd = evEndFull > gridEnd ? gridEnd : evEndFull;
+            if (clampedStart > clampedEnd) return;
+            for (let d = new Date(clampedStart); d <= clampedEnd; d.setDate(d.getDate() + 1)) {
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                const dateStr = `${y}-${m}-${dd}`;
+                if (!cellDateSet.has(dateStr)) continue;
+                // icon + description
+                if (hasIcon && hasDescription) {
+                    complexAdjustByDate[dateStr] = (complexAdjustByDate[dateStr] || 0) + COMPLEX_ICON_DESC_ADJUST_PX; // LN
+                    adjustByEventId[ev.id] = (adjustByEventId[ev.id] || 0) + COMPLEX_ICON_DESC_ADJUST_PX; // LN
+                }
+                // title + just icon (no description)
+                if (hasIcon && !hasDescription) {
+                    if (isTopIcon) {
+                        complexAdjustByDate[dateStr] = (complexAdjustByDate[dateStr] || 0) + ICON_ONLY_TOP_ADJUST_PX; // LN
+                        adjustByEventId[ev.id] = (adjustByEventId[ev.id] || 0) + ICON_ONLY_TOP_ADJUST_PX; // LN
+                    } else if (isBottomIcon) {
+                        complexAdjustByDate[dateStr] = (complexAdjustByDate[dateStr] || 0) + ICON_ONLY_BOTTOM_ADJUST_PX; // LN
+                        adjustByEventId[ev.id] = (adjustByEventId[ev.id] || 0) + ICON_ONLY_BOTTOM_ADJUST_PX; // LN
+                    }
+                    // Lane-based fallback: use the same settings to ensure L2174-L2176 affect long events
+                    if (stackIndex === 0) {
+                        complexAdjustByDate[dateStr] = (complexAdjustByDate[dateStr] || 0) + ICON_ONLY_TOP_ADJUST_PX; // LN
+                        adjustByEventId[ev.id] = (adjustByEventId[ev.id] || 0) + ICON_ONLY_TOP_ADJUST_PX; // LN
+                    } else {
+                        complexAdjustByDate[dateStr] = (complexAdjustByDate[dateStr] || 0) + ICON_ONLY_BOTTOM_ADJUST_PX; // LN
+                        adjustByEventId[ev.id] = (adjustByEventId[ev.id] || 0) + ICON_ONLY_BOTTOM_ADJUST_PX; // LN
+                    }
+                }
+            }
+        });
 
         const sortedLongEvents = [...longEvents].sort((a, b) => {
             const laneA = eventLanes.get(a.id) ?? 0;
@@ -2196,12 +2260,14 @@ class DaybleCalendarView extends ItemView {
             if (!wallsContainer) return;
             const date = cell.getAttr('data-date');
             const unitsCount = countsByDate[date] || 0;
-            const totalHeight = unitsCount * LANE_UNIT_HEIGHT;
+            const baseHeight = unitsCount * LANE_UNIT_HEIGHT; // LN
+            const adjustPx = complexAdjustByDate[date] || 0; // LN
+            const totalHeight = Math.max(0, baseHeight - adjustPx); // LN
             
             // Use a single spacer wall for efficiency and smoother layout
             let wall = wallsContainer.firstElementChild as HTMLElement;
             if (!wall) wall = wallsContainer.createDiv({ cls: 'dayble-lane-wall' });
-            wall.style.height = `${totalHeight}px`;
+            wall.style.height = `${totalHeight}px`; // LN
             
             while (wallsContainer.children.length > 1) {
                 wallsContainer.lastElementChild?.remove();
@@ -2209,16 +2275,18 @@ class DaybleCalendarView extends ItemView {
         });
 
         // Function to position a single event segment using fixed calculations
-        const positionEventSegment = (item: HTMLElement, first: HTMLElement, last: HTMLElement, stackIndex: number) => {
+        const positionEventSegment = (item: HTMLElement, first: HTMLElement, last: HTMLElement, stackIndex: number, evId?: string) => {
             const frLeft = first.offsetLeft;
             const frTop = first.offsetTop;
             const lrRight = last.offsetLeft + last.offsetWidth;
             
             // Fixed top offset calculation based on lane unit index
-            const topOffset = HEADER_BUFFER + (stackIndex * LANE_UNIT_HEIGHT);
+            const baseTopOffset = HEADER_BUFFER + (stackIndex * LANE_UNIT_HEIGHT); // LN
+            const perEventAdjust = (evId && adjustByEventId[evId]) ? adjustByEventId[evId] : 0; // LN
+            const topOffset = Math.max(0, baseTopOffset - perEventAdjust); // LN
             
             const left = frLeft;
-            const top = frTop + topOffset;
+            const top = frTop + topOffset; // LN
             const width = (lrRight - frLeft);
             
             item.setCssProps({
@@ -2286,7 +2354,7 @@ class DaybleCalendarView extends ItemView {
                 }
                 
                 if (!item.isConnected) this.gridEl.appendChild(item);
-                positionEventSegment(item, first, last, stackIndex);
+                positionEventSegment(item, first, last, stackIndex, ev.id);
 
             } else {
                 for (let row = startRow; row <= endRow; row++) {
@@ -2318,7 +2386,7 @@ class DaybleCalendarView extends ItemView {
                     }
                     
                     if (!item.isConnected) this.gridEl.appendChild(item);
-                    positionEventSegment(item, first, last, stackIndex);
+                    positionEventSegment(item, first, last, stackIndex, ev.id);
                 }
             }
         });

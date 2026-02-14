@@ -105,13 +105,13 @@
     color: var(--text-muted);
 }
 
-.dayble-header,
+/* .dayble-header,
 .dayble-month-title,
 .dayble-header-buttons {
 }
 
 .dayble-header {
-}
+} */
 
 @media (max-width: 700px) {
     .dayble-header {
@@ -1019,12 +1019,7 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
     border-left: 2px solid var(--background-modifier-border);
 }
 
-@media screen and (max-width: 600px) {
-    .dayble-focus-grid-container {
-        flex-direction: column;
-        gap: 0;
-    }
-}
+
 
 .dayble-event-icon {
     display: inline-flex;
@@ -3365,6 +3360,19 @@ button.dayble-btn.db-btn.button {
     border: none !important;
 } */
 
+.dayble-long-event:has(.dayble-event-icon):has(.dayble-event-desc) {
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+}
+
+.dayble-long-event:has(.dayble-event-desc) .dayble-event-title,
+.dayble-long-event:has(.dayble-event-desc) .dayble-event-desc {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    line-height: 1.2 !important;
+}
+
 .dayble-3day-all-day-section {
     background-color: var(--background-primary);
     background: var(--background-primary);
@@ -3428,3 +3436,13 @@ button.dayble-btn.db-btn.button {
 }
 
 .dayble-focus-scroll.dayble-no-all-day-margin { margin-top: 6px; }
+
+
+
+/* .dayble-layout-center-flex .dayble-event-inner {
+    flex: 1 !important;
+}
+
+.dayble-layout-center-flex .dayble-event-inner:has(.dayble-event-desc) {
+    flex: 0 !important;
+} */
