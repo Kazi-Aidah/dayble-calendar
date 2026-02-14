@@ -1123,7 +1123,7 @@ class DaybleCalendarView extends ItemView {
         // so we don't need manual margin adjustments anymore.
     }
 
-    calculateLongEventLanes(longEvents: DaybleEvent[], unitParams?: { lanesPerEvent: number, lanesPerGap: number, lanesPerDesc: number, lanesPerIcon: number }): { eventLanes: Map<string, number>, maxLanesByDate: Record<string, number> } {
+    calculateLongEventLanes(longEvents: DaybleEvent[], unitParams?: { lanesPerEvent: number, lanesPerGap: number, lanesPerDesc: number, lanesPerIcon: number, liTopGapReduceUnits?: number, liBottomGapReduceUnits?: number }): { eventLanes: Map<string, number>, maxLanesByDate: Record<string, number> } {
         const eventLanes = new Map<string, number>();
         const maxLanesByDate: Record<string, number> = {};
         const occupiedLanesByDate = new Map<string, Set<number>>();
@@ -1132,7 +1132,9 @@ class DaybleCalendarView extends ItemView {
             lanesPerEvent = 7, // LN
             lanesPerGap = 1, // LN
             lanesPerDesc = 5, // LN
-            lanesPerIcon = 0 // LN
+            lanesPerIcon = 0, // LN
+            liTopGapReduceUnits = 0, // LN new: reduce top gap units for LI
+            liBottomGapReduceUnits = 1 // LN new: reduce bottom gap units for LI
         } = unitParams || {};
 
         // Sort long events: earlier start date first, then longer duration first
@@ -1164,17 +1166,24 @@ class DaybleCalendarView extends ItemView {
             const iconPlacement = this.plugin.settings.iconPlacement || 'left';
             const isVerticalIcon = (iconPlacement === 'top' || iconPlacement === 'top-left' || iconPlacement === 'top-right' || 
                                    iconPlacement === 'bottom' || iconPlacement === 'bottom-left' || iconPlacement === 'bottom-right');
+            const isTopIcon = (iconPlacement === 'top' || iconPlacement === 'top-left' || iconPlacement === 'top-right');
+            const isBottomIcon = (iconPlacement === 'bottom' || iconPlacement === 'bottom-left' || iconPlacement === 'bottom-right');
             
             const category = this.plugin.settings.eventCategories?.find(c => c.id === ev.categoryId);
             const state = ev.stateId ? (this.plugin.settings.eventStates || []).find(s => s.id === ev.stateId) : null;
             const iconToUse = (state && state.icon) || ev.icon || (category?.icon || '');
             const hasVerticalIcon = isVerticalIcon && iconToUse;
+            const hasIcon = !!iconToUse; // LN
 
             let extraLanes = 0;
             if (hasDescription) extraLanes += lanesPerDesc; // LN
             if (hasVerticalIcon) extraLanes += lanesPerIcon; // LN
 
-            const lanesNeeded = lanesPerEvent + lanesPerGap + extraLanes; // LN
+            let gapUnits = lanesPerGap; // LN
+            if (hasIcon && !hasDescription) {
+                gapUnits = Math.max(0, lanesPerGap - liBottomGapReduceUnits); // LN
+            }
+            const lanesNeeded = lanesPerEvent + gapUnits + extraLanes; // LN
 
             let lane = 0;
             while (true) {
@@ -2171,9 +2180,13 @@ class DaybleCalendarView extends ItemView {
         const lanesPerDesc = 3; // 20px extra for description // LN
         const lanesPerIcon = 0; // 28px extra for top/bottom icons // LN
         const COMPLEX_ICON_DESC_ADJUST_PX = 4; // LN new: reduce spacer by 2px when icon+description
-
         const ICON_ONLY_TOP_ADJUST_PX = 0; // LN new: title + icon (top) adjustment
-        const ICON_ONLY_BOTTOM_ADJUST_PX = 6; // LN new: title + icon (bottom) adjustment
+        const ICON_ONLY_BOTTOM_ADJUST_PX = -7; // LN new: title + icon (bottom) adjustment
+        const TYPE_OFFSET_LD_PX = 0; // LN new: type offset for long+desc
+        const TYPE_OFFSET_LI_PX = 0; // LN new: type offset for long+icon
+        const TYPE_OFFSET_LB_PX = -4; // LN new: type offset for long+icon+desc (bring LB 4px lower)
+        const LI_TOP_GAP_REDUCE_UNITS = 0; // LN new: reduce top gap units for LI
+        const LI_BOTTOM_GAP_REDUCE_UNITS = 6; // LN new: reduce bottom gap units for LI
 
         // const ICON_ONLY_TOP_LANE_ADJUST_PX = 60; // LN new: title + icon at top lane
         // const ICON_ONLY_BOTTOM_LANE_ADJUST_PX = 6; // LN new: title + icon at bottom lane
@@ -2186,7 +2199,7 @@ class DaybleCalendarView extends ItemView {
             longEvents = longEvents.filter(ev => ev.pinned);
         }
 
-        const { eventLanes, maxLanesByDate } = this.calculateLongEventLanes(longEvents, { lanesPerEvent, lanesPerGap, lanesPerDesc, lanesPerIcon });
+        const { eventLanes, maxLanesByDate } = this.calculateLongEventLanes(longEvents, { lanesPerEvent, lanesPerGap, lanesPerDesc, lanesPerIcon, liTopGapReduceUnits: LI_TOP_GAP_REDUCE_UNITS, liBottomGapReduceUnits: LI_BOTTOM_GAP_REDUCE_UNITS });
         const countsByDate = maxLanesByDate;
 
         // Compute per-date adjustment for complex long events (icon + description)
@@ -2194,7 +2207,7 @@ class DaybleCalendarView extends ItemView {
         const complexAdjustByDate: Record<string, number> = {};
         const adjustByEventId: Record<string, number> = {}; // LN
         longEvents.forEach(ev => {
-            const stackIndex = eventLanes.get(ev.id) ?? 0; // LN
+            // const stackIndex = eventLanes.get(ev.id) ?? 0; // LN
             const hasDescription = !!(ev.description && ev.description.trim().length > 0);
             const category = this.plugin.settings.eventCategories?.find(c => c.id === ev.categoryId);
             const state = ev.stateId ? (this.plugin.settings.eventStates || []).find(s => s.id === ev.stateId) : null;
@@ -2222,29 +2235,70 @@ class DaybleCalendarView extends ItemView {
                 if (!cellDateSet.has(dateStr)) continue;
                 // icon + description
                 if (hasIcon && hasDescription) {
-                    complexAdjustByDate[dateStr] = (complexAdjustByDate[dateStr] || 0) + COMPLEX_ICON_DESC_ADJUST_PX; // LN
-                    adjustByEventId[ev.id] = (adjustByEventId[ev.id] || 0) + COMPLEX_ICON_DESC_ADJUST_PX; // LN
+                    complexAdjustByDate[dateStr] = (complexAdjustByDate[dateStr] || 0) + (COMPLEX_ICON_DESC_ADJUST_PX + TYPE_OFFSET_LB_PX); // LN
+                    adjustByEventId[ev.id] = (adjustByEventId[ev.id] || 0) + (COMPLEX_ICON_DESC_ADJUST_PX + TYPE_OFFSET_LB_PX); // LN
                 }
                 // title + just icon (no description)
                 if (hasIcon && !hasDescription) {
                     if (isTopIcon) {
-                        complexAdjustByDate[dateStr] = (complexAdjustByDate[dateStr] || 0) + ICON_ONLY_TOP_ADJUST_PX; // LN
-                        adjustByEventId[ev.id] = (adjustByEventId[ev.id] || 0) + ICON_ONLY_TOP_ADJUST_PX; // LN
+                        complexAdjustByDate[dateStr] = (complexAdjustByDate[dateStr] || 0) + (ICON_ONLY_TOP_ADJUST_PX + TYPE_OFFSET_LI_PX); // LN
+                        adjustByEventId[ev.id] = (adjustByEventId[ev.id] || 0) + (ICON_ONLY_TOP_ADJUST_PX + TYPE_OFFSET_LI_PX); // LN
                     } else if (isBottomIcon) {
-                        complexAdjustByDate[dateStr] = (complexAdjustByDate[dateStr] || 0) + ICON_ONLY_BOTTOM_ADJUST_PX; // LN
-                        adjustByEventId[ev.id] = (adjustByEventId[ev.id] || 0) + ICON_ONLY_BOTTOM_ADJUST_PX; // LN
-                    }
-                    // Lane-based fallback: use the same settings to ensure L2174-L2176 affect long events
-                    if (stackIndex === 0) {
-                        complexAdjustByDate[dateStr] = (complexAdjustByDate[dateStr] || 0) + ICON_ONLY_TOP_ADJUST_PX; // LN
-                        adjustByEventId[ev.id] = (adjustByEventId[ev.id] || 0) + ICON_ONLY_TOP_ADJUST_PX; // LN
+                        complexAdjustByDate[dateStr] = (complexAdjustByDate[dateStr] || 0) + (ICON_ONLY_BOTTOM_ADJUST_PX + TYPE_OFFSET_LI_PX); // LN
+                        adjustByEventId[ev.id] = (adjustByEventId[ev.id] || 0) + (ICON_ONLY_BOTTOM_ADJUST_PX + TYPE_OFFSET_LI_PX); // LN
                     } else {
-                        complexAdjustByDate[dateStr] = (complexAdjustByDate[dateStr] || 0) + ICON_ONLY_BOTTOM_ADJUST_PX; // LN
-                        adjustByEventId[ev.id] = (adjustByEventId[ev.id] || 0) + ICON_ONLY_BOTTOM_ADJUST_PX; // LN
+                        // Side icon case: apply type offset only
+                        complexAdjustByDate[dateStr] = (complexAdjustByDate[dateStr] || 0) + TYPE_OFFSET_LI_PX; // LN
+                        adjustByEventId[ev.id] = (adjustByEventId[ev.id] || 0) + TYPE_OFFSET_LI_PX; // LN
                     }
+                }
+                // long + description only
+                if (!hasIcon && hasDescription) {
+                    complexAdjustByDate[dateStr] = (complexAdjustByDate[dateStr] || 0) + TYPE_OFFSET_LD_PX; // LN
+                    adjustByEventId[ev.id] = (adjustByEventId[ev.id] || 0) + TYPE_OFFSET_LD_PX; // LN
                 }
             }
         });
+
+        // Pairwise gap adjustment (prevType -> currType)
+        const PAIR_ADJUST: Record<string, Record<string, number>> = {
+            LD: { LI: -1, LB: -1 },
+            LI: { LD: +2, LI: 0, LB: 0 },
+            LB: { LI: 0, LD: 0, LB: 0 }
+        }; // LN
+
+        const getEventType = (ev: DaybleEvent): 'LD' | 'LI' | 'LB' | 'N' => {
+            const hasDescription = !!(ev.description && ev.description.trim().length > 0);
+            const category = this.plugin.settings.eventCategories?.find(c => c.id === ev.categoryId);
+            const state = ev.stateId ? (this.plugin.settings.eventStates || []).find(s => s.id === ev.stateId) : null;
+            const iconToUse = (state && state.icon) || ev.icon || (category?.icon || '');
+            const hasIcon = !!iconToUse && this.plugin.settings.iconPlacement !== 'none';
+            if (hasIcon && hasDescription) return 'LB';
+            if (hasIcon && !hasDescription) return 'LI';
+            if (!hasIcon && hasDescription) return 'LD';
+            return 'N';
+        }; // LN
+
+        // Build prev-type mapping per visible date
+        const prevTypeByEventDateKey: Record<string, string> = {}; // LN
+        const visibleDates = cells.map(c => c.getAttr('data-date')).filter(Boolean) as string[]; // LN
+        visibleDates.forEach(dateStr => {
+            const evsOnDate = longEvents
+                .filter(ev => {
+                    if (!ev.startDate || !ev.endDate) return false;
+                    const d = new Date(dateStr);
+                    const s = new Date(ev.startDate);
+                    const e = new Date(ev.endDate);
+                    return d >= s && d <= e;
+                })
+                .sort((a, b) => (eventLanes.get(a.id) ?? 0) - (eventLanes.get(b.id) ?? 0));
+            let prevType: string | null = null;
+            evsOnDate.forEach(ev => {
+                const key = `${ev.id}|${dateStr}`;
+                if (prevType) prevTypeByEventDateKey[key] = prevType;
+                prevType = getEventType(ev);
+            });
+        }); // LN
 
         const sortedLongEvents = [...longEvents].sort((a, b) => {
             const laneA = eventLanes.get(a.id) ?? 0;
@@ -2283,7 +2337,25 @@ class DaybleCalendarView extends ItemView {
             // Fixed top offset calculation based on lane unit index
             const baseTopOffset = HEADER_BUFFER + (stackIndex * LANE_UNIT_HEIGHT); // LN
             const perEventAdjust = (evId && adjustByEventId[evId]) ? adjustByEventId[evId] : 0; // LN
-            const topOffset = Math.max(0, baseTopOffset - perEventAdjust); // LN
+            // Pairwise adjustment based on previous event on the same date
+            let pairAdjustPx = 0; // LN
+            // Lane-sequence compression to prevent drift in LI/LB sequences
+            let seqCompressPx = 0; // LN
+            if (evId) {
+                const dateStr = first.getAttr('data-date');
+                if (dateStr) {
+                    const prevType = prevTypeByEventDateKey[`${evId}|${dateStr}`];
+                    if (prevType) {
+                        const currType = getEventType(this.events.find(e => e.id === evId)!);
+                        pairAdjustPx = (PAIR_ADJUST[prevType]?.[currType] ?? 0);
+                        if (stackIndex >= 1) {
+                            if (currType === 'LI') seqCompressPx = 2; // LN
+                            else if (currType === 'LB') seqCompressPx = 1; // LN
+                        }
+                    }
+                }
+            }
+            const topOffset = Math.max(0, baseTopOffset - (perEventAdjust + pairAdjustPx + seqCompressPx)); // LN
             
             const left = frLeft;
             const top = frTop + topOffset; // LN

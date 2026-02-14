@@ -3360,10 +3360,23 @@ button.dayble-btn.db-btn.button {
     border: none !important;
 } */
 
+
+
 .dayble-long-event:has(.dayble-event-icon):has(.dayble-event-desc) {
-    padding-top: 6px !important;
-    padding-bottom: 6px !important;
+    padding-top: 9px !important;
+    padding-bottom: 9px !important;
 }
+
+.dayble-long-event:has(.dayble-event-icon):has(.dayble-event-desc) .dayble-event-inner {
+    padding-left: 0px !important;
+}
+
+.dayble-long-event:has(.dayble-event-icon):has(.dayble-event-desc) {
+    padding-left: 12px !important;
+}
+
+
+
 
 .dayble-long-event:has(.dayble-event-desc) .dayble-event-title,
 .dayble-long-event:has(.dayble-event-desc) .dayble-event-desc {
