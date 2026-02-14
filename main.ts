@@ -61,8 +61,6 @@ interface DaybleSettings {
     agendaTitleFormat?: string;
     agendaDateFormat?: string;
     dimPastEvents?: number;
-    dayStartHour?: number;
-    dayEndHour?: number;
 } 
 
 const DEFAULT_SETTINGS: DaybleSettings = {
@@ -111,8 +109,6 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     agendaTitleFormat: 'MMMM YYYY',
     agendaDateFormat: 'dddd, D MMMM',
     dimPastEvents: 0.60,
-    dayStartHour: 0,
-    dayEndHour: 23,
     swatches: [
         // { name: 'Red', color: '#eb3b5a', textColor: '#f9c6d0' },
         // { name: 'Orange', color: '#fa8231', textColor: '#fed8be' },
@@ -351,7 +347,7 @@ export default class DaybleCalendarPlugin extends Plugin {
         });
         this.addCommand({ 
             id: 'toggle-pinned-month', 
-            name: 'Show only pinned events for month view', 
+            name: 'Show only pinned events in month view', 
             callback: async () => {
                 this.settings.onlyShowPinnedEventsMonth = !this.settings.onlyShowPinnedEventsMonth;
                 await this.saveSettings();
@@ -364,7 +360,7 @@ export default class DaybleCalendarPlugin extends Plugin {
         });
         this.addCommand({ 
             id: 'toggle-pinned-week', 
-            name: 'Show only pinned events for week view', 
+            name: 'Show only pinned events in week view', 
             callback: async () => {
                 this.settings.onlyShowPinnedEventsWeek = !this.settings.onlyShowPinnedEventsWeek;
                 await this.saveSettings();
@@ -377,7 +373,7 @@ export default class DaybleCalendarPlugin extends Plugin {
         });
         this.addCommand({ 
             id: 'toggle-pinned-agenda', 
-            name: 'Show only pinned events for agenda view', 
+            name: 'Show only pinned events in agenda view', 
             callback: async () => {
                 this.settings.onlyShowPinnedEventsAgenda = !this.settings.onlyShowPinnedEventsAgenda;
                 await this.saveSettings();
@@ -409,6 +405,18 @@ export default class DaybleCalendarPlugin extends Plugin {
                     view.openEventModal(undefined, moment().format('YYYY-MM-DD'));
                 }
             } 
+        });
+        this.addCommand({
+            id: 'search-events',
+            name: 'Search events',
+            callback: async () => {
+                await this.openDayble();
+                const view = this.getCalendarView();
+                if (view) {
+                    const modal = new PromptSearchModal(this.app, view);
+                    void modal.open();
+                }
+            }
         });
         this.addCommand({ id: 'focus-today', name: 'Focus on today', callback: () => void this.focusToday() });
 this.addSettingTab(new DaybleSettingTab(this.app, this));
@@ -3532,11 +3540,95 @@ class PromptSearchModal extends Modal {
                 if (i === this.selectedIndex) row.addClass('is-selected');
                 row.onmouseenter = () => { this.selectedIndex = i; render(); };
                 const content = row.createDiv({ cls: 'suggestion-content' });
-                const title = content.createDiv({ cls: 'suggestion-title' });
-                title.textContent = ev.title || '(untitled)';
+                
+                const preview = document.createElement('div');
+                preview.className = 'dayble-event dayble-title-align-left dayble-desc-align-left dayble-icon-placement-left';
+                
+                const inner = preview.createDiv({ cls: 'dayble-event-inner' });
+                const titleContainer = inner.createDiv({ cls: 'dayble-event-title-container' });
+                const titleEl = titleContainer.createDiv({ cls: 'dayble-event-title' });
+                renderMarkdown(ev.title || '(untitled)', titleEl, this.app);
+                
+                if (ev.description) {
+                    const descEl = inner.createDiv({ cls: 'dayble-event-desc' });
+                    renderMarkdown(ev.description || '', descEl, this.app);
+                }
+                
+                const category = this.view.plugin.settings.eventCategories?.find(c => c.id === ev.categoryId);
+                const state = ev.stateId ? (this.view.plugin.settings.eventStates || []).find(s => s.id === ev.stateId) : null;
+                const effect = state ? state.effect : (category ? category.effect : null);
+                const anim = state ? state.animation : (category ? category.animation : null);
+                const anim2 = state ? state.animation2 : (category ? category.animation2 : null);
+                
+                if (effect && effect !== '') preview.addClass(`dayble-effect-${effect}`);
+                if (anim && anim !== '') preview.addClass(`dayble-anim-${anim}`);
+                if (anim2 && anim2 !== '') preview.addClass(`dayble-anim-${anim2}`);
+                
+                const iconToUse = (state && state.icon) || ev.icon || (category?.icon || '');
+                if (iconToUse) {
+                    const iconEl = preview.createDiv({ cls: 'dayble-event-icon' });
+                    setIcon(iconEl, iconToUse);
+                    preview.insertBefore(iconEl, inner);
+                }
+                
+                let bgColor = '';
+                let textColor = '';
+                const colorName = ev.colorName || (!ev.color && !category ? this.view.plugin.settings.defaultEventColorName : undefined);
+                if (colorName) {
+                    const allSwatches = [...(this.view.plugin.settings.swatches || []), ...(this.view.plugin.settings.userCustomSwatches || [])];
+                    const swatch = allSwatches.find(s => (s.name || '').toLowerCase() === colorName.toLowerCase());
+                    if (swatch) {
+                        preview.classList.add('dayble-event-colored');
+                        const opacity = this.view.plugin.settings.eventBgOpacity ?? 1;
+                        const bOpacity = this.view.plugin.settings.eventBorderOpacity ?? 1;
+                        const swatchBg = swatch.color;
+                        const swatchText = swatch.textColor || chooseTextColor(swatchBg);
+                        preview.style.setProperty('--event-bg-color', hexToRgba(swatchBg, opacity));
+                        preview.style.setProperty('--event-text-color', swatchText);
+                        preview.style.setProperty('--event-border-color', hexToRgba(swatchText, bOpacity));
+                        bgColor = swatchBg;
+                        textColor = swatchText;
+                    }
+                } else {
+                    if (ev.color) {
+                        bgColor = ev.color;
+                        textColor = ev.textColor || chooseTextColor(ev.color);
+                        (preview as HTMLElement).dataset.color = ev.color;
+                    } else if (category && category.bgColor) {
+                        bgColor = category.bgColor;
+                        textColor = category.textColor;
+                    }
+                    if (bgColor && textColor) {
+                        const opacity = this.view.plugin.settings.eventBgOpacity ?? 1;
+                        const rgbaColor = hexToRgba(bgColor, opacity);
+                        preview.style.setProperty('--event-bg-color', rgbaColor);
+                        preview.style.setProperty('--event-text-color', textColor);
+                        const bOpacity = this.view.plugin.settings.eventBorderOpacity ?? 1;
+                        const borderColor = hexToRgba(textColor, bOpacity);
+                        preview.style.setProperty('--event-border-color', borderColor);
+                        preview.classList.add('dayble-event-colored');
+                        const descEl = preview.querySelector('.dayble-event-desc') as HTMLElement;
+                        if (descEl) descEl.style.setProperty('color', textColor);
+                    }
+                }
+                
+                (preview as any).setCssProps?.({ 'width': '100%' });
+                content.appendChild(preview);
+                
                 const note = content.createDiv({ cls: 'suggestion-note' });
-                note.textContent = ev.date + (ev.time ? ' ' + ev.time : '');
+                const dateStr = ev.date || ev.startDate || '';
+                let formattedDate = dateStr;
+                if (dateStr) {
+                    const [yy, mm, dd] = dateStr.split('-').map(Number);
+                    const dObj = new Date(yy, (mm || 1) - 1, dd || 1);
+                    const fmt = this.view.plugin.settings.dayTitleFormat || 'dddd, D MMMM';
+                    formattedDate = moment(dObj).format(fmt);
+                }
+                const timeStr = String(ev.time || '');
+                const isMidnightRange = /^0{2}:0{2}\s*-\s*0{2}:0{2}$/.test(timeStr);
+                note.textContent = formattedDate + (!isMidnightRange && timeStr ? ' ' + timeStr : '');
                 note.addClass('dayble-suggestion-note');
+                
                 row.onclick = async () => { await this.choose(i); };
                 row.onmousedown = async (e) => { e.preventDefault(); e.stopPropagation(); await this.choose(i); };
             });
@@ -3700,8 +3792,8 @@ class TodayModal extends Modal {
             return `${pad(h)}:00`;
         };
         const slots: { hour: number; minute: number }[] = [];
-        const startHour = this.view?.plugin?.settings?.dayStartHour ?? 0;
-        const endHour = this.view?.plugin?.settings?.dayEndHour ?? 23;
+        const startHour = 0;
+        const endHour = 23;
         for (let h = startHour; h <= endHour; h++) {
             slots.push({ hour: h, minute: 0 });
             slots.push({ hour: h, minute: 30 });
@@ -4093,7 +4185,7 @@ class TodayModal extends Modal {
             const relYInCell = clientY - targetCellRect.top;
             const isSecondHalf = relYInCell > pxPer15;
             
-            const startHour = this.view?.plugin?.settings?.dayStartHour ?? 0;
+            const startHour = 0;
             const baseIdx = (split && !isMulti && isAfternoon) ? 24 : startHour;
             const n = (slotIdx - baseIdx) * 2 + (isSecondHalf ? 1 : 0);
 
@@ -4484,7 +4576,7 @@ class TodayModal extends Modal {
             const dates = Array.isArray(this.date) ? (this.date as string[]) : [this.date as string];
             const targetDate = dates[info.dayIdx] || dates[0];
 
-            const startHour = this.view?.plugin?.settings?.dayStartHour ?? 0;
+            const startHour = 0;
             const baseMin = (!Array.isArray(this.date) && split && info.isAfternoon) ? 12 * 60 : startHour * 60;
             const startTotalMin = baseMin + (info.n * 15);
             
@@ -4658,7 +4750,7 @@ class TodayModal extends Modal {
 
         // Render existing events for this date spanning above the grid
         try {
-            const startHour = this.view?.plugin?.settings?.dayStartHour ?? 0;
+            const startHour = 0;
             const toIdx = (hh: number, mm: number) => ((hh - startHour) * 2) + (mm >= 30 ? 1 : 0);
             const parseHM = (s: string) => {
                 const [h, m] = s.split(':').map(n => parseInt(n || '0', 10));
@@ -5256,35 +5348,7 @@ class DaybleSettingTab extends PluginSettingTab {
                     });
             });
 
-        new Setting(containerEl)
-            .setName('Day start hour')
-            .setDesc('First hour to display in Day/3-Day views (0-23)')
-            .addSlider(s => {
-                s.setLimits(0, 23, 1)
-                    .setValue(this.plugin.settings.dayStartHour ?? 0)
-                    .setDynamicTooltip()
-                    .onChange(async v => {
-                        this.plugin.settings.dayStartHour = v;
-                        await this.plugin.saveSettings();
-                        const view = this.plugin.getCalendarView();
-                        await view?.render();
-                    });
-            });
-
-        new Setting(containerEl)
-            .setName('Day end hour')
-            .setDesc('Last hour to display in Day/3-Day views (0-23)')
-            .addSlider(s => {
-                s.setLimits(0, 23, 1)
-                    .setValue(this.plugin.settings.dayEndHour ?? 23)
-                    .setDynamicTooltip()
-                    .onChange(async v => {
-                        this.plugin.settings.dayEndHour = v;
-                        await this.plugin.saveSettings();
-                        const view = this.plugin.getCalendarView();
-                        await view?.render();
-                    });
-            });
+        
 
         const dateFormatHeading = new Setting(containerEl).setName('Date formats').setHeading();
         dateFormatHeading.descEl.createSpan({ text: 'Customize how dates appear in different views. ' });

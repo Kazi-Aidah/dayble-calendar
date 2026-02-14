@@ -3,6 +3,8 @@ A fast, customizable calendar for Obsidian that stores events as monthly JSON fi
 
 ![](assets/banner.gif)
 
+works on mobile devices.
+
 Dayble Calendar is non-intrusive. Events never appear in daily notes, so your notes stay clean. You can attach Markdown links to events and jump straight to related notes.
 
 This plugin is based on a customizable calendar I originally built as a [website](https://kazi-aidah.github.io/Aidah-s-Calendar/), now rebuilt to live directly inside Obsidian.
@@ -85,7 +87,7 @@ You can click on the day date to add an all day event, or just drag your normal 
 A timetable for a single day. Day Split mode is great if you prefer separate morning and afternoon sections instead of one long scrollable column.
 
 You can also select time period using the time column.
-![](assets/.gif)
+![](assets/select-by-time.gif)
 
 ### Agenda View
 Displays events in a list. If “Only show pinned events in Agenda view” is enabled, you’ll see just the important stuff, no clutter.
@@ -138,7 +140,9 @@ If the "None" event color blends into the background in Day View, you can change
 
 ```
 :root {
-    --dayble-focus-event-default-bg: [YOUR COLOR]; /* uses var(--background-secondary) by default */
+    --dayble-focus-event-default-bg: darkgreen;
+    --dayble-focus-event-default-text: yellow;
+    --dayble-focus-event-default-border: orange;
 }
 ```
 
