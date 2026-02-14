@@ -147,6 +147,16 @@
         gap: 8px;
         order: 0;
     }
+
+    .dayble-nav-left, .dayble-nav-right {
+        gap: 0;
+        padding: 0;
+        margin: 0;
+    }
+
+    .dayble-nav-left button, .dayble-nav-right button {
+        padding: 8px;
+    }
 }
 
 .dayble-view-select {
