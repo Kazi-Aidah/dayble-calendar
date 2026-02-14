@@ -537,6 +537,18 @@
     overflow: visible !important;
 }
 
+/* Ensure animated overlays are clipped inside events */
+.dayble-event.dayble-anim-glass-shine,
+.dayble-event.dayble-anim-shine,
+.dayble-event.dayble-anim-sparkles,
+.dayble-event.dayble-anim-particles,
+.dayble-event.dayble-anim-animated-gradient,
+.dayble-event.dayble-anim-glowing,
+.dayble-event.dayble-anim-stars,
+.dayble-event.dayble-anim-snow-falling {
+    overflow: hidden !important;
+}
+
 .dayble-event:not(.dayble-layout-center-flex):not(.dayble-event-compact) {
     flex-direction: row !important;
 }
@@ -1517,46 +1529,255 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     -webkit-backdrop-filter: blur(8px);
 }
 
+
+
+
+
+
+.dayble-anim-shine {
+    position: relative;
+    isolation: isolate;
+}
+
+.dayble-anim-shine::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, 
+        transparent 0%, 
+        rgba(255, 255, 255, 0.2) 30%, 
+        rgba(255, 255, 255, 0.5) 50%, 
+        rgba(255, 255, 255, 0.2) 70%, 
+        transparent 100%
+    );
+    transform: translateX(-100%);
+    animation: dayble-shine-smooth 2.5s ease-in-out infinite;
+    pointer-events: none;
+    border-radius: inherit;
+    will-change: transform;
+    z-index: 1;
+}
+
+@keyframes dayble-shine-smooth {
+    0% {
+        transform: translateX(-100%);
+    }
+    30%, 70% {
+        transform: translateX(100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
 .dayble-anim-glass-shine {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+}
+
+.dayble-anim-glass-shine::before,
+.dayble-anim-glass-shine::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    will-change: transform, opacity;
+    z-index: 1;
+}
+
+.dayble-anim-glass-shine::before {
+    background: linear-gradient(
+        110deg,
+        transparent 35%,
+        rgba(255,255,255,0.15) 42%,
+        rgba(255,255,255,0.55) 50%,
+        rgba(255,255,255,0.15) 58%,
+        transparent 65%
+    );
+    filter: blur(6px);
+    transform: translateX(-120%) rotate(-8deg);
+    animation: glass-shine-smooth 4.5s cubic-bezier(0.4,0,0.2,1) infinite;
+}
+
+.dayble-anim-glass-shine::after {
+    background: radial-gradient(
+        circle at 30% 50%,
+        rgba(255,255,255,0.35),
+        rgba(255,255,255,0.15) 40%,
+        transparent 70%
+    );
+    opacity: 0.6;
+    animation: glass-glow-breathe 6s ease-in-out infinite alternate;
+}
+
+@keyframes glass-shine-smooth {
+    0% {
+        transform: translateX(-140%) rotate(-8deg);
+        opacity: 0;
+    }
+    15% {
+        opacity: 1;
+    }
+    60% {
+        transform: translateX(60%) rotate(-8deg);
+        opacity: 1;
+    }
+    100% {
+        transform: translateX(140%) rotate(-8deg);
+        opacity: 0;
+    }
+}
+
+@keyframes glass-glow-breathe {
+    0% {
+        transform: scale(1);
+        opacity: 0.4;
+    }
+    100% {
+        transform: scale(1.08);
+        opacity: 0.8;
+    }
+}
+
+
+.dayble-anim-sparkles {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+}
+
+.dayble-anim-sparkles::before,
+.dayble-anim-sparkles::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+}
+
+.dayble-anim-sparkles::before {
+    background-image:
+        radial-gradient(circle at 10% 20%, rgba(255,255,255,0.9) 0.6px, transparent 2px),
+        radial-gradient(circle at 30% 80%, rgba(255,255,255,0.7) 0.8px, transparent 2.5px),
+        radial-gradient(circle at 50% 40%, rgba(255,255,255,1) 1px, transparent 3px),
+        radial-gradient(circle at 70% 70%, rgba(255,255,255,0.85) 0.7px, transparent 2.2px),
+        radial-gradient(circle at 90% 30%, rgba(255,255,255,0.8) 0.9px, transparent 2.8px),
+        radial-gradient(circle at 20% 60%, rgba(255,255,255,0.95) 0.5px, transparent 2px),
+        radial-gradient(circle at 60% 10%, rgba(255,255,255,0.75) 0.6px, transparent 2px);
+    background-repeat: repeat;
+    background-size: 180px 180px;
+    animation: sparkle-float-1 18s linear infinite,
+               sparkle-twinkle-1 5s ease-in-out infinite alternate;
+    mix-blend-mode: overlay;
+    opacity: 0.8;
+    z-index: 1;
+}
+
+.dayble-anim-sparkles::after {
+    background-image:
+        radial-gradient(circle at 15% 15%, rgba(255,255,255,1) 1.4px, transparent 3.5px),
+        radial-gradient(circle at 35% 55%, rgba(255,255,255,0.85) 1.1px, transparent 3px),
+        radial-gradient(circle at 55% 85%, rgba(255,255,255,0.9) 1.3px, transparent 3.2px),
+        radial-gradient(circle at 75% 25%, rgba(255,255,255,0.8) 1px, transparent 2.8px),
+        radial-gradient(circle at 95% 65%, rgba(255,255,255,0.95) 1.2px, transparent 3px);
+    background-repeat: repeat;
+    background-size: 220px 220px;
+    animation: sparkle-float-2 28s linear infinite,
+               sparkle-twinkle-2 7s ease-in-out infinite alternate;
+    mix-blend-mode: screen;
+    opacity: 0.9;
+    z-index: 2;
+}
+
+@keyframes sparkle-float-1 {
+    0% { background-position: 0 0; }
+    100% { background-position: 0 180px; }
+}
+
+@keyframes sparkle-float-2 {
+    0% { background-position: 0 0; }
+    100% { background-position: -220px 220px; }
+}
+
+@keyframes sparkle-twinkle-1 {
+    0% { opacity: 0.6; transform: scale(1); }
+    100% { opacity: 0.95; transform: scale(1.02); }
+}
+
+@keyframes sparkle-twinkle-2 {
+    0% { opacity: 0.7; transform: scale(1); }
+    100% { opacity: 1; transform: scale(1.03); }
+}
+
+
+/* === New: Subtle dual-shine variant for smaller elements === */
+.dayble-anim-shine-compact {
     position: relative;
     overflow: hidden;
 }
 
-.dayble-anim-glass-shine::after {
+.dayble-anim-shine-compact::after {
     content: '';
     position: absolute;
-    top: -50%;
-    left: -50%;
+    top: 0;
+    left: 0;
     width: 200%;
-    height: 200%;
-    background: linear-gradient(120deg, rgba(255, 255, 255, 0) 40%, rgba(255, 255, 255, 0.35) 50%, rgba(255, 255, 255, 0) 60%);
-    transform: rotate(0deg);
-    animation: dayble-glass-shine 3s linear infinite;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.3) 20%,
+        rgba(255, 255, 255, 0.5) 50%,
+        rgba(255, 255, 255, 0.3) 80%,
+        transparent
+    );
+    animation: compact-shine 2s infinite;
     pointer-events: none;
+    border-radius: inherit;
 }
 
-@keyframes dayble-glass-shine {
+@keyframes compact-shine {
     0% {
-        transform: translate(-50%, -50%) rotate(0deg);
+        transform: translateX(-100%);
     }
     100% {
-        transform: translate(50%, 50%) rotate(0deg);
+        transform: translateX(0%);
     }
 }
 
+/* === Utility classes for animation control === */
+.dayble-anim-paused {
+    animation-play-state: paused !important;
+}
+
+.dayble-anim-slower {
+    animation-duration: 4s !important;
+}
+
+.dayble-anim-faster {
+    animation-duration: 1.5s !important;
+}
+
+    
+
+
 .dayble-anim-glowing {
+    position: relative;
+    overflow: hidden;
     animation: dayble-glow-pulse 2.5s ease-in-out infinite;
 }
 
 @keyframes dayble-glow-pulse {
     0% {
-        box-shadow: 0 0 6px color-mix(in srgb, var(--event-text-color, currentColor) 40%, transparent);
+        box-shadow: inset 0 0 6px color-mix(in srgb, var(--event-text-color, currentColor) 40%, transparent);
     }
     50% {
-        box-shadow: 0 0 16px color-mix(in srgb, var(--event-text-color, currentColor) 70%, transparent);
+        box-shadow: inset 0 0 16px color-mix(in srgb, var(--event-text-color, currentColor) 70%, transparent);
     }
     100% {
-        box-shadow: 0 0 6px color-mix(in srgb, var(--event-text-color, currentColor) 40%, transparent);
+        box-shadow: inset 0 0 6px color-mix(in srgb, var(--event-text-color, currentColor) 40%, transparent);
     }
 }
 
@@ -1595,6 +1816,105 @@ input[type="time"]::-webkit-calendar-picker-indicator {
         background-position: 0 200px;
     }
 }
+.dayble-anim-stars {
+    position: relative;
+    overflow: hidden;
+}
+
+.dayble-anim-stars::before {
+    content: '';
+    position: absolute;
+    inset: -10%;
+    pointer-events: none;
+    background-image:
+        radial-gradient(circle at 5% 10%, currentColor 1px, transparent 2.5px),
+        radial-gradient(circle at 15% 30%, currentColor 1.4px, transparent 3px),
+        radial-gradient(circle at 25% 70%, currentColor 0.9px, transparent 2px),
+        radial-gradient(circle at 35% 50%, currentColor 1.8px, transparent 3.5px),
+        radial-gradient(circle at 45% 20%, currentColor 1.2px, transparent 2.8px),
+        radial-gradient(circle at 55% 80%, currentColor 1.6px, transparent 3.2px),
+        radial-gradient(circle at 65% 40%, currentColor 1px, transparent 2.5px),
+        radial-gradient(circle at 75% 60%, currentColor 1.9px, transparent 3.8px),
+        radial-gradient(circle at 85% 25%, currentColor 1.3px, transparent 3px),
+        radial-gradient(circle at 95% 75%, currentColor 1.5px, transparent 3px),
+        radial-gradient(circle at 20% 5%, currentColor 1.1px, transparent 2.5px),
+        radial-gradient(circle at 40% 95%, currentColor 1.7px, transparent 3.4px),
+        radial-gradient(circle at 60% 8%, currentColor 1.2px, transparent 2.8px),
+        radial-gradient(circle at 80% 92%, currentColor 1.4px, transparent 3px);
+    background-size: 160px 160px;
+    background-repeat: repeat;
+    animation: stars-twinkle-1 6s ease-in-out infinite alternate,
+               stars-drift-1 80s linear infinite;
+    opacity: 0.7;
+    border-radius: inherit;
+}
+
+.dayble-anim-stars::after {
+    content: '';
+    position: absolute;
+    inset: -10%;
+    pointer-events: none;
+    background-image:
+        radial-gradient(circle at 8% 2%, currentColor 2px, transparent 4px),
+        radial-gradient(circle at 18% 98%, currentColor 1.6px, transparent 3.2px),
+        radial-gradient(circle at 28% 12%, currentColor 1.3px, transparent 2.8px),
+        radial-gradient(circle at 38% 88%, currentColor 2.2px, transparent 4.2px),
+        radial-gradient(circle at 48% 6%, currentColor 1.5px, transparent 3px),
+        radial-gradient(circle at 58% 94%, currentColor 1.9px, transparent 3.8px),
+        radial-gradient(circle at 68% 18%, currentColor 1.4px, transparent 3px),
+        radial-gradient(circle at 78% 82%, currentColor 2.1px, transparent 4px),
+        radial-gradient(circle at 88% 10%, currentColor 1.7px, transparent 3.5px),
+        radial-gradient(circle at 98% 90%, currentColor 1.2px, transparent 2.6px);
+    background-size: 140px 140px;
+    background-repeat: repeat;
+    animation: stars-twinkle-2 8s ease-in-out infinite alternate,
+               stars-drift-2 110s linear infinite;
+    opacity: 0.85;
+    mix-blend-mode: screen;
+    border-radius: inherit;
+}
+
+@keyframes stars-twinkle-1 {
+    0% {
+        opacity: 0.5;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0.95;
+        transform: scale(1.015);
+    }
+}
+
+@keyframes stars-twinkle-2 {
+    0% {
+        opacity: 0.6;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1.02);
+    }
+}
+
+@keyframes stars-drift-1 {
+    0% {
+        background-position: 0 0;
+    }
+    100% {
+        background-position: 0 160px;
+    }
+}
+
+@keyframes stars-drift-2 {
+    0% {
+        background-position: 0 0;
+    }
+    100% {
+        background-position: 0 -140px;
+    }
+}
+
+
 
 .dayble-anim-move-horizontally {
     animation: dayble-move-horizontally 10s linear infinite;
@@ -1608,30 +1928,60 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     position: relative;
     overflow: hidden;
 }
-
 .dayble-anim-particles::before {
     content: '';
     position: absolute;
     inset: 0;
     pointer-events: none;
-    box-shadow: 0px 0px 0 0px var(--event-text-color, currentColor), 10px 15px 0 0px var(--event-text-color, currentColor), -5px 20px 0 0px var(--event-text-color, currentColor), 15px 5px 0 0px var(--event-text-color, currentColor), -10px -10px 0 0px var(--event-text-color, currentColor);
+    box-shadow:
+        0px 0px 0 0px var(--event-text-color, currentColor),
+        10px 15px 0 0px var(--event-text-color, currentColor),
+        -5px 20px 0 0px var(--event-text-color, currentColor),
+        15px 5px 0 0px var(--event-text-color, currentColor),
+        -10px -10px 0 0px var(--event-text-color, currentColor);
     animation: particle-flow 5s linear infinite;
     opacity: 0.7;
 }
-
 @keyframes particle-flow {
     0% {
         transform: translate(0, 0);
         opacity: 0.7;
-        box-shadow: 0px 0px 0 0px var(--event-text-color, currentColor), 10px 15px 0 0px var(--event-text-color, currentColor), -5px 20px 0 0px var(--event-text-color, currentColor), 15px 5px 0 0px var(--event-text-color, currentColor), -10px -10px 0 0px var(--event-text-color, currentColor);
+        box-shadow:
+            0px 0px 0 0px var(--event-text-color, currentColor),
+            10px 15px 0 0px var(--event-text-color, currentColor),
+            -5px 20px 0 0px var(--event-text-color, currentColor),
+            15px 5px 0 0px var(--event-text-color, currentColor),
+            -10px -10px 0 0px var(--event-text-color, currentColor);
     }
     100% {
         transform: translate(100%, 100%);
         opacity: 0;
-        box-shadow: 100% 100% 0 0px var(--event-text-color, currentColor), calc(100% + 10px) calc(100% + 15px) 0 0px var(--event-text-color, currentColor), calc(100% - 5px) calc(100% + 20px) 0 0px var(--event-text-color, currentColor), calc(100% + 15px) calc(100% + 5px) 0 0px var(--event-text-color, currentColor), calc(100% - 10px) calc(100% - 10px) 0 0px var(--event-text-color, currentColor);
+        box-shadow:
+            100% 100% 0 0px var(--event-text-color, currentColor),
+            calc(100% + 10px) calc(100% + 15px) 0 0px var(--event-text-color, currentColor),
+            calc(100% - 5px) calc(100% + 20px) 0 0px var(--event-text-color, currentColor),
+            calc(100% + 15px) calc(100% + 5px) 0 0px var(--event-text-color, currentColor),
+            calc(100% - 10px) calc(100% - 10px) 0 0px var(--event-text-color, currentColor);
     }
 }
 
+@keyframes particle-twinkle {
+    0% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+@keyframes particle-drift {
+    0% {
+        background-position: 10% 10%, 70% 30%, 40% 60%, 85% 50%, 20% 80%;
+    }
+    100% {
+        background-position: 20% 20%, 65% 35%, 45% 55%, 80% 60%, 25% 85%;
+    }
+}
 .dayble-anim-snow-falling {
     overflow: hidden;
 }
@@ -1643,15 +1993,17 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .dayble-anim-snow-falling .snow-layer-3 {
     content: '';
     position: absolute;
-    inset: -200px 0 0 0;
+    inset: 0;
     pointer-events: none;
     background-repeat: repeat;
     opacity: 0.85;
+    border-radius: inherit;
 }
 
 .dayble-anim-snow-falling::before {
     background-image: radial-gradient(circle at 20% 10%, currentColor 1.5px, transparent 3px), radial-gradient(circle at 70% 30%, currentColor 1.2px, transparent 3px), radial-gradient(circle at 50% 50%, currentColor 1.8px, transparent 4px), radial-gradient(circle at 90% 70%, currentColor 1.3px, transparent 3px);
     background-size: 250px 250px;
+    background-position: 0 0;
     animation: snow-back 16s linear infinite;
     animation-delay: 0s;
     opacity: 0.5;
@@ -1660,6 +2012,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .dayble-anim-snow-falling::after {
     background-image: radial-gradient(circle at 30% 20%, currentColor 2.5px, transparent 5px), radial-gradient(circle at 80% 40%, currentColor 2px, transparent 4px), radial-gradient(circle at 60% 80%, currentColor 2.2px, transparent 4px), radial-gradient(circle at 10% 60%, currentColor 2.8px, transparent 5px);
     background-size: 200px 200px;
+    background-position: 0 0;
     animation: snow-front 10s linear infinite;
     animation-delay: 0s;
 }
@@ -1667,6 +2020,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .dayble-anim-snow-falling .snow-layer-1 {
     background-image: radial-gradient(circle at 15% 25%, currentColor 1.8px, transparent 3.5px), radial-gradient(circle at 65% 45%, currentColor 1.5px, transparent 3px), radial-gradient(circle at 45% 75%, currentColor 2px, transparent 4px), radial-gradient(circle at 85% 15%, currentColor 1.6px, transparent 3px);
     background-size: 220px 220px;
+    background-position: 0 0;
     animation: snow-mid 12s linear infinite;
     animation-delay: -4s;
     opacity: 0.6;
@@ -1675,6 +2029,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .dayble-anim-snow-falling .snow-layer-2 {
     background-image: radial-gradient(circle at 40% 35%, currentColor 2px, transparent 4px), radial-gradient(circle at 75% 55%, currentColor 1.7px, transparent 3.5px), radial-gradient(circle at 25% 85%, currentColor 2.2px, transparent 4.5px), radial-gradient(circle at 55% 25%, currentColor 1.9px, transparent 4px);
     background-size: 180px 180px;
+    background-position: 0 0;
     animation: snow-mid 14s linear infinite;
     animation-delay: -7s;
     opacity: 0.55;
@@ -1683,6 +2038,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .dayble-anim-snow-falling .snow-layer-3 {
     background-image: radial-gradient(circle at 50% 15%, currentColor 2.2px, transparent 4.5px), radial-gradient(circle at 20% 65%, currentColor 1.9px, transparent 4px), radial-gradient(circle at 80% 45%, currentColor 2.4px, transparent 5px), radial-gradient(circle at 35% 90%, currentColor 2.1px, transparent 4.5px);
     background-size: 190px 190px;
+    background-position: 0 0;
     animation: snow-front 8s linear infinite;
     animation-delay: -2s;
     opacity: 0.65;
@@ -1690,33 +2046,34 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 @keyframes snow-back {
     0% {
-        transform: translateY(0) translateX(0);
+        background-position: 0 0;
     }
     100% {
-        transform: translateY(400px) translateX(30px);
+        background-position: 30px 400px;
     }
 }
 
 @keyframes snow-mid {
     0% {
-        transform: translateY(0) translateX(0);
+        background-position: 0 0;
     }
     100% {
-        transform: translateY(450px) translateX(-20px);
+        background-position: -20px 450px;
     }
 }
 
 @keyframes snow-front {
     0% {
-        transform: translateY(0) translateX(0);
+        background-position: 0 0;
     }
     100% {
-        transform: translateY(500px) translateX(40px);
+        background-position: 40px 500px;
     }
 }
 
 .dayble-anim-animated-gradient {
     position: relative;
+    overflow: hidden;
 }
 
 .dayble-anim-animated-gradient::after {
@@ -2763,6 +3120,12 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     align-items: center;
     gap: 4px;
 }
+
+.dayble-current-time-line,
+.dayble-current-time-label {
+    box-shadow: 0px 2px #00000050 !important;
+}
+
 
 /* Left align only if it has a description */
 .dayble-focus-scroll .dayble-event.min15:has(.dayble-event-desc) {

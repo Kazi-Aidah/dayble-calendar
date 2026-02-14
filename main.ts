@@ -6724,7 +6724,7 @@ class DaybleSettingTab extends PluginSettingTab {
                     'embossed': 'Embossed',
                     'glass': 'Glass',
                     'glow': 'Glow',
-                    'retro-button': 'Retro button'
+                    'retro-button': 'Outset'
                 }).setValue(category.effect).onChange(async v => { 
                     category.effect = v; 
                     await this.plugin.saveSettings();
@@ -6739,7 +6739,10 @@ class DaybleSettingTab extends PluginSettingTab {
                     'snow-falling': 'Snow falling',
                     'animated-gradient': 'Animated gradient',
                     'glass-shine': 'Glass shine',
-                    'glowing': 'Glowing'
+                    'glowing': 'Glowing',
+                    'shine': 'Shine',
+                    'sparkles': 'Sparkles',
+                    'stars': 'Stars'
                 }).setValue(category.animation).onChange(async v => { 
                     category.animation = v; 
                     await this.plugin.saveSettings();
@@ -6754,7 +6757,10 @@ class DaybleSettingTab extends PluginSettingTab {
                     'snow-falling': 'Snow falling',
                     'animated-gradient': 'Animated gradient',
                     'glass-shine': 'Glass shine',
-                    'glowing': 'Glowing'
+                    'glowing': 'Glowing',
+                    'shine': 'Shine',
+                    'sparkles': 'Sparkles',
+                    'stars': 'Stars'
                 }).setValue(category.animation2).onChange(async v => { 
                     category.animation2 = v; 
                     await this.plugin.saveSettings();
@@ -7258,7 +7264,7 @@ class DaybleSettingTab extends PluginSettingTab {
                         'embossed': 'Embossed',
                         'glass': 'Glass',
                         'glow': 'Glow',
-                        'retro-button': 'Retro button'
+                        'retro-button': 'Outset'
                     }).setValue(state.effect || '').onChange(async v => {
                         state.effect = v;
                         await this.plugin.saveSettings();
@@ -7275,7 +7281,10 @@ class DaybleSettingTab extends PluginSettingTab {
                         'snow-falling': 'Snow falling',
                         'animated-gradient': 'Animated gradient',
                         'glass-shine': 'Glass shine',
-                        'glowing': 'Glowing'
+                        'glowing': 'Glowing',
+                        'shine': 'Shine',
+                        'sparkles': 'Sparkles',
+                        'stars': 'Stars'
                     }).setValue(state.animation || '').onChange(async v => {
                         state.animation = v;
                         await this.plugin.saveSettings();
@@ -7292,7 +7301,10 @@ class DaybleSettingTab extends PluginSettingTab {
                         'snow-falling': 'Snow falling',
                         'animated-gradient': 'Animated gradient',
                         'glass-shine': 'Glass shine',
-                        'glowing': 'Glowing'
+                        'glowing': 'Glowing',
+                        'shine': 'Shine',
+                        'sparkles': 'Sparkles',
+                        'stars': 'Stars'
                     }).setValue(state.animation2 || '').onChange(async v => {
                         state.animation2 = v;
                         await this.plugin.saveSettings();
