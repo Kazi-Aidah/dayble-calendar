@@ -1,9 +1,9 @@
 # Dayble Calendar
 A fast, customizable calendar for Obsidian that stores events as monthly JSON files directly inside your vault. Fully tweakable with colors, effects, and animations.
 
-![](assets/banner.gif)
+| ![](assets/banner.gif) | ![](assets/mobile-day.png) |
+|------------------------|----------------------------|
 
-works on mobile devices.
 
 Dayble Calendar is non-intrusive. Events never appear in daily notes, so your notes stay clean. You can attach Markdown links to events and jump straight to related notes.
 
@@ -82,6 +82,7 @@ Like Month view, but focused on a single week. You can enable “Weekly Notes”
 Shows a timetable-style layout with three columns. Use the `<>` buttons to move between dates for precise control. The current time label appears here, and you can dim past events from the Interface section in settings.
 
 You can click on the day date to add an all day event, or just drag your normal events into the all day section.
+![](assets/click-date.gif)
 
 ### Day View
 A timetable for a single day. Day Split mode is great if you prefer separate morning and afternoon sections instead of one long scrollable column.

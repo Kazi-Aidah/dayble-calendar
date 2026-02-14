@@ -46,6 +46,7 @@ interface DaybleSettings {
     triggers?: { id?: string, pattern: string, categoryId: string, color?: string, textColor?: string, colorName?: string }[];
     weeklyNotesEnabled?: boolean;
     scrollToCurrentTime?: boolean;
+    showCurrentTimeLine?: boolean;
     todayModalSplitView?: boolean;
     tooltipEnabled?: boolean;
     showCopyTextOption?: boolean;
@@ -94,6 +95,7 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     calendarView: 'Month',
     weeklyNotesEnabled: false,
     scrollToCurrentTime: true,
+    showCurrentTimeLine: true,
     todayModalSplitView: true,
     tooltipEnabled: true,
     showCopyTextOption: false,
@@ -419,6 +421,42 @@ export default class DaybleCalendarPlugin extends Plugin {
             }
         });
         this.addCommand({ id: 'focus-today', name: 'Focus on today', callback: () => void this.focusToday() });
+        this.addCommand({
+            id: 'show-current-time-line',
+            name: 'Show current time line',
+            checkCallback: (checking) => {
+                const enabled = this.settings.showCurrentTimeLine ?? true;
+                if (enabled) return false;
+                if (!checking) {
+                    this.settings.showCurrentTimeLine = true;
+                    void this.saveSettings().then(async () => {
+                        const view = this.getCalendarView();
+                        if (view) {
+                            await view.render();
+                        }
+                    });
+                }
+                return true;
+            }
+        });
+        this.addCommand({
+            id: 'hide-current-time-line',
+            name: 'Hide current time line',
+            checkCallback: (checking) => {
+                const enabled = this.settings.showCurrentTimeLine ?? true;
+                if (!enabled) return false;
+                if (!checking) {
+                    this.settings.showCurrentTimeLine = false;
+                    void this.saveSettings().then(async () => {
+                        const view = this.getCalendarView();
+                        if (view) {
+                            await view.render();
+                        }
+                    });
+                }
+                return true;
+            }
+        });
 this.addSettingTab(new DaybleSettingTab(this.app, this));
 try { await this.ensureEntriesFolder(); } catch (e) { console.error(e); }
     void this.openDayble();
@@ -4130,17 +4168,16 @@ class TodayModal extends Modal {
         const gridContainer = scroller.createDiv({ cls: 'dayble-focus-grid-container' });
         this.gridContainer = gridContainer;
 
-        // Current time line update
-        if (this.currentTimeInterval) clearInterval(this.currentTimeInterval);
-        this.currentTimeInterval = setInterval(() => this.renderCurrentTimeLine(), 60000);
-        
-        // Initial render and setup observer for layout changes
-        requestAnimationFrame(() => this.renderCurrentTimeLine());
-        const timeLineObs = new ResizeObserver(() => this.renderCurrentTimeLine());
-        timeLineObs.observe(gridContainer);
-        // @ts-ignore
-        if (!this._dayMode3ROs) this._dayMode3ROs = [];
-        this._dayMode3ROs.push(timeLineObs);
+        if (this.view?.plugin.settings.showCurrentTimeLine ?? true) {
+            if (this.currentTimeInterval) clearInterval(this.currentTimeInterval);
+            this.currentTimeInterval = setInterval(() => this.renderCurrentTimeLine(), 60000);
+            requestAnimationFrame(() => this.renderCurrentTimeLine());
+            const timeLineObs = new ResizeObserver(() => this.renderCurrentTimeLine());
+            timeLineObs.observe(gridContainer);
+            // @ts-ignore
+            if (!this._dayMode3ROs) this._dayMode3ROs = [];
+            this._dayMode3ROs.push(timeLineObs);
+        }
 
         let morningGrid: HTMLElement, afternoonGrid: HTMLElement;
         if (split && !isMulti) {
@@ -4669,6 +4706,7 @@ class TodayModal extends Modal {
     }
 
     renderCurrentTimeLine() {
+        if (!(this.view?.plugin.settings.showCurrentTimeLine ?? true)) return;
         const gridContainer = this.gridContainer;
         if (!gridContainer) return;
 
@@ -6184,6 +6222,19 @@ class DaybleSettingTab extends PluginSettingTab {
                         }
                     });
                  });
+            });
+
+        new Setting(containerEl)
+            .setName('Show current time line')
+            .setDesc('Show a current time indicator in day and 3-day view.')
+            .addToggle(t => {
+                t.setValue(this.plugin.settings.showCurrentTimeLine ?? true)
+                    .onChange(async v => {
+                        this.plugin.settings.showCurrentTimeLine = v;
+                        await this.plugin.saveSettings();
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
+                    });
             });
 
         new Setting(containerEl)
