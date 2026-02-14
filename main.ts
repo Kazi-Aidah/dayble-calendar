@@ -4634,6 +4634,119 @@ class TodayModal extends Modal {
                         item.style.setProperty('--focus-item-top', `${Math.round(top)}px`);
                         item.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
                         item.style.setProperty('--focus-item-height', `${Math.round(height)}px`);
+
+                        // Edge hover cursor change & Resize handling
+                        const EDGE_SIZE = 10;
+                        item.addEventListener('mousemove', (e: MouseEvent) => {
+                            if (this.dragId) return; 
+                            const rect = item.getBoundingClientRect();
+                            const y = e.clientY - rect.top;
+                            if (y < EDGE_SIZE || y > rect.height - EDGE_SIZE) {
+                                item.style.cursor = 'ns-resize';
+                                item.setAttribute('draggable', 'false');
+                            } else {
+                                item.style.cursor = 'pointer';
+                                item.setAttribute('draggable', 'true');
+                            }
+                        });
+
+                        item.addEventListener('mousedown', (e: MouseEvent) => {
+                            if (e.button !== 0) return;
+                            const rect = item.getBoundingClientRect();
+                            const y = e.clientY - rect.top;
+                            let edge: 'top' | 'bottom' | null = null;
+                            if (y < EDGE_SIZE) edge = 'top';
+                            else if (y > rect.height - EDGE_SIZE) edge = 'bottom';
+
+                            if (!edge) return;
+
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            const initialY = e.clientY;
+                            const initialTop = parseFloat(item.style.getPropertyValue('--focus-item-top'));
+                            const initialHeight = parseFloat(item.style.getPropertyValue('--focus-item-height'));
+                            
+                            item.addClass('resizing');
+                            
+                            const onMove = (moveEvent: MouseEvent) => {
+                                const deltaY = moveEvent.clientY - initialY;
+                                let newTop = initialTop;
+                                let newHeight = initialHeight;
+
+                                if (edge === 'top') {
+                                    newTop = initialTop + deltaY;
+                                    newHeight = initialHeight - deltaY;
+                                } else {
+                                    newHeight = initialHeight + deltaY;
+                                }
+
+                                // Snapping to 15-min increments
+                                const snappedTop = Math.round(newTop / pxPer15) * pxPer15;
+                                const snappedHeight = Math.max(pxPer15, Math.round(newHeight / pxPer15) * pxPer15);
+                                
+                                if (edge === 'top') {
+                                    const actualNewTop = snappedTop;
+                                    const actualNewHeight = initialHeight - (snappedTop - initialTop);
+                                    if (actualNewHeight >= pxPer15) {
+                                        item.style.setProperty('--focus-item-top', `${Math.round(actualNewTop)}px`);
+                                        item.style.setProperty('--focus-item-height', `${Math.round(actualNewHeight)}px`);
+                                    }
+                                } else {
+                                    item.style.setProperty('--focus-item-height', `${Math.round(snappedHeight)}px`);
+                                }
+                            };
+
+                            const onUp = async () => {
+                                window.removeEventListener('mousemove', onMove);
+                                window.removeEventListener('mouseup', onUp);
+                                item.removeClass('resizing');
+
+                                const finalTop = parseFloat(item.style.getPropertyValue('--focus-item-top'));
+                                const finalHeight = parseFloat(item.style.getPropertyValue('--focus-item-height'));
+                                
+                                let newStartTotal = startTotal;
+                                let newEndTotal = endTotal;
+
+                                if (edge === 'top') {
+                                    let segmentStartMins = Math.round(finalTop / pxPer15) * 15;
+                                    if (!isMulti && split && sMin >= boundary) {
+                                        segmentStartMins += boundary;
+                                    }
+                                    newStartTotal = segmentStartMins;
+                                } else {
+                                    let segmentEndMins = Math.round((finalTop + finalHeight) / pxPer15) * 15;
+                                    if (!isMulti && split && sMin >= boundary) {
+                                        segmentEndMins += boundary;
+                                    }
+                                    newEndTotal = segmentEndMins;
+                                }
+
+                                if (newStartTotal >= newEndTotal) {
+                                    if (edge === 'top') newStartTotal = newEndTotal - 15;
+                                    else newEndTotal = newStartTotal + 15;
+                                }
+
+                                const formatTime = (h: number, m: number) => `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                                const newTimeRange = `${formatTime(Math.floor(newStartTotal / 60), newStartTotal % 60)}-${formatTime(Math.floor(newEndTotal / 60), newEndTotal % 60)}`;
+                                
+                                try {
+                                    const evIdx = (this.view?.events || []).findIndex(event => event.id === ev.id);
+                                    if (evIdx !== -1 && this.view) {
+                                        const updatedEv = JSON.parse(JSON.stringify(this.view.events[evIdx]));
+                                        updatedEv.time = newTimeRange;
+                                        this.view.events[evIdx] = updatedEv;
+                                        await this.view.saveAllEntries();
+                                        await this.view.render();
+                                        this.onOpen();
+                                    }
+                                } catch (err) { console.debug('[Dayble] Resize update:', err); }
+                            };
+
+                            window.addEventListener('mousemove', onMove);
+                            window.addEventListener('mouseup', onUp);
+                        });
+
                         item.onclick = async (e) => { e.stopPropagation(); await this.view?.openEventModal(ev.id, ev.date || ev.startDate, ev.endDate); };
                         
                         item.ondragstart = (e) => {

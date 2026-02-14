@@ -2377,6 +2377,12 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     pointer-events: auto !important;
 }
 
+.dayble-focus-event-abs.resizing {
+    z-index: 10000 !important;
+    opacity: 0.8;
+    pointer-events: none;
+}
+
 .dayble-focus-event-split-start {
     border-right-width: 0 !important;
     border-top-right-radius: 0 !important;
@@ -2677,7 +2683,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .dayble-agenda-all-day .dayble-event-inner .dayble-event-title-container {
     flex: 1 1 auto !important;
     display: flex !important;
-    justify-content: flex-start !important;
+    justify-content: center !important;
     min-width: 0 !important;
     overflow: hidden !important;
 }
@@ -2697,7 +2703,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .dayble-3day-all-day-day .dayble-event .dayble-event-inner .dayble-event-desc,
 .dayble-agenda-all-day .dayble-event-inner .dayble-event-desc {
     display: inline-block !important;
-    flex: 0 1 auto !important; /* Changed from 1 1 auto to prevent squishing title */
+    flex: 0 !important;
     margin-left: 6px !important;
     font-size: 0.85em !important;
     opacity: 0.7 !important;
