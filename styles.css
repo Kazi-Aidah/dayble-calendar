@@ -472,7 +472,8 @@
    clip-path: none !important;
 }
 
-.dayble-day-mode .dayble-focus-grid-container .dayble-event {
+.dayble-day-mode .dayble-focus-grid-container .dayble-event,
+.dayble-3day-mode .dayble-focus-grid-container .dayble-event {
    border-radius: 0 !important;
    clip-path: inset(2px 0 2px 0) !important;
 }
@@ -2355,7 +2356,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     right: 0;
     top: var(--quarter-line-top);
     border-top: 1px dashed var(--background-modifier-border);
-    opacity: 0.2;
+    opacity: 0.1;
 }
 
 .dayble-focus-event-abs {
@@ -2490,6 +2491,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     border-radius: 8px;
     overflow: hidden;
     background: var(--background-primary);
+    max-height: calc(100% - 12px);
 }
 
 .dayble-3day-header {
@@ -2574,8 +2576,9 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .dayble-3day-mode .dayble-focus-scroll {
-    height: 100% !important;
-    flex: 1;
+    height: auto !important;
+    max-height: 100%;
+    flex: 0 1 auto;
 }
 
 /* Fix 3-day mode vertical centering for timed events without affecting day mode */

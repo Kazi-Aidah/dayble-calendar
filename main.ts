@@ -61,6 +61,8 @@ interface DaybleSettings {
     agendaTitleFormat?: string;
     agendaDateFormat?: string;
     dimPastEvents?: number;
+    dayStartHour?: number;
+    dayEndHour?: number;
 } 
 
 const DEFAULT_SETTINGS: DaybleSettings = {
@@ -109,6 +111,8 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     agendaTitleFormat: 'MMMM YYYY',
     agendaDateFormat: 'dddd, D MMMM',
     dimPastEvents: 0.60,
+    dayStartHour: 0,
+    dayEndHour: 23,
     swatches: [
         // { name: 'Red', color: '#eb3b5a', textColor: '#f9c6d0' },
         // { name: 'Orange', color: '#fa8231', textColor: '#fed8be' },
@@ -3014,6 +3018,7 @@ class EventModal extends Modal {
         if (initialValue) setValue(initialValue);
 
         const getValue = () => {
+            if (!hInput.value && !mInput.value) return undefined;
             let h = parseInt(hInput.value || '0', 10);
             const m = parseInt(mInput.value || '0', 10);
             
@@ -3036,6 +3041,7 @@ class EventModal extends Modal {
                 }
             };
             el.onblur = () => {
+                if (el.value === '') return;
                 let v = parseInt(el.value, 10);
                 if (isNaN(v)) v = min;
                 if (v > max) v = max;
@@ -3694,7 +3700,9 @@ class TodayModal extends Modal {
             return `${pad(h)}:00`;
         };
         const slots: { hour: number; minute: number }[] = [];
-        for (let h = 0; h <= 23; h++) {
+        const startHour = this.view?.plugin?.settings?.dayStartHour ?? 0;
+        const endHour = this.view?.plugin?.settings?.dayEndHour ?? 23;
+        for (let h = startHour; h <= endHour; h++) {
             slots.push({ hour: h, minute: 0 });
             slots.push({ hour: h, minute: 30 });
         }
@@ -3724,7 +3732,11 @@ class TodayModal extends Modal {
                 const [y, m, d] = dStr.split('-').map(Number);
                 const dateObj = new Date(y, m - 1, d);
                 const label = moment(dateObj).format(this.view?.plugin?.settings?.threeDayDateFormat || 'ddd D');
-                header.createDiv({ cls: 'dayble-3day-header-day', text: label });
+                const headerDay = header.createDiv({ cls: 'dayble-3day-header-day', text: label });
+                headerDay.style.cursor = 'pointer';
+                headerDay.onclick = () => {
+                    this.view?.openEventModal(undefined, dStr, dStr);
+                };
             });
 
             // All-Day Setup
@@ -4081,7 +4093,8 @@ class TodayModal extends Modal {
             const relYInCell = clientY - targetCellRect.top;
             const isSecondHalf = relYInCell > pxPer15;
             
-            const baseIdx = (split && !isMulti && isAfternoon) ? 24 : 0;
+            const startHour = this.view?.plugin?.settings?.dayStartHour ?? 0;
+            const baseIdx = (split && !isMulti && isAfternoon) ? 24 : startHour;
             const n = (slotIdx - baseIdx) * 2 + (isSecondHalf ? 1 : 0);
 
             return {
@@ -4350,11 +4363,12 @@ class TodayModal extends Modal {
             const pxPer15 = rowHeight / 2;
             
             // Draw lines for columns
-            const grids = split ? [morningGrid, afternoonGrid] : [morningGrid];
+            const grids = split && !isMulti ? [morningGrid, afternoonGrid] : [morningGrid];
             grids.forEach(grid => {
                 const gridRect = grid.getBoundingClientRect();
-                const colIntervals = split ? (cells.length / 2) * 2 : cells.length * 2;
-                for (let i = 1; i < colIntervals; i++) {
+                const numSlots = slots.length;
+                const intervals = numSlots * 2;
+                for (let i = 1; i < intervals; i++) {
                     const line = quarter.createDiv({ cls: 'dayble-quarter-line' });
                     line.setCssProps({
                         'left': `${gridRect.left - gRect.left}px`,
@@ -4470,7 +4484,8 @@ class TodayModal extends Modal {
             const dates = Array.isArray(this.date) ? (this.date as string[]) : [this.date as string];
             const targetDate = dates[info.dayIdx] || dates[0];
 
-            const baseMin = (!Array.isArray(this.date) && split && info.isAfternoon) ? 12 * 60 : 0;
+            const startHour = this.view?.plugin?.settings?.dayStartHour ?? 0;
+            const baseMin = (!Array.isArray(this.date) && split && info.isAfternoon) ? 12 * 60 : startHour * 60;
             const startTotalMin = baseMin + (info.n * 15);
             
             const newH = Math.floor(startTotalMin / 60);
@@ -4643,7 +4658,8 @@ class TodayModal extends Modal {
 
         // Render existing events for this date spanning above the grid
         try {
-            const toIdx = (hh: number, mm: number) => (hh * 2) + (mm >= 30 ? 1 : 0);
+            const startHour = this.view?.plugin?.settings?.dayStartHour ?? 0;
+            const toIdx = (hh: number, mm: number) => ((hh - startHour) * 2) + (mm >= 30 ? 1 : 0);
             const parseHM = (s: string) => {
                 const [h, m] = s.split(':').map(n => parseInt(n || '0', 10));
                 return (h * 60) + m;
@@ -5237,6 +5253,36 @@ class DaybleSettingTab extends PluginSettingTab {
                             const view = this.plugin.getCalendarView();
                             await view?.render();
                         });
+                    });
+            });
+
+        new Setting(containerEl)
+            .setName('Day start hour')
+            .setDesc('First hour to display in Day/3-Day views (0-23)')
+            .addSlider(s => {
+                s.setLimits(0, 23, 1)
+                    .setValue(this.plugin.settings.dayStartHour ?? 0)
+                    .setDynamicTooltip()
+                    .onChange(async v => {
+                        this.plugin.settings.dayStartHour = v;
+                        await this.plugin.saveSettings();
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
+                    });
+            });
+
+        new Setting(containerEl)
+            .setName('Day end hour')
+            .setDesc('Last hour to display in Day/3-Day views (0-23)')
+            .addSlider(s => {
+                s.setLimits(0, 23, 1)
+                    .setValue(this.plugin.settings.dayEndHour ?? 23)
+                    .setDynamicTooltip()
+                    .onChange(async v => {
+                        this.plugin.settings.dayEndHour = v;
+                        await this.plugin.saveSettings();
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
                     });
             });
 
