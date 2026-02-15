@@ -551,7 +551,11 @@
 }
 
 .dayble-agenda-container .dayble-event-desc {
-    display: none !important;
+    display: block !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    width: 100%;
 }
 
 .dayble-focus-event-abs .dayble-event-desc {
@@ -570,6 +574,16 @@
 
 .dayble-month-week-event .dayble-event-desc {
     display: block !important;
+}
+
+/* Allow full height in agenda mode for month/week style events */
+.dayble-agenda-container .dayble-month-week-event {
+    overflow: visible !important;
+    height: auto !important;
+}
+
+.dayble-agenda-container .dayble-month-week-event .dayble-event-inner {
+    justify-content: flex-start !important;
 }
 
 .dayble-event {
@@ -3160,18 +3174,51 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     min-width: 0 !important;
 }
 
+.dayble-agenda-all-day .dayble-event-inner .dayble-event-title {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+}
+
 .dayble-all-day-section .dayble-event .dayble-event-inner .dayble-event-desc,
 .dayble-3day-all-day-day .dayble-event .dayble-event-inner .dayble-event-desc,
 .dayble-agenda-all-day .dayble-event-inner .dayble-event-desc {
-    display: inline-block !important;
-    flex: 0 !important;
+    display: block !important;
+    flex: 0 0 auto !important;
     margin-left: 6px !important;
+    margin-top: 2px !important;
     font-size: 0.85em !important;
     opacity: 0.7 !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
     min-width: 0 !important;
+}
+
+/* Agenda all-day layout: stack title and description vertically */
+.dayble-agenda-all-day {
+    align-items: flex-start !important;
+}
+
+.dayble-agenda-all-day .dayble-event-inner {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 2px !important;
+}
+
+.dayble-agenda-all-day .dayble-event-inner .dayble-event-title-container {
+    justify-content: flex-start !important;
+    align-items: flex-start !important;
+}
+
+.dayble-agenda-all-day .dayble-event-inner .dayble-event-title {
+    width: 100% !important;
+}
+
+.dayble-agenda-all-day .dayble-event-inner .dayble-event-desc {
+    margin-left: 0 !important;
+    margin-top: 4px !important;
+    width: 100% !important;
 }
 
 /* Duration based styling for day mode (15 min) */
@@ -3485,6 +3532,30 @@ button.dayble-btn.db-btn.button {
 
 .dayble-agenda-container .dayble-event-inner:has(.dayble-event-desc) .dayble-event-title-container {
     padding-bottom: 0 !important;
-    margin-bottom: 0 !important;
-    height: 100%;
+    margin-bottom: 2px !important;
+    height: auto !important;
+}
+
+.dayble-agenda-container .dayble-event-container {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+}
+
+.dayble-agenda-container .dayble-event-inner:has(.dayble-event-icon):has(.dayble-icon-top):has(.dayble-event-desc) .dayble-event-title-container {
+    padding: 3px 0 !important;
+    padding-top: 4px !important;
+}
+
+.dayble-agenda-container .dayble-event-inner:has(.dayble-event-icon):has(.dayble-icon-top):has(.dayble-event-desc) .dayble-event-desc {
+    padding-bottom: 0px !important;
+    margin-bottom: 0px !important;
+}
+
+.dayble-long-event:has(.dayble-event-icon) .dayble-event-inner {
+    margin-inline-start: 0px;
+}
+
+.dayble-long-event .dayble-event-inner {
+    margin-inline-start: 4px;
 }

@@ -701,12 +701,24 @@ class DaybleCalendarView extends ItemView {
         const prevBtn = document.createElement('button'); prevBtn.className = 'dayble-btn dayble-header-buttons';
         setIcon(prevBtn, 'chevron-left');
         prevBtn.onclick = () => { this.shiftMonth(-1); };
+        prevBtn.onwheel = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const delta = e.deltaY > 0 ? 1 : -1;
+            this.shiftMonth(delta);
+        };
         const todayBtn = document.createElement('button'); todayBtn.className = 'dayble-btn dayble-header-buttons';
         setIcon(todayBtn, 'dot');
         todayBtn.onclick = () => { this.focusToday(); };
         const nextBtn = document.createElement('button'); nextBtn.className = 'dayble-btn dayble-header-buttons';
         setIcon(nextBtn, 'chevron-right');
         nextBtn.onclick = () => { this.shiftMonth(1); };
+        nextBtn.onwheel = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const delta = e.deltaY > 0 ? 1 : -1;
+            this.shiftMonth(delta);
+        };
         const placement = this.plugin.settings.holderPlacement ?? 'left';
         
         if (placement === 'left') left.appendChild(holderToggle);
