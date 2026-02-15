@@ -2226,12 +2226,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 @media (max-width: 700px) {
     .db-category-row .setting-item-control {
-        overflow-x: auto;
-        overflow-y: hidden;
-        -webkit-overflow-scrolling: touch;
-    }
-    .db-category-row .setting-item-control::-webkit-scrollbar {
-        height: 6px;
+        flex-wrap: wrap;
+        overflow: visible;
     }
 }
 
@@ -2256,13 +2252,16 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 @media (max-width: 700px) {
     .db-triggers-row .setting-item-control,
     .db-states-row .setting-item-control {
-        overflow-x: auto;
-        overflow-y: hidden;
-        -webkit-overflow-scrolling: touch;
+        flex-wrap: wrap;
     }
-    .db-triggers-row .setting-item-control::-webkit-scrollbar,
-    .db-states-row .setting-item-control::-webkit-scrollbar {
-        height: 6px;
+    .db-triggers-row .setting-item-control input,
+    .db-triggers-row .setting-item-control select,
+    .db-states-row .setting-item-control input,
+    .db-states-row .setting-item-control select {
+        flex: 1 1 110px;
+        max-width: 48%;
+        padding-inline: 6px;
+        font-size: 0.9em;
     }
 }
 
@@ -3482,3 +3481,10 @@ button.dayble-btn.db-btn.button {
 .dayble-layout-center-flex .dayble-event-inner:has(.dayble-event-desc) {
     flex: 0 !important;
 } */
+
+
+.dayble-agenda-container .dayble-event-inner:has(.dayble-event-desc) .dayble-event-title-container {
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+    height: 100%;
+}
