@@ -2224,6 +2224,16 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     align-items: center;
     overflow: hidden;
 }
+@media (max-width: 700px) {
+    .db-category-row .setting-item-control {
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+    .db-category-row .setting-item-control::-webkit-scrollbar {
+        height: 6px;
+    }
+}
 
 .db-triggers-row,
 .db-states-row {
@@ -2242,6 +2252,18 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     flex-wrap: nowrap;
     gap: 8px;
     align-items: center;
+}
+@media (max-width: 700px) {
+    .db-triggers-row .setting-item-control,
+    .db-states-row .setting-item-control {
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+    .db-triggers-row .setting-item-control::-webkit-scrollbar,
+    .db-states-row .setting-item-control::-webkit-scrollbar {
+        height: 6px;
+    }
 }
 
 .db-category-row .setting-item-control > * {
