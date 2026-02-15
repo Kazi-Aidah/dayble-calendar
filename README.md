@@ -4,7 +4,6 @@ A fast, customizable calendar for Obsidian that stores events as monthly JSON fi
 | ![](assets/banner.gif) | ![](assets/mobile-day.png) |
 |------------------------|----------------------------|
 
-
 Dayble Calendar is non-intrusive. Events never appear in daily notes, so your notes stay clean. You can attach Markdown links to events and jump straight to related notes.
 
 This plugin is based on a customizable calendar I originally built as a [website](https://kazi-aidah.github.io/Aidah-s-Calendar/), now rebuilt to live directly inside Obsidian.
@@ -23,12 +22,13 @@ then assign that styling to events right from the same modal.
 ## Triggers
 Create triggers that match text in an event’s title or description. Triggers can automatically apply an Event Category and Event Color (from your custom color groups).
 
-![](assets/section-trigger.png)
+![](assets/section-triggers.png)
 
 
 ## States
 States let you add icons and labels that appear in the context menu as “Set as [state]”. Each state can also define its own Event Color, effects, and animations.
 
+![](assets/section-states.png)
 
 ## Colors
 Add your own colors. Events using Category Styling can use your custom palette.
@@ -79,7 +79,7 @@ Supports both normal and long events. When long events are stacked, the gaps bet
 Like Month view, but focused on a single week. You can enable “Weekly Notes” to add a small textarea for reminders or quick notes.
 
 ### 3 Day View
-Shows a timetable-style layout with three columns. Use the `<>` buttons to move between dates for precise control. The current time label appears here, and you can dim past events from the Interface section in settings.
+Shows a timetable-style layout with three columns. Use the `<` `>` buttons to move between dates for precise control. The current time label appears here, and you can adjust the dim of past events from the Interface section in settings.
 
 You can click on the day date to add an all day event, or just drag your normal events into the all day section.
 ![](assets/click-date.gif)
@@ -104,6 +104,9 @@ Dayble Calendar includes a Holder on the left by default. It’s a space for eve
 
 ![](assets/holder.gif)
 
+## Mobile Support
+Dayble Calendar is mobile-friendly. You can use it on your phone to add events or view the calendar.
+But it’s not as easy to use as the desktop version. Dragging events does not work on mobile, selecting by dragging multiple time cells do not work either. I personally end up using the Add Event modal to add events. In the future, I will try to add touch support for these features.
 
 ## Why “Dayble”?
 **Day** + Ta**ble** = Dayble.
@@ -136,7 +139,7 @@ https://github.com/Kazi-Aidah/dayble-calendar/issues/new
 ### Current Time Label
 Use `.dayble-current-time-line` and `.dayble-current-time-label` for CSS Snippets to customize the current time indicator.
 
-### None Event color blending issue
+### None event color blending issue
 If the "None" event color blends into the background in Day View, you can change it by adding a CSS snippet:
 
 ```
@@ -154,3 +157,4 @@ Use this:
     display: none !important;
 }
 ```
+

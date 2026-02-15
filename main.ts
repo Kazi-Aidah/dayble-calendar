@@ -84,7 +84,7 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     eventBorderRadius: 6,
     eventBorderOpacity: 0.25,
     dayCellRadius: 8,
-    eventVerticalPadding: 2,
+    eventVerticalPadding: 9,
     colorSwatchPosition: 'under-title',
     onlyAnimateToday: false,
     completeBehavior: 'dim',
