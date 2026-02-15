@@ -528,6 +528,7 @@
    clip-path: none !important;
 }
 
+.dayble-modal-wide .dayble-focus-grid-container .dayble-event,
 .dayble-day-mode .dayble-focus-grid-container .dayble-event,
 .dayble-3day-mode .dayble-focus-grid-container .dayble-event {
    border-radius: 0 !important;

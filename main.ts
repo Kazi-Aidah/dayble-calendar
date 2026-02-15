@@ -62,6 +62,10 @@ interface DaybleSettings {
     agendaTitleFormat?: string;
     agendaDateFormat?: string;
     dimPastEvents?: number;
+    soundMarkComplete?: string;
+    soundNextEvent?: string;
+    soundMarkCompleteName?: string;
+    soundNextEventName?: string;
 } 
 
 const DEFAULT_SETTINGS: DaybleSettings = {
@@ -111,6 +115,10 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     agendaTitleFormat: 'MMMM YYYY',
     agendaDateFormat: 'dddd, D MMMM',
     dimPastEvents: 0.60,
+    soundMarkComplete: '',
+    soundNextEvent: '',
+    soundMarkCompleteName: '',
+    soundNextEventName: '',
     swatches: [
         // { name: 'Red', color: '#eb3b5a', textColor: '#f9c6d0' },
         // { name: 'Orange', color: '#fa8231', textColor: '#fed8be' },
@@ -209,6 +217,27 @@ export default class DaybleCalendarPlugin extends Plugin {
          const isMoment12h = moment.localeData().longDateFormat('LT').includes('A');
          return isMoment12h ? '12h' : '24h';
      }
+    
+    resolveSoundSrc(src?: string): string {
+        const s = String(src || '');
+        if (!s) return '';
+        if (s.startsWith('data:') || s.startsWith('http://') || s.startsWith('https://')) return s;
+        const file = this.app.vault.getFileByPath(s);
+        if (file && file instanceof TFile) return this.app.vault.getResourcePath(file);
+        return s;
+    }
+    
+    playSoundMarkComplete(): void {
+        const url = this.resolveSoundSrc(this.settings.soundMarkComplete);
+        if (!url) return;
+        try { const a = new Audio(url); void a.play(); } catch {}
+    }
+    
+    playSoundNextEvent(): void {
+        const url = this.resolveSoundSrc(this.settings.soundNextEvent);
+        if (!url) return;
+        try { const a = new Audio(url); void a.play(); } catch {}
+    }
 
     async fetchAllReleases() {
         const allReleases = [];
@@ -1123,7 +1152,7 @@ class DaybleCalendarView extends ItemView {
         // so we don't need manual margin adjustments anymore.
     }
 
-    calculateLongEventLanes(longEvents: DaybleEvent[], unitParams?: { lanesPerEvent: number, lanesPerGap: number, lanesPerDesc: number, lanesPerIcon: number, liTopGapReduceUnits?: number, liBottomGapReduceUnits?: number }): { eventLanes: Map<string, number>, maxLanesByDate: Record<string, number> } {
+    calculateLongEventLanes(longEvents: DaybleEvent[], unitParams?: { lanesPerEvent: number, lanesPerGap: number, lanesPerDesc: number, lanesPerIcon: number, liBottomGapReduceUnits?: number }): { eventLanes: Map<string, number>, maxLanesByDate: Record<string, number> } {
         const eventLanes = new Map<string, number>();
         const maxLanesByDate: Record<string, number> = {};
         const occupiedLanesByDate = new Map<string, Set<number>>();
@@ -1133,7 +1162,6 @@ class DaybleCalendarView extends ItemView {
             lanesPerGap = 1, // LN
             lanesPerDesc = 5, // LN
             lanesPerIcon = 0, // LN
-            liTopGapReduceUnits = 0, // LN new: reduce top gap units for LI
             liBottomGapReduceUnits = 1 // LN new: reduce bottom gap units for LI
         } = unitParams || {};
 
@@ -1166,8 +1194,6 @@ class DaybleCalendarView extends ItemView {
             const iconPlacement = this.plugin.settings.iconPlacement || 'left';
             const isVerticalIcon = (iconPlacement === 'top' || iconPlacement === 'top-left' || iconPlacement === 'top-right' || 
                                    iconPlacement === 'bottom' || iconPlacement === 'bottom-left' || iconPlacement === 'bottom-right');
-            const isTopIcon = (iconPlacement === 'top' || iconPlacement === 'top-left' || iconPlacement === 'top-right');
-            const isBottomIcon = (iconPlacement === 'bottom' || iconPlacement === 'bottom-left' || iconPlacement === 'bottom-right');
             
             const category = this.plugin.settings.eventCategories?.find(c => c.id === ev.categoryId);
             const state = ev.stateId ? (this.plugin.settings.eventStates || []).find(s => s.id === ev.stateId) : null;
@@ -2185,7 +2211,6 @@ class DaybleCalendarView extends ItemView {
         const TYPE_OFFSET_LD_PX = 0; // LN new: type offset for long+desc
         const TYPE_OFFSET_LI_PX = 0; // LN new: type offset for long+icon
         const TYPE_OFFSET_LB_PX = -4; // LN new: type offset for long+icon+desc (bring LB 4px lower)
-        const LI_TOP_GAP_REDUCE_UNITS = 0; // LN new: reduce top gap units for LI
         const LI_BOTTOM_GAP_REDUCE_UNITS = 6; // LN new: reduce bottom gap units for LI
 
         // const ICON_ONLY_TOP_LANE_ADJUST_PX = 60; // LN new: title + icon at top lane
@@ -2199,7 +2224,7 @@ class DaybleCalendarView extends ItemView {
             longEvents = longEvents.filter(ev => ev.pinned);
         }
 
-        const { eventLanes, maxLanesByDate } = this.calculateLongEventLanes(longEvents, { lanesPerEvent, lanesPerGap, lanesPerDesc, lanesPerIcon, liTopGapReduceUnits: LI_TOP_GAP_REDUCE_UNITS, liBottomGapReduceUnits: LI_BOTTOM_GAP_REDUCE_UNITS });
+        const { eventLanes, maxLanesByDate } = this.calculateLongEventLanes(longEvents, { lanesPerEvent, lanesPerGap, lanesPerDesc, lanesPerIcon, liBottomGapReduceUnits: LI_BOTTOM_GAP_REDUCE_UNITS });
         const countsByDate = maxLanesByDate;
 
         // Compute per-date adjustment for complex long events (icon + description)
@@ -2964,9 +2989,11 @@ class DaybleCalendarView extends ItemView {
             }
 
             menu.addItem(i => i.setTitle(ev.completed ? 'Mark incomplete' : 'Mark complete').setIcon('check').onClick(async () => {
+                const wasCompleted = !!ev.completed;
                 ev.completed = !ev.completed;
                 await this.saveAllEntries();
                 await this.render();
+                if (!wasCompleted && ev.completed) { try { this.plugin.playSoundMarkComplete(); } catch {} }
             }));
 
             menu.addSeparator();
@@ -3959,6 +3986,7 @@ class TodayModal extends Modal {
     overlay: HTMLElement;
     scroller: HTMLElement;
     currentTimeInterval?: any;
+    lastCurrentEventId?: string;
 
     constructor(app: App, date: string | string[], events: DaybleEvent[], view?: DaybleCalendarView) {
         super(app);
@@ -3969,7 +3997,8 @@ class TodayModal extends Modal {
     
     onOpen() {
         const c = this.contentEl;
-        const split = this.view?.plugin?.settings?.todayModalSplitView ?? true;
+        const isMobile = window.innerWidth <= 700;
+        const split = (!isMobile) && (this.view?.plugin?.settings?.todayModalSplitView ?? true);
         const isMulti = Array.isArray(this.date);
         const dates = isMulti ? (this.date as string[]) : [this.date as string];
         const primaryDate = dates[0];
@@ -4920,6 +4949,27 @@ class TodayModal extends Modal {
             timeStr = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
         }
         timeLabel.textContent = timeStr;
+        
+        const todayStr2 = moment().format('YYYY-MM-DD');
+        const now2 = new Date();
+        const nowMin = (now2.getHours() * 60) + now2.getMinutes();
+        const currentEv = (this.events || []).find(e => {
+            const isToday = (e.date === todayStr2) || (e.startDate === todayStr2) || (e.startDate && e.endDate && todayStr2 >= e.startDate && todayStr2 <= e.endDate);
+            if (!isToday) return false;
+            if (!e.time) return false;
+            const parts = String(e.time).split('-');
+            const startStr = parts[0] || '';
+            const endStr = parts[1] || '';
+            if (!startStr) return false;
+            const startMin = timeToMinutes(startStr);
+            const endMin = endStr ? timeToMinutes(endStr) : startMin + 30;
+            return nowMin >= startMin && nowMin < endMin;
+        });
+        const newId = currentEv?.id;
+        if (this.lastCurrentEventId && newId && this.lastCurrentEventId !== newId) {
+            try { this.view?.plugin.playSoundNextEvent(); } catch {}
+        }
+        this.lastCurrentEventId = newId || undefined;
     }
 
     scrollToCurrentTime() {
@@ -5028,7 +5078,8 @@ class TodayModal extends Modal {
                 processedEvents.forEach(data => {
                     const { ev, startTotal, endTotal, column, totalColumns } = data;
                     
-                    const split = this.view?.plugin?.settings?.todayModalSplitView ?? true;
+                    const isMobile = window.innerWidth <= 700;
+                    const split = (!isMobile) && (this.view?.plugin?.settings?.todayModalSplitView ?? true);
                     const boundary = 12 * 60; // 12:00 PM
                     
                     const renderSegment = (sMin: number, eMin: number, segmentType: 'full' | 'start' | 'end') => {
@@ -5481,6 +5532,8 @@ class FolderSuggestModal extends FuzzySuggestModal<string> {
         void Promise.resolve(this.onChoose(item));
     }
 }
+
+ 
 
 class DaybleSettingTab extends PluginSettingTab {
     plugin: DaybleCalendarPlugin;
@@ -6361,6 +6414,100 @@ class DaybleSettingTab extends PluginSettingTab {
                         });
                 });
 
+        new Setting(containerEl).setName('Sounds').setHeading();
+        
+        const markCompleteSetting = new Setting(containerEl);
+        markCompleteSetting.setName('Sound on mark complete');
+        markCompleteSetting.addButton(b => {
+            const lbl = (() => {
+                const v = this.plugin.settings.soundMarkComplete || '';
+                if (!v) return 'Select file';
+                if (v.startsWith('data:')) return this.plugin.settings.soundMarkCompleteName || 'Custom audio';
+                const parts = v.split('/');
+                return parts[parts.length - 1] || 'Select file';
+            })();
+            b.setButtonText(lbl);
+            b.buttonEl.setCssProps({
+                'max-width': '220px',
+                'text-overflow': 'ellipsis',
+                'overflow': 'hidden',
+                'white-space': 'nowrap',
+            });
+            b.buttonEl.title = lbl;
+            b.onClick(() => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'audio/*';
+                input.onchange = () => {
+                    const file = input.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = async () => {
+                        const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+                        this.plugin.settings.soundMarkComplete = dataUrl;
+                        this.plugin.settings.soundMarkCompleteName = file.name || '';
+                        await this.plugin.saveSettings();
+                        this.display();
+                    };
+                    reader.readAsDataURL(file);
+                };
+                input.click();
+            });
+        }).addButton(b => {
+            b.setButtonText('Reset').onClick(async () => {
+                this.plugin.settings.soundMarkComplete = '';
+                this.plugin.settings.soundMarkCompleteName = '';
+                await this.plugin.saveSettings();
+                this.display();
+            });
+        });
+        
+        const nextEventSetting = new Setting(containerEl);
+        nextEventSetting.setName('Day view: sound on switching to next event');
+        nextEventSetting.addButton(b => {
+            const lbl = (() => {
+                const v = this.plugin.settings.soundNextEvent || '';
+                if (!v) return 'Select file';
+                if (v.startsWith('data:')) return this.plugin.settings.soundNextEventName || 'Custom audio';
+                const parts = v.split('/');
+                return parts[parts.length - 1] || 'Select file';
+            })();
+            b.setButtonText(lbl);
+            b.buttonEl.setCssProps({
+                'max-width': '220px',
+                'text-overflow': 'ellipsis',
+                'overflow': 'hidden',
+                'white-space': 'nowrap',
+            });
+            b.buttonEl.title = lbl;
+            b.onClick(() => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'audio/*';
+                input.onchange = () => {
+                    const file = input.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = async () => {
+                        const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+                        this.plugin.settings.soundNextEvent = dataUrl;
+                        this.plugin.settings.soundNextEventName = file.name || '';
+                        await this.plugin.saveSettings();
+                        this.display();
+                    };
+                    reader.readAsDataURL(file);
+                };
+                input.click();
+            });
+        }).addButton(b => {
+            b.setButtonText('Reset').onClick(async () => {
+                this.plugin.settings.soundNextEvent = '';
+                this.plugin.settings.soundNextEventName = '';
+                await this.plugin.saveSettings();
+                this.display();
+            });
+        });
+
         new Setting(containerEl).setName('Interface').setHeading();
 
         new Setting(containerEl)
@@ -6432,7 +6579,7 @@ class DaybleSettingTab extends PluginSettingTab {
                         await view?.render();
                     });
             });
-
+ 
         new Setting(containerEl)
             .setName('Enable weekly notes')
             .setDesc('Show a notes section below the calendar in weekly view')
