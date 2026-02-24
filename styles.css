@@ -2484,9 +2484,6 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     opacity: 0.8;
 }
 
-.dayble-event-hidden {
-    display: none !important;
-}
 
 .dayble-icon-select {
     width: 90px;
@@ -3558,4 +3555,13 @@ button.dayble-btn.db-btn.button {
 
 .dayble-long-event .dayble-event-inner {
     margin-inline-start: 4px;
+}
+
+/* Ensure hidden events are actually hidden regardless of other rules */
+.dayble-event.dayble-event-hidden,
+.dayble-root .dayble-event.dayble-event-hidden,
+.dayble-modal-wide .dayble-event.dayble-event-hidden,
+.dayble-day-mode .dayble-event.dayble-event-hidden,
+.dayble-3day-mode .dayble-event.dayble-event-hidden {
+    display: none !important;
 }
