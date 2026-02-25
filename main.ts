@@ -293,6 +293,29 @@ export default class DaybleCalendarPlugin extends Plugin {
         return allReleases;
     }
 
+    getDataFilePath(filename: string): string {
+        const folder = this.settings.entriesFolder?.trim() || '';
+        if (!folder) return filename;
+        if (folder.endsWith('/')) return `${folder}${filename}`;
+        return `${folder}/${filename}`;
+    }
+
+    async onStorageFolderChange(newFolder: string) {
+        this.settings.entriesFolder = newFolder;
+        await this.saveSettings();
+        await this.ensureEntriesFolder();
+        
+        const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
+        for (const leaf of leaves) {
+            if (leaf.view instanceof DaybleCalendarView) {
+                await leaf.view.loadAllEntries();
+                await leaf.view.render();
+            }
+        }
+        
+        new Notice(`Storage folder updated to: ${newFolder || 'root'}`);
+    }
+
     async onload() {
         await this.loadSettings();
         
@@ -628,7 +651,7 @@ class DaybleCalendarView extends ItemView {
         const year = this.currentDate.getFullYear();
         const month = monthNames[this.currentDate.getMonth()];
         const filename = `${year}${month}.json`;
-        return `${this.plugin.settings.entriesFolder}/${filename}`;
+        return this.plugin.getDataFilePath(filename);
     }
 
     async onOpen() {
@@ -922,7 +945,7 @@ class DaybleCalendarView extends ItemView {
 
         let holderFromGlobal: DaybleEvent[] | null = null;
         try {
-            const holderFile = `${this.plugin.settings.entriesFolder}/holder.json`;
+            const holderFile = this.plugin.getDataFilePath('holder.json');
             const hjson = await this.app.vault.adapter.read(holderFile);
             const hdata = JSON.parse(hjson);
             if (Array.isArray(hdata?.holder)) {
@@ -932,7 +955,7 @@ class DaybleCalendarView extends ItemView {
 
         const holderAggregate: DaybleEvent[] = [];
         for (const filename of files) {
-            const file = `${this.plugin.settings.entriesFolder}/${filename}`;
+            const file = this.plugin.getDataFilePath(filename);
             try {
                 const json = await this.app.vault.adapter.read(file);
                 const data = JSON.parse(json) as { events: DaybleEvent[], holder: DaybleEvent[], weeklyNotes?: Record<string, string>, lastModified?: string };
@@ -1035,7 +1058,7 @@ class DaybleCalendarView extends ItemView {
             const fileEvents = eventsByFile[filename];
             const isCurrent = filename === currentFile;
             
-            const file = `${folder}/${filename}`;
+            const file = this.plugin.getDataFilePath(filename);
             
             // We need to preserve holder/weeklyNotes if we are NOT the current file
             // But wait, `loadAllEntries` only loaded holder from `currentFile`.
@@ -1073,7 +1096,7 @@ class DaybleCalendarView extends ItemView {
             } catch { }
         }
 
-        const holderFile = `${folder}/holder.json`;
+        const holderFile = this.plugin.getDataFilePath('holder.json');
         try {
             const hdata = {
                 holder: this.holderEvents,
@@ -4347,7 +4370,8 @@ class PromptSearchModal extends Modal {
         try {
             let listing;
             try {
-                listing = await this.app.vault.adapter.list(folder);
+                const targetFolder = this.view.plugin.settings.entriesFolder?.trim() || '';
+                listing = await this.app.vault.adapter.list(targetFolder);
             } catch {
                 listing = { files: [] };
             }
@@ -5995,15 +6019,8 @@ class DaybleSettingTab extends PluginSettingTab {
                             .map(f => f.path)
                             .sort();
                         const suggest = new FolderSuggestModal(this.app, folders, async (folder) => {
-                            this.plugin.settings.entriesFolder = folder || '';
-                            await this.plugin.saveSettings();
-                            await this.plugin.ensureEntriesFolder();
+                            await this.plugin.onStorageFolderChange(folder || '');
                             b.setButtonText(this.plugin.settings.entriesFolder?.trim() ? this.plugin.settings.entriesFolder : 'Unset');
-                            const view = this.plugin.getCalendarView();
-                            if (view) {
-                                await view.loadAllEntries();
-                                await view.render();
-                            }
                         });
                         suggest.setPlaceholder('Select storage folder...');
                         suggest.open();
@@ -8191,7 +8208,7 @@ class DaybleSettingTab extends PluginSettingTab {
                             settings: this.plugin.settings,
                             months: []
                         };
-                        const folder = this.plugin.settings.entriesFolder || 'DaybleCalendar';
+                        const folder = this.plugin.settings.entriesFolder?.trim() || 'DaybleCalendar';
                         let files: string[] = [];
                         try {
                             const listing = await this.app.vault.adapter.list(folder);
