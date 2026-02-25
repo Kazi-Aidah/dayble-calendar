@@ -4584,8 +4584,7 @@ class TodayModal extends Modal {
                     const isToday = (e.date === dStr) || (e.startDate === dStr) || 
                                     (e.startDate && e.endDate && dStr >= e.startDate && dStr <= e.endDate);
                     if (!isToday) return false;
-                    const isMultiDay = e.startDate && e.endDate && e.startDate !== e.endDate;
-                    return !e.time || isMultiDay;
+                    return !e.time;
                 }).sort((a, b) => {
                     const ad = a.startDate && a.endDate ? (new Date(a.endDate).getTime() - new Date(a.startDate).getTime()) : 0;
                     const bd = b.startDate && b.endDate ? (new Date(b.endDate).getTime() - new Date(b.startDate).getTime()) : 0;
@@ -4699,8 +4698,7 @@ class TodayModal extends Modal {
                 const isToday = (e.date === primaryDate) || (e.startDate === primaryDate) || 
                                 (e.startDate && e.endDate && primaryDate >= e.startDate && primaryDate <= e.endDate);
                 if (!isToday) return false;
-                const isMultiDay = e.startDate && e.endDate && e.startDate !== e.endDate;
-                return !e.time || isMultiDay;
+                return !e.time;
             }).sort((a, b) => {
                 const ad = a.startDate && a.endDate ? (new Date(a.endDate).getTime() - new Date(a.startDate).getTime()) : 0;
                 const bd = b.startDate && b.endDate ? (new Date(b.endDate).getTime() - new Date(b.startDate).getTime()) : 0;
@@ -5485,10 +5483,8 @@ class TodayModal extends Modal {
                                     (e.startDate && e.endDate && dStr >= e.startDate && dStr <= e.endDate);
                     if (!isToday) return false;
                     
-                    // If it's an all-day/multi-day event, we skip it here because it's in the all-day section
-                    const isMultiDay = e.startDate && e.endDate && e.startDate !== e.endDate;
-                    const isAllDay = !e.time || isMultiDay;
-                    return !isAllDay;
+                    // If it's an all-day event, we skip it here because it's in the all-day section
+                    return !!e.time;
                 });
                 
                 // Overlap detection and column calculation
@@ -5498,9 +5494,20 @@ class TodayModal extends Modal {
                     const startStr = parts[0] || '';
                     const endStr = parts[1] || '';
                     if (!startStr) return null;
-                    const startTotal = parseHM(startStr);
+                    let startTotal = parseHM(startStr);
                     let endTotal = startTotal + 30;
                     if (endStr) endTotal = parseHM(endStr);
+
+                    // Multi-day adjustment for grid segments
+                    if (ev.startDate && ev.endDate && ev.startDate !== ev.endDate) {
+                        if (dStr > ev.startDate) {
+                            startTotal = 0; // Starts at midnight on subsequent days
+                        }
+                        if (dStr < ev.endDate) {
+                            endTotal = 24 * 60; // Ends at midnight on previous days
+                        }
+                    }
+
                     return { ev, startTotal, endTotal, column: 0, totalColumns: 1 };
                 }).filter(item => item !== null) as { ev: DaybleEvent, startTotal: number, endTotal: number, column: number, totalColumns: number }[];
 
