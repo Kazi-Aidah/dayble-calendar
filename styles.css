@@ -2063,6 +2063,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 .dayble-anim-snow-falling {
     overflow: hidden;
+    position: relative;
+    isolation: isolate;
 }
 
 .dayble-anim-snow-falling::before,
@@ -2075,78 +2077,213 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     inset: 0;
     pointer-events: none;
     background-repeat: repeat;
-    opacity: 0.85;
     border-radius: inherit;
+    will-change: background-position;
+    transform: translateZ(0);
 }
 
 .dayble-anim-snow-falling::before {
-    background-image: radial-gradient(circle at 20% 10%, currentColor 1.5px, transparent 3px), radial-gradient(circle at 70% 30%, currentColor 1.2px, transparent 3px), radial-gradient(circle at 50% 50%, currentColor 1.8px, transparent 4px), radial-gradient(circle at 90% 70%, currentColor 1.3px, transparent 3px);
+    background-image: 
+        radial-gradient(circle at 20% 10%, currentColor 1.5px, transparent 3px),
+        radial-gradient(circle at 70% 30%, currentColor 1.2px, transparent 3px),
+        radial-gradient(circle at 50% 50%, currentColor 1.8px, transparent 4px),
+        radial-gradient(circle at 90% 70%, currentColor 1.3px, transparent 3px);
     background-size: 250px 250px;
     background-position: 0 0;
-    animation: snow-back 16s linear infinite;
+    animation: snow-back 18s linear infinite;
     animation-delay: 0s;
     opacity: 0.5;
 }
 
 .dayble-anim-snow-falling::after {
-    background-image: radial-gradient(circle at 30% 20%, currentColor 2.5px, transparent 5px), radial-gradient(circle at 80% 40%, currentColor 2px, transparent 4px), radial-gradient(circle at 60% 80%, currentColor 2.2px, transparent 4px), radial-gradient(circle at 10% 60%, currentColor 2.8px, transparent 5px);
+    background-image: 
+        radial-gradient(circle at 30% 20%, currentColor 2.5px, transparent 5px),
+        radial-gradient(circle at 80% 40%, currentColor 2px, transparent 4px),
+        radial-gradient(circle at 60% 80%, currentColor 2.2px, transparent 4px),
+        radial-gradient(circle at 10% 60%, currentColor 2.8px, transparent 5px);
     background-size: 200px 200px;
     background-position: 0 0;
-    animation: snow-front 10s linear infinite;
+    animation: snow-front 11s linear infinite;
     animation-delay: 0s;
+    opacity: 0.85;
 }
 
 .dayble-anim-snow-falling .snow-layer-1 {
-    background-image: radial-gradient(circle at 15% 25%, currentColor 1.8px, transparent 3.5px), radial-gradient(circle at 65% 45%, currentColor 1.5px, transparent 3px), radial-gradient(circle at 45% 75%, currentColor 2px, transparent 4px), radial-gradient(circle at 85% 15%, currentColor 1.6px, transparent 3px);
+    background-image: 
+        radial-gradient(circle at 15% 25%, currentColor 1.8px, transparent 3.5px),
+        radial-gradient(circle at 65% 45%, currentColor 1.5px, transparent 3px),
+        radial-gradient(circle at 45% 75%, currentColor 2px, transparent 4px),
+        radial-gradient(circle at 85% 15%, currentColor 1.6px, transparent 3px);
     background-size: 220px 220px;
     background-position: 0 0;
-    animation: snow-mid 12s linear infinite;
-    animation-delay: -4s;
+    animation: snow-mid 14s linear infinite;
+    animation-delay: -3.5s;
     opacity: 0.6;
 }
 
 .dayble-anim-snow-falling .snow-layer-2 {
-    background-image: radial-gradient(circle at 40% 35%, currentColor 2px, transparent 4px), radial-gradient(circle at 75% 55%, currentColor 1.7px, transparent 3.5px), radial-gradient(circle at 25% 85%, currentColor 2.2px, transparent 4.5px), radial-gradient(circle at 55% 25%, currentColor 1.9px, transparent 4px);
+    background-image: 
+        radial-gradient(circle at 40% 35%, currentColor 2px, transparent 4px),
+        radial-gradient(circle at 75% 55%, currentColor 1.7px, transparent 3.5px),
+        radial-gradient(circle at 25% 85%, currentColor 2.2px, transparent 4.5px),
+        radial-gradient(circle at 55% 25%, currentColor 1.9px, transparent 4px);
     background-size: 180px 180px;
     background-position: 0 0;
-    animation: snow-mid 14s linear infinite;
-    animation-delay: -7s;
+    animation: snow-mid 15.5s linear infinite;
+    animation-delay: -6.5s;
     opacity: 0.55;
 }
 
 .dayble-anim-snow-falling .snow-layer-3 {
-    background-image: radial-gradient(circle at 50% 15%, currentColor 2.2px, transparent 4.5px), radial-gradient(circle at 20% 65%, currentColor 1.9px, transparent 4px), radial-gradient(circle at 80% 45%, currentColor 2.4px, transparent 5px), radial-gradient(circle at 35% 90%, currentColor 2.1px, transparent 4.5px);
+    background-image: 
+        radial-gradient(circle at 50% 15%, currentColor 2.2px, transparent 4.5px),
+        radial-gradient(circle at 20% 65%, currentColor 1.9px, transparent 4px),
+        radial-gradient(circle at 80% 45%, currentColor 2.4px, transparent 5px),
+        radial-gradient(circle at 35% 90%, currentColor 2.1px, transparent 4.5px);
     background-size: 190px 190px;
     background-position: 0 0;
-    animation: snow-front 8s linear infinite;
-    animation-delay: -2s;
+    animation: snow-front 9s linear infinite;
+    animation-delay: -1.8s;
     opacity: 0.65;
 }
 
 @keyframes snow-back {
-    0% {
-        background-position: 0 0;
-    }
-    100% {
-        background-position: 30px 400px;
+    to {
+        background-position: 35px 520px;
     }
 }
 
 @keyframes snow-mid {
-    0% {
-        background-position: 0 0;
-    }
-    100% {
-        background-position: -20px 450px;
+    to {
+        background-position: -25px 580px;
     }
 }
 
 @keyframes snow-front {
-    0% {
-        background-position: 0 0;
+    to {
+        background-position: 45px 650px;
     }
-    100% {
-        background-position: 40px 500px;
+}
+
+.dayble-anim-rain-falling {
+    overflow: hidden;
+    position: relative;
+    isolation: isolate;
+}
+
+.dayble-anim-rain-falling::before,
+.dayble-anim-rain-falling::after,
+.dayble-anim-rain-falling .rain-layer-1,
+.dayble-anim-rain-falling .rain-layer-2,
+.dayble-anim-rain-falling .rain-layer-3 {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-repeat: repeat;
+    border-radius: inherit;
+    will-change: background-position;
+    transform: translateZ(0);
+}
+
+.dayble-anim-rain-falling::before {
+    background-image: 
+        radial-gradient(circle at 15% 10%, currentColor 0.7px, transparent 1.8px),
+        radial-gradient(circle at 45% 25%, currentColor 0.6px, transparent 1.6px),
+        radial-gradient(circle at 75% 40%, currentColor 0.8px, transparent 2px),
+        radial-gradient(circle at 30% 55%, currentColor 0.65px, transparent 1.7px),
+        radial-gradient(circle at 85% 65%, currentColor 0.75px, transparent 1.9px),
+        radial-gradient(circle at 55% 80%, currentColor 0.9px, transparent 2.2px),
+        radial-gradient(circle at 10% 90%, currentColor 0.7px, transparent 1.8px);
+    background-size: 140px 180px;
+    background-position: 0 0;
+    opacity: 0.45;
+    animation: rain-back 15s linear infinite;
+}
+
+.dayble-anim-rain-falling::after {
+    background-image: 
+        radial-gradient(circle at 25% 15%, currentColor 1.0px, transparent 2.3px),
+        radial-gradient(circle at 60% 30%, currentColor 0.9px, transparent 2.1px),
+        radial-gradient(circle at 90% 45%, currentColor 1.1px, transparent 2.5px),
+        radial-gradient(circle at 40% 60%, currentColor 0.85px, transparent 2.0px),
+        radial-gradient(circle at 70% 75%, currentColor 1.0px, transparent 2.3px),
+        radial-gradient(circle at 20% 85%, currentColor 1.2px, transparent 2.7px),
+        radial-gradient(circle at 80% 95%, currentColor 0.8px, transparent 2.0px),
+        radial-gradient(circle at 5% 5%, currentColor 0.95px, transparent 2.2px);
+    background-size: 110px 150px;
+    background-position: 0 0;
+    opacity: 0.85;
+    animation: rain-front 7.5s linear infinite;
+}
+
+.dayble-anim-rain-falling .rain-layer-1 {
+    background-image: 
+        radial-gradient(circle at 35% 20%, currentColor 0.8px, transparent 2.0px),
+        radial-gradient(circle at 65% 35%, currentColor 0.75px, transparent 1.9px),
+        radial-gradient(circle at 95% 50%, currentColor 0.95px, transparent 2.2px),
+        radial-gradient(circle at 50% 65%, currentColor 0.7px, transparent 1.8px),
+        radial-gradient(circle at 80% 80%, currentColor 0.9px, transparent 2.1px),
+        radial-gradient(circle at 15% 90%, currentColor 1.05px, transparent 2.4px),
+        radial-gradient(circle at 70% 10%, currentColor 0.75px, transparent 1.9px),
+        radial-gradient(circle at 25% 45%, currentColor 0.85px, transparent 2.0px);
+    background-size: 130px 170px;
+    background-position: 0 0;
+    opacity: 0.7;
+    animation: rain-mid 10.5s linear infinite;
+    animation-delay: -2.8s;
+}
+
+.dayble-anim-rain-falling .rain-layer-2 {
+    background-image: 
+        radial-gradient(circle at 50% 25%, currentColor 0.9px, transparent 2.1px),
+        radial-gradient(circle at 10% 40%, currentColor 1.1px, transparent 2.5px),
+        radial-gradient(circle at 75% 55%, currentColor 0.7px, transparent 1.8px),
+        radial-gradient(circle at 30% 70%, currentColor 1.0px, transparent 2.3px),
+        radial-gradient(circle at 90% 85%, currentColor 0.8px, transparent 2.0px),
+        radial-gradient(circle at 60% 95%, currentColor 0.95px, transparent 2.2px),
+        radial-gradient(circle at 20% 5%, currentColor 0.9px, transparent 2.1px),
+        radial-gradient(circle at 85% 20%, currentColor 0.75px, transparent 1.9px),
+        radial-gradient(circle at 40% 80%, currentColor 1.0px, transparent 2.3px);
+    background-size: 120px 160px;
+    background-position: 0 0;
+    opacity: 0.75;
+    animation: rain-mid 11.5s linear infinite;
+    animation-delay: -5.5s;
+}
+
+.dayble-anim-rain-falling .rain-layer-3 {
+    background-image: 
+        radial-gradient(circle at 65% 10%, currentColor 1.0px, transparent 2.3px),
+        radial-gradient(circle at 25% 30%, currentColor 0.75px, transparent 1.9px),
+        radial-gradient(circle at 95% 45%, currentColor 1.1px, transparent 2.5px),
+        radial-gradient(circle at 5% 60%, currentColor 0.8px, transparent 2.0px),
+        radial-gradient(circle at 55% 75%, currentColor 1.05px, transparent 2.4px),
+        radial-gradient(circle at 80% 90%, currentColor 0.9px, transparent 2.1px),
+        radial-gradient(circle at 35% 5%, currentColor 0.95px, transparent 2.2px),
+        radial-gradient(circle at 70% 50%, currentColor 0.75px, transparent 1.9px);
+    background-size: 145px 190px;
+    background-position: 0 0;
+    opacity: 0.8;
+    animation: rain-front 6.5s linear infinite;
+    animation-delay: -1.2s;
+}
+
+@keyframes rain-back {
+    to {
+        background-position: 25px 650px;
+    }
+}
+
+@keyframes rain-mid {
+    to {
+        background-position: -20px 600px;
+    }
+}
+
+@keyframes rain-front {
+    to {
+        background-position: 35px 750px;
     }
 }
 
@@ -2402,7 +2539,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .dayble-embed-image {
     max-width: 100%;
     height: auto;
-    border-radius: var(--input-radius);
+    border-radius: var(--event-border-radius, var(--input-radius));
     margin: 4px 0;
     display: block;
 }

@@ -3111,8 +3111,8 @@ class DaybleCalendarView extends ItemView {
             actualDescAlign = actualTitleAlign;
         }
 
-        item.addClass(`dayble-title-align-${actualTitleAlign}`);
-        item.addClass(`dayble-desc-align-${actualDescAlign}`);
+        item.addClass(`dayble-title-align-${titleAlign}`);
+        item.addClass(`dayble-desc-align-${descAlign}`);
         
         // CRITICAL: Add layout class when title is centered OR in center-left mode
         if (actualTitleAlign === 'center' || titleAlign === 'center-left') {
@@ -3121,44 +3121,46 @@ class DaybleCalendarView extends ItemView {
 
         // Dynamic "center-left" transition logic
         if (titleAlign === 'center-left') {
+            const checkAlignment = () => {
+                const titleEl = item.querySelector('.dayble-event-title') as HTMLElement;
+                if (!titleEl) return;
+                // Measure natural single-line width
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                if (!context) return;
+                const computedStyle = window.getComputedStyle(titleEl);
+                context.font = `${computedStyle.fontWeight} ${computedStyle.fontSize} ${computedStyle.fontFamily}`;
+                const naturalWidth = context.measureText(titleEl.innerText).width;
+                const containerWidth = item.getBoundingClientRect().width;
+                const iconEl = item.querySelector('.dayble-event-icon') as HTMLElement;
+                let iconWidth = 0;
+                const isSideIcon = item.classList.contains('dayble-icon-placement-left') || item.classList.contains('dayble-icon-placement-right');
+                
+                if (iconEl && iconEl.offsetParent && isSideIcon) {
+                    iconWidth = iconEl.getBoundingClientRect().width;
+                    const iconStyle = window.getComputedStyle(iconEl);
+                    iconWidth += parseFloat(iconStyle.marginLeft) + parseFloat(iconStyle.marginRight);
+                }
+                const eventStyle = window.getComputedStyle(item);
+                const padding = parseFloat(eventStyle.paddingLeft) + parseFloat(eventStyle.paddingRight);
+                const gap = parseFloat(eventStyle.gap) || 0;
+                const availableWidth = containerWidth - padding - (iconWidth > 0 ? iconWidth + gap : 0) - 4; // 4px extra buffer
+                if (naturalWidth >= availableWidth) {
+                    item.addClass('dayble-force-left');
+                } else {
+                    item.removeClass('dayble-force-left');
+                }
+            };
+
+            // Initial check
+            checkAlignment();
             // Use a slightly longer timeout and a more robust measurement
             setTimeout(() => {
-                const checkAlignment = () => {
-                    const titleEl = item.querySelector('.dayble-event-title') as HTMLElement;
-                    if (!titleEl) return;
-                    // Measure natural single-line width
-                    const canvas = document.createElement('canvas');
-                    const context = canvas.getContext('2d');
-                    if (!context) return;
-                                        const computedStyle = window.getComputedStyle(titleEl);
-                    context.font = `${computedStyle.fontWeight} ${computedStyle.fontSize} ${computedStyle.fontFamily}`;
-                    const naturalWidth = context.measureText(titleEl.innerText).width;
-                    const containerWidth = item.getBoundingClientRect().width;
-                    const iconEl = item.querySelector('.dayble-event-icon') as HTMLElement;
-                    let iconWidth = 0;
-                    const isSideIcon = item.classList.contains('dayble-icon-placement-left') || item.classList.contains('dayble-icon-placement-right');
-                    
-                    if (iconEl && iconEl.offsetParent && isSideIcon) {
-                        iconWidth = iconEl.getBoundingClientRect().width;
-                        const iconStyle = window.getComputedStyle(iconEl);
-                        iconWidth += parseFloat(iconStyle.marginLeft) + parseFloat(iconStyle.marginRight);
-                    }
-                                        const eventStyle = window.getComputedStyle(item);
-                    const padding = parseFloat(eventStyle.paddingLeft) + parseFloat(eventStyle.paddingRight);
-                    const gap = parseFloat(eventStyle.gap) || 0;
-                                        const availableWidth = containerWidth - padding - (iconWidth > 0 ? iconWidth + gap : 0) - 4; // 4px extra buffer
-                    if (naturalWidth >= availableWidth) {
-                        item.addClass('dayble-force-left');
-                    } else {
-                        item.removeClass('dayble-force-left');
-                    }
-                };
-                // Initial check
                 checkAlignment();
                 // Observe for size changes (e.g., window resize)
                 const observer = new ResizeObserver(() => checkAlignment());
                 observer.observe(item);
-            }, 150);
+            }, 0);
         }
 
         // Determine which colors to use: user-set or category
@@ -7686,14 +7688,15 @@ class DaybleSettingTab extends PluginSettingTab {
                     '': 'No animation',
                     'move-horizontally': 'Move horizontally',
                     'move-vertically': 'Move vertically',
+                    'snow-falling': 'Snow Falling',
                     'particles': 'Particles',
-                    'snow-falling': 'Snow falling',
-                    'animated-gradient': 'Animated gradient',
-                    'glass-shine': 'Glass shine',
-                    'glowing': 'Glowing',
-                    'shine': 'Shine',
+                    'rain-falling': 'Raining',
+                    'stars': 'Stars',
                     'sparkles': 'Sparkles',
-                    'stars': 'Stars'
+                    'glowing': 'Glowing',
+                    'glass-shine': 'Glass Shine',
+                    'animated-gradient': 'Gradient',
+                    'shine': 'Shine'
                 }).setValue(category.animation).onChange(async v => { 
                     category.animation = v; 
                     await this.plugin.saveSettings();
@@ -7704,14 +7707,15 @@ class DaybleSettingTab extends PluginSettingTab {
                     '': 'No animation',
                     'move-horizontally': 'Move horizontally',
                     'move-vertically': 'Move vertically',
+                    'snow-falling': 'Snow Falling',
                     'particles': 'Particles',
-                    'snow-falling': 'Snow falling',
-                    'animated-gradient': 'Animated gradient',
-                    'glass-shine': 'Glass shine',
-                    'glowing': 'Glowing',
-                    'shine': 'Shine',
+                    'rain-falling': 'Raining',
+                    'stars': 'Stars',
                     'sparkles': 'Sparkles',
-                    'stars': 'Stars'
+                    'glowing': 'Glowing',
+                    'glass-shine': 'Glass Shine',
+                    'animated-gradient': 'Gradient',
+                    'shine': 'Shine'
                 }).setValue(category.animation2).onChange(async v => { 
                     category.animation2 = v; 
                     await this.plugin.saveSettings();
@@ -8228,14 +8232,15 @@ class DaybleSettingTab extends PluginSettingTab {
                         '': 'No animation',
                         'move-horizontally': 'Move horizontally',
                         'move-vertically': 'Move vertically',
+                        'snow-falling': 'Snow Falling',
                         'particles': 'Particles',
-                        'snow-falling': 'Snow falling',
-                        'animated-gradient': 'Animated gradient',
-                        'glass-shine': 'Glass shine',
-                        'glowing': 'Glowing',
-                        'shine': 'Shine',
+                        'rain-falling': 'Raining',
+                        'stars': 'Stars',
                         'sparkles': 'Sparkles',
-                        'stars': 'Stars'
+                        'glowing': 'Glowing',
+                        'glass-shine': 'Glass Shine',
+                        'animated-gradient': 'Gradient',
+                        'shine': 'Shine'
                     }).setValue(state.animation || '').onChange(async v => {
                         state.animation = v;
                         await this.plugin.saveSettings();
@@ -8248,14 +8253,15 @@ class DaybleSettingTab extends PluginSettingTab {
                         '': 'No animation',
                         'move-horizontally': 'Move horizontally',
                         'move-vertically': 'Move vertically',
+                        'snow-falling': 'Snow Falling',
                         'particles': 'Particles',
-                        'snow-falling': 'Snow falling',
-                        'animated-gradient': 'Animated gradient',
-                        'glass-shine': 'Glass shine',
-                        'glowing': 'Glowing',
-                        'shine': 'Shine',
+                        'rain-falling': 'Raining',
+                        'stars': 'Stars',
                         'sparkles': 'Sparkles',
-                        'stars': 'Stars'
+                        'glowing': 'Glowing',
+                        'glass-shine': 'Glass Shine',
+                        'animated-gradient': 'Gradient',
+                        'shine': 'Shine'
                     }).setValue(state.animation2 || '').onChange(async v => {
                         state.animation2 = v;
                         await this.plugin.saveSettings();
