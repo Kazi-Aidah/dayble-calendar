@@ -43,7 +43,7 @@ interface DaybleSettings {
     holderPlacement?: 'left' | 'right' | 'hidden';
     calendarWeekActive?: boolean;
     calendarView?: 'Month' | 'Week' | '3day' | 'Day' | 'Agenda';
-    triggers?: { id?: string, pattern: string, categoryId: string, color?: string, textColor?: string, colorName?: string }[];
+    triggers?: { id?: string, pattern: string, categoryId: string, color?: string, textColor?: string, colorName?: string, icon?: string }[];
     weeklyNotesEnabled?: boolean;
     scrollToCurrentTime?: boolean;
     showCurrentTimeLine?: boolean;
@@ -203,6 +203,7 @@ interface EventState {
     effect: string;
     animation: string;
     animation2: string;
+    categoryId?: string;
 }
 
 export default class DaybleCalendarPlugin extends Plugin {
@@ -3278,7 +3279,39 @@ class DaybleCalendarView extends ItemView {
             }
             renderMarkdown(ev.description, desc, this.plugin.app);
         }
-        const iconToUse = (state && state.icon) || ev.icon || (category?.icon || '');
+        
+        // Trigger matching for icon and color
+        let triggerIcon = '';
+        let triggerColorName = '';
+        if (category && this.plugin.settings.triggers) {
+            const catTriggers = this.plugin.settings.triggers.filter(t => t.categoryId === category.id);
+            const fullText = `${ev.title || ''} ${ev.description || ''}`.toLowerCase();
+            for (const trigger of catTriggers) {
+                const patterns = trigger.pattern.split(',').map(p => p.trim().toLowerCase()).filter(p => p.length > 0);
+                if (patterns.some(p => fullText.includes(p))) {
+                    triggerIcon = trigger.icon || '';
+                    triggerColorName = trigger.colorName || '';
+                    break;
+                }
+            }
+        }
+
+        const iconToUse = (state && state.icon) || triggerIcon || ev.icon || (category?.icon || '');
+        
+        // Apply trigger color if found and user hasn't set a manual color/colorName
+        if (triggerColorName && !ev.colorName && !ev.color) {
+            const allSwatches = [...(this.plugin.settings.swatches || []), ...(this.plugin.settings.userCustomSwatches || [])];
+            const swatch = allSwatches.find(s => (s.name || '').toLowerCase() === triggerColorName.toLowerCase());
+            if (swatch) {
+                const opacity = this.plugin.settings.eventBgOpacity ?? 1;
+                const bOpacity = this.plugin.settings.eventBorderOpacity ?? 1;
+                item.style.setProperty('--event-bg-color', hexToRgba(swatch.color, opacity));
+                item.style.setProperty('--event-text-color', swatch.textColor || chooseTextColor(swatch.color));
+                item.style.setProperty('--event-border-color', hexToRgba(swatch.textColor || chooseTextColor(swatch.color), bOpacity));
+                item.classList.add('dayble-event-colored');
+            }
+        }
+
         const hasDescription = ev.description && ev.description.trim().length > 0;
         const hasIcon = this.plugin.settings.iconPlacement !== 'none' && iconToUse;
 
@@ -6113,6 +6146,16 @@ class DaybleSettingTab extends PluginSettingTab {
         ;
 
         new Setting(containerEl)
+            .setName('Event styling shortcuts')
+            .setDesc('Quickly jump to styling settings.')
+            .addButton(b => {
+                b.setButtonText('Scroll to Event Styling').onClick(() => {
+                    const el = containerEl.querySelector('.dayble-event-styles-heading');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                });
+            });
+
+        new Setting(containerEl)
             .setName('Latest release notes')
             .setDesc('View the most recent plugin release notes.')
             .addButton(b => {
@@ -6514,7 +6557,7 @@ class DaybleSettingTab extends PluginSettingTab {
             padding: '4px 8px',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px'
+            flexShrink: '0'
         });
 
         const eventIcon = eventBox.createDiv({ cls: 'dayble-event-icon' });
@@ -6555,6 +6598,7 @@ class DaybleSettingTab extends PluginSettingTab {
             const borderRadius = settings.eventBorderRadius ?? 6;
             const titleAlign = settings.eventTitleAlign ?? 'center';
             const descAlign = settings.eventDescAlign ?? 'center';
+            const verticalPadding = settings.eventVerticalPadding ?? 2;
 
             let finalDescAlign = descAlign;
             if (titleAlign === 'center-left' && descAlign === 'center-left') {
@@ -6605,7 +6649,11 @@ class DaybleSettingTab extends PluginSettingTab {
                 });
             }
 
-            eventBox.setCssStyles({ borderRadius: `${borderRadius}px` });
+            eventBox.setCssStyles({ 
+                borderRadius: `${borderRadius}px`,
+                paddingTop: `${verticalPadding}px`,
+                paddingBottom: `${verticalPadding}px`
+            });
             
             // Align title and desc
             eventTitle.setCssStyles({ textAlign: titleAlign === 'center-left' ? 'left' : titleAlign });
@@ -6618,14 +6666,23 @@ class DaybleSettingTab extends PluginSettingTab {
             const placement = settings.iconPlacement ?? 'left';
             eventIcon.setCssStyles({ display: placement === 'none' ? 'none' : 'block' });
             
+            // Reset placement classes
+            Array.from(eventBox.classList).forEach(cls => {
+                if (cls.startsWith('dayble-icon-placement-')) {
+                    eventBox.classList.remove(cls);
+                }
+            });
+            
             // Re-stack icon based on placement
             if (placement === 'right') {
+                eventBox.addClass('dayble-icon-placement-right');
                 eventBox.setCssStyles({
                     flexDirection: 'row',
                     alignItems: 'center'
                 });
                 eventBox.appendChild(eventIcon);
             } else if (placement === 'left') {
+                eventBox.addClass('dayble-icon-placement-left');
                 eventBox.setCssStyles({
                     flexDirection: 'row',
                     alignItems: 'center'
@@ -6635,8 +6692,10 @@ class DaybleSettingTab extends PluginSettingTab {
                 eventBox.setCssStyles({ flexDirection: 'column' });
                 
                 if (placement.startsWith('top')) {
+                    eventBox.addClass('dayble-icon-placement-top');
                     eventBox.prepend(eventIcon);
                 } else {
+                    eventBox.addClass('dayble-icon-placement-bottom');
                     eventBox.appendChild(eventIcon);
                 }
                 
@@ -6705,7 +6764,11 @@ class DaybleSettingTab extends PluginSettingTab {
                     }
                     
                     Array.from(d.selectEl.options).forEach(opt => {
-                        if (!opt.value) return;
+                        if (!opt.value) {
+                            opt.style.setProperty('background-color', 'var(--background-primary)');
+                            opt.style.setProperty('color', 'var(--text-normal)');
+                            return;
+                        }
                         const s = swatches.find(sw => sw.name === opt.value);
                         if (s) {
                             opt.style.setProperty('background-color', s.color);
@@ -7488,23 +7551,28 @@ class DaybleSettingTab extends PluginSettingTab {
             });
         };
         renderColorsTop();
-        new Setting(containerEl).setName('Event categories').setDesc('Adds a category dropdown to apply predefined styling.').setHeading();
-        const rulesWrap = containerEl.createDiv();
-        const renderRules = () => {
-            rulesWrap.empty();
-            (this.plugin.settings.eventCategories || []).forEach((category: EventCategory, idx: number) => {
-                const row = new Setting(rulesWrap);
-                // Remove the left-side setting title element
+        const stylesHeading = new Setting(containerEl).setName('Event styles').setDesc('Manage event styling, triggers, and states in a unified view.').setHeading();
+        stylesHeading.settingEl.addClass('dayble-event-styles-heading');
+        const stylesWrap = containerEl.createDiv();
+        const renderStyles = () => {
+            stylesWrap.empty();
+            const categories = this.plugin.settings.eventCategories || [];
+            const swatches = [
+                ...(this.plugin.settings.swatches || []),
+                ...(this.plugin.settings.userCustomSwatches || []).map((s, idx) => ({ ...s, name: s.name || `custom-${idx}` }))
+            ];
+            
+            categories.forEach((category: EventCategory) => {
+                const row = new Setting(stylesWrap);
                 row.settingEl.querySelector('.setting-item-name')?.remove();
-                row.settingEl.addClass('dayble-settings-category-row');
-                row.controlEl.addClass('dayble-settings-category-control');
-                row.settingEl.classList.add('db-category-row');
+                row.settingEl.addClass('db-category-row');
+                row.settingEl.addClass('dayble-settings-style-row');
+                row.settingEl.dataset.id = category.id;
+                (row.controlEl).addClass('dayble-flex-gap-8');
                 
                 // Drag Handle
                 const dragBtn = row.controlEl.createEl('button', {
-                    attr: {
-                        'aria-label': 'Drag to reorder'
-                    }
+                    attr: { 'aria-label': 'Drag to reorder' }
                 });
                 dragBtn.setCssProps({
                     'padding': '0px',
@@ -7575,9 +7643,9 @@ class DaybleSettingTab extends PluginSettingTab {
                         });
 
                         const target = document.elementFromPoint(currentX, currentY);
-                        const targetRow = target ? target.closest('.dayble-settings-category-row') : null;
+                        const targetRow = target ? target.closest('.dayble-settings-style-row') : null;
 
-                        if (targetRow && targetRow !== wrap && targetRow.parentNode === rulesWrap) {
+                        if (targetRow && targetRow !== wrap && targetRow.parentNode === stylesWrap) {
                             const rect = targetRow.getBoundingClientRect();
                             const isAfter = (currentY - rect.top) > (rect.height / 2);
                             
@@ -7599,17 +7667,9 @@ class DaybleSettingTab extends PluginSettingTab {
                         ghost.remove();
                         wrap.classList.remove('drag-ghost-hidden');
                         
-                        // Reorder settings based on DOM order
-                        const newCategories: EventCategory[] = [];
-                        rulesWrap.querySelectorAll('.dayble-settings-category-row').forEach((el) => {
-                            const name = (el.querySelector('.db-category-name') as HTMLInputElement)?.value;
-                            const cat = this.plugin.settings.eventCategories?.find(c => c.name === name); // This is a bit fragile if names are identical
-                            if (cat) newCategories.push(cat);
-                        });
-                        
-                        // Fallback/more robust way: store ID on the element
+                        // Reorder based on DOM order
                         const updatedCategories: EventCategory[] = [];
-                        rulesWrap.querySelectorAll('.dayble-settings-category-row').forEach((el) => {
+                        stylesWrap.querySelectorAll('.dayble-settings-style-row').forEach((el) => {
                             const catId = (el as HTMLElement).dataset.id;
                             const cat = this.plugin.settings.eventCategories?.find(c => c.id === catId);
                             if (cat) updatedCategories.push(cat);
@@ -7618,6 +7678,11 @@ class DaybleSettingTab extends PluginSettingTab {
                         if (updatedCategories.length > 0) {
                             this.plugin.settings.eventCategories = updatedCategories;
                             await this.plugin.saveSettings();
+                            renderStyles();
+                            
+                            // Refresh calendar view to apply new order/styles
+                            const view = this.plugin.getCalendarView();
+                            if (view) await view.render();
                         }
                     };
 
@@ -7625,334 +7690,64 @@ class DaybleSettingTab extends PluginSettingTab {
                     document.addEventListener('mouseup', onEnd);
                 });
 
-                row.settingEl.dataset.id = category.id;
-
-                // Icon button
+                // Clickable icon to set icon
                 row.addExtraButton(btn => {
                     btn.setIcon(category.icon || 'plus').setTooltip('Change icon').onClick(() => {
                         const picker = new IconPickerModal(this.app, async (icon) => {
                             category.icon = icon;
                             await this.plugin.saveSettings();
-                            const view = this.plugin.getCalendarView();
-                            await view?.render();
-                            renderRules();
+                            renderStyles();
                         }, async () => {
                             category.icon = undefined;
                             await this.plugin.saveSettings();
-                            const view = this.plugin.getCalendarView();
-                            await view?.render();
-                            renderRules();
+                            renderStyles();
                         });
                         void picker.open();
                     });
                 });
-                // Category name input
-                row.addText(t => { t.setValue(category.name).onChange(v => { category.name = v; }); (t.inputEl).classList.add('db-input','db-category-name'); });
-                // Text color first
-                row.addColorPicker(cp => { cp.setValue(category.textColor).onChange(async v => { 
-                    category.textColor = v; 
-                    await this.plugin.saveSettings();
-                    const view = this.plugin.getCalendarView();
-                    if (view) await view.render();
-                }); (cp as unknown as { inputEl: HTMLElement }).inputEl?.classList?.add('db-color','db-text-color'); });
-                // Background color next
-                row.addColorPicker(cp => { cp.setValue(category.bgColor).onChange(async v => { 
-                    category.bgColor = v; 
-                    await this.plugin.saveSettings();
-                    const view = this.plugin.getCalendarView();
-                    if (view) await view.render();
-                }); (cp as unknown as { inputEl: HTMLElement }).inputEl?.classList?.add('db-color','db-bg-color'); });
-                row.addDropdown(d => { d.addOptions({
-                    '': 'No effect',
-                    'striped-1': 'Striped (45°)',
-                    'striped-2': 'Striped (-45°)',
-                    'vertical-stripes': 'Vertical stripes',
-                    'thin-textured-stripes': 'Thin textured stripes',
-                    'crosshatched': 'Crosshatched',
-                    'checkerboard': 'Checkerboard',
-                    'hexaboard': 'Hexaboard',
-                    'wavy-lines': 'Wavy lines',
-                    'dotted': 'Dotted',
-                    'argyle': 'Argyle',
-                    'embossed': 'Embossed',
-                    'glass': 'Glass',
-                    'glow': 'Glow',
-                    'retro-button': 'Outset'
-                }).setValue(category.effect).onChange(async v => { 
-                    category.effect = v; 
-                    await this.plugin.saveSettings();
-                    const view = this.plugin.getCalendarView();
-                    if (view) await view.render();
-                }); (d.selectEl).classList.add('db-select','db-effect'); });
-                row.addDropdown(d => { d.addOptions({
-                    '': 'No animation',
-                    'move-horizontally': 'Move horizontally',
-                    'move-vertically': 'Move vertically',
-                    'snow-falling': 'Snow Falling',
-                    'particles': 'Particles',
-                    'rain-falling': 'Raining',
-                    'stars': 'Stars',
-                    'sparkles': 'Sparkles',
-                    'glowing': 'Glowing',
-                    'glass-shine': 'Glass Shine',
-                    'animated-gradient': 'Gradient',
-                    'shine': 'Shine'
-                }).setValue(category.animation).onChange(async v => { 
-                    category.animation = v; 
-                    await this.plugin.saveSettings();
-                    const view = this.plugin.getCalendarView();
-                    if (view) await view.render();
-                }); (d.selectEl).classList.add('db-select','db-animation'); });
-                row.addDropdown(d => { d.addOptions({
-                    '': 'No animation',
-                    'move-horizontally': 'Move horizontally',
-                    'move-vertically': 'Move vertically',
-                    'snow-falling': 'Snow Falling',
-                    'particles': 'Particles',
-                    'rain-falling': 'Raining',
-                    'stars': 'Stars',
-                    'sparkles': 'Sparkles',
-                    'glowing': 'Glowing',
-                    'glass-shine': 'Glass Shine',
-                    'animated-gradient': 'Gradient',
-                    'shine': 'Shine'
-                }).setValue(category.animation2).onChange(async v => { 
-                    category.animation2 = v; 
-                    await this.plugin.saveSettings();
-                    const view = this.plugin.getCalendarView();
-                    if (view) await view.render();
-                }); (d.selectEl).classList.add('db-select','db-animation2'); });
-                row.addExtraButton(btn => {
-                    btn.setIcon('copy').setTooltip('Duplicate entry').onClick(async () => {
-                        const items2 = (this.plugin.settings.eventCategories || []).slice();
-                        const copy = { ...category, id: randomId(), name: category.name + ' (copy)' };
-                        items2.splice(items2.indexOf(category) + 1, 0, copy);
-                        this.plugin.settings.eventCategories = items2;
-                        await this.plugin.saveSettings();
-                        renderRules();
-                    });
-                });
-                row.addExtraButton(btn => { 
-                    btn.setIcon('x').setTooltip('Delete').onClick(() => { 
-                        this.plugin.settings.eventCategories = (this.plugin.settings.eventCategories || []).filter(c => c.id !== category.id); 
-                        renderRules(); 
-                    }); 
-                    const extraBtn = (btn as unknown as { extraButtonEl: HTMLElement }).extraButtonEl;
-                    if (extraBtn) {
-                        extraBtn.classList.add('db-btn','db-delete-category');
-                    }
-                });
-            });
-        };
-        const addCategorySetting = new Setting(containerEl);
-        addCategorySetting.settingEl.addClass('dayble-transparent-setting');
-        addCategorySetting.addButton(b => {
-            b.setButtonText('+ add category');
-            (b.buttonEl).addClass('mod-cta');
-            b.onClick(async () => {
-                const category: EventCategory = { id: randomId(), name: 'New category', bgColor: '#8392a4', textColor: '#ffffff', effect: 'embossed', animation: '', animation2: '', icon: undefined };
-                this.plugin.settings.eventCategories = (this.plugin.settings.eventCategories || []).concat(category);
-                await this.plugin.saveSettings();
-                renderRules();
-            });
-        });
-        renderRules();
 
-        new Setting(containerEl).setName('Triggers').setDesc('Assigns a category and color when the event information matches defined text.').setHeading();
-        const triggersWrap = containerEl.createDiv();
-        const renderTriggers = () => {
-            triggersWrap.empty();
-            const items = this.plugin.settings.triggers || [];
-            const swatches = [
-                ...(this.plugin.settings.swatches || []),
-                ...(this.plugin.settings.userCustomSwatches || []).map((s, idx) => ({ ...s, name: s.name || `custom-${idx}` }))
-            ];
-            items.forEach((tr, idx) => {
-                if (!tr.id) tr.id = randomId();
-                const row = new Setting(triggersWrap);
-                row.settingEl.querySelector('.setting-item-name')?.remove();
-                row.settingEl.classList.add('db-triggers-row');
-                row.settingEl.dataset.id = tr.id;
-                (row.controlEl).addClass('dayble-flex-gap-8');
-
-                // Drag Handle
-                const dragBtn = row.controlEl.createEl('button', {
-                    attr: {
-                        'aria-label': 'Drag to reorder'
-                    }
-                });
-                dragBtn.setCssProps({
-                    'padding': '0px',
-                    'border': 'none',
-                    'background': 'transparent',
-                    'box-shadow': 'none',
-                    'cursor': 'grab',
-                    'color': 'var(--text-muted)',
-                    'flex-shrink': '0',
-                    'display': 'flex',
-                    'align-items': 'center',
-                    'justify-content': 'center',
-                    'margin-right': '4px'
-                });
-                setIcon(dragBtn, 'menu');
-
-                dragBtn.addEventListener('mousedown', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    const wrap = row.settingEl;
-                    const startX = e.clientX;
-                    const startY = e.clientY;
-                    const rect = wrap.getBoundingClientRect();
-                    const offsetX = startX - rect.left;
-                    const offsetY = startY - rect.top;
-
-                    if (navigator.vibrate) navigator.vibrate(100);
-
-                    const ghost = document.body.createDiv({ cls: 'drag-reorder-ghost' });
-                    const clone = wrap.cloneNode(true) as HTMLElement;
-                    
-                    // Sync values for cloned inputs/selects
-                    const originalInputs = wrap.querySelectorAll('input, select');
-                    const clonedInputs = clone.querySelectorAll('input, select');
-                    originalInputs.forEach((el, idx) => {
-                        if (clonedInputs[idx]) {
-                            (clonedInputs[idx] as HTMLInputElement | HTMLSelectElement).value = (el as HTMLInputElement | HTMLSelectElement).value;
-                        }
-                    });
-                    
-                    ghost.appendChild(clone);
-                    ghost.setCssProps({
-                        'width': `${rect.width}px`,
-                        'height': `${rect.height}px`,
-                        'left': `${rect.left}px`,
-                        'top': `${rect.top}px`,
-                        'position': 'fixed',
-                        'z-index': '9999',
-                        'pointer-events': 'none',
-                        'opacity': '0.8',
-                        'box-shadow': '0 4px 12px rgba(0, 0, 0, 0.2)',
-                        'background-color': 'var(--background-primary)',
-                        'border-radius': '4px'
-                    });
-
-                    wrap.classList.add('drag-ghost-hidden');
-                    ghost.addClass('dayble-drag-ghost');
-
-                    const onMove = (moveEvent: MouseEvent) => {
-                        moveEvent.preventDefault();
-                        const currentX = moveEvent.clientX;
-                        const currentY = moveEvent.clientY;
-
-                        ghost.setCssProps({
-                            'left': `${currentX - offsetX}px`,
-                            'top': `${currentY - offsetY}px`
-                        });
-
-                        const target = document.elementFromPoint(currentX, currentY);
-                        const targetRow = target ? target.closest('.db-triggers-row') : null;
-
-                        if (targetRow && targetRow !== wrap && targetRow.parentNode === triggersWrap) {
-                            const rect = targetRow.getBoundingClientRect();
-                            const isAfter = (currentY - rect.top) > (rect.height / 2);
-                            
-                            if (isAfter) {
-                                if (targetRow.nextSibling !== wrap) {
-                                    targetRow.parentNode?.insertBefore(wrap, targetRow.nextSibling);
-                                }
-                            } else {
-                                if (targetRow !== wrap) {
-                                    targetRow.parentNode?.insertBefore(wrap, targetRow);
-                                }
-                            }
-                        }
-                    };
-
-                    const onEnd = async () => {
-                        document.removeEventListener('mousemove', onMove);
-                        document.removeEventListener('mouseup', onEnd);
-                        ghost.remove();
-                        wrap.classList.remove('drag-ghost-hidden');
-                        
-                        // Reorder settings based on DOM order
-                        const updatedTriggers: any[] = [];
-                        triggersWrap.querySelectorAll('.db-triggers-row').forEach((el) => {
-                            const trId = (el as HTMLElement).dataset.id;
-                            const tr = this.plugin.settings.triggers?.find(t => t.id === trId);
-                            if (tr) updatedTriggers.push(tr);
-                        });
-
-                        if (updatedTriggers.length > 0) {
-                            this.plugin.settings.triggers = updatedTriggers;
-                            await this.plugin.saveSettings();
-                        }
-                    };
-
-                    document.addEventListener('mousemove', onMove);
-                    document.addEventListener('mouseup', onEnd);
-                });
-
+                // Event category name
                 row.addText(t => {
-                    t.setPlaceholder('Text in title or description');
-                    t.setValue(tr.pattern);
-                    t.onChange(async v => {
-                        items[idx].pattern = v || '';
-                        this.plugin.settings.triggers = items;
+                    t.setValue(category.name).onChange(async v => {
+                        category.name = v;
                         await this.plugin.saveSettings();
                     });
-                    (t.inputEl).classList.add('db-input');
-                    (t.inputEl).addClass('dayble-trigger-input');
-                    (t.inputEl).setCssProps({ 'min-width': '200px' });
+                    (t.inputEl).classList.add('db-input', 'db-category-name');
                 });
+
+                // Color list dropdown
                 row.addDropdown(d => {
-                    const cats = this.plugin.settings.eventCategories || [];
-                    d.addOption('', 'Default category');
-                    cats.forEach(c => d.addOption(c.id, c.name));
-                    d.setValue(tr.categoryId || '');
-                    d.onChange(async v => {
-                        items[idx].categoryId = v || '';
-                        this.plugin.settings.triggers = items;
-                        await this.plugin.saveSettings();
-                        const view = this.plugin.getCalendarView();
-                        await view?.render();
-                    });
-                    (d.selectEl).classList.add('db-select');
-                    (d.selectEl).addClass('dayble-icon-select');
-                });
-                row.addDropdown(d => {
-                    d.addOption('', 'Default color');
+                    d.addOption('', 'No color');
                     swatches.forEach(s => d.addOption(s.name, s.name));
-                    d.setValue(tr.colorName || tr.color || '');
+                    
+                    // Find if current bgColor matches any swatch
+                    const currentSwatch = swatches.find(s => s.color === category.bgColor);
+                    d.setValue(currentSwatch ? currentSwatch.name : '');
+                    
                     d.onChange(async v => {
-                        if (!v) {
-                            delete items[idx].colorName;
-                            delete items[idx].color;
-                            delete items[idx].textColor;
+                        const s = swatches.find(sw => sw.name === v);
+                        if (s) {
+                            category.bgColor = s.color;
+                            category.textColor = s.textColor || chooseTextColor(s.color);
                         } else {
-                            const s = swatches.find(sw => sw.name === v || sw.color === v);
-                            if (s) {
-                                items[idx].colorName = s.name;
-                                delete items[idx].color;
-                                delete items[idx].textColor;
-                            }
+                            category.bgColor = '#8392a4';
+                            category.textColor = '#ffffff';
                         }
-                        this.plugin.settings.triggers = items;
                         await this.plugin.saveSettings();
                         applyColorStyles();
-                    });
-                    (d.selectEl).classList.add('db-select');
-                    (d.selectEl).addClass('dayble-trigger-color-select');
-                    
-                    // Style the dropdown
-                    const applyColorStyles = () => {
-                        const currentValue = d.getValue();
-                        const selectedSwatch = swatches.find(sw => sw.name === currentValue || sw.color === currentValue);
                         
-                        // Style the select element itself
-                        if (selectedSwatch) {
+                        // Refresh calendar view to apply new color
+                        const view = this.plugin.getCalendarView();
+                        if (view) await view.render();
+                    });
+
+                    const applyColorStyles = () => {
+                        const val = d.getValue();
+                        const s = swatches.find(sw => sw.name === val);
+                        if (s) {
                             (d.selectEl).setCssProps({
-                                'background-color': selectedSwatch.color,
-                                'color': selectedSwatch.textColor || chooseTextColor(selectedSwatch.color)
+                                'background-color': s.color,
+                                'color': s.textColor || chooseTextColor(s.color)
                             });
                         } else {
                             (d.selectEl).setCssProps({
@@ -7961,349 +7756,69 @@ class DaybleSettingTab extends PluginSettingTab {
                             });
                         }
                         
-                        // Style the options
                         Array.from(d.selectEl.options).forEach(opt => {
-                            if (!opt.value) return; // Skip default option
-                            const s = swatches.find(sw => sw.name === opt.value || sw.color === opt.value);
-                            if (s) {
-                                (opt as unknown as { setCssProps: (props: any) => void }).setCssProps?.({
-                                    'background-color': s.color,
-                                    'color': s.textColor || chooseTextColor(s.color)
-                                });
+                            if (!opt.value) {
+                                opt.style.setProperty('background-color', 'var(--background-primary)');
+                                opt.style.setProperty('color', 'var(--text-normal)');
+                                return;
+                            }
+                            const swatch = swatches.find(sw => sw.name === opt.value);
+                            if (swatch) {
+                                opt.style.setProperty('background-color', swatch.color);
+                                opt.style.setProperty('color', swatch.textColor || chooseTextColor(swatch.color));
                             }
                         });
                     };
-                    // Apply initially
                     applyColorStyles();
-                    
-                    (d.selectEl).addClass('dayble-select-max-width');
+                    (d.selectEl).classList.add('db-select');
                 });
+
+                // Copy icon
                 row.addExtraButton(btn => {
-                    btn.setIcon('copy').setTooltip('Duplicate entry').onClick(async () => {
-                        const items2 = (this.plugin.settings.triggers || []).slice();
-                        const copy = { ...tr, id: randomId(), pattern: tr.pattern + ' (copy)' };
-                        items2.splice(idx + 1, 0, copy);
-                        this.plugin.settings.triggers = items2;
+                    btn.setIcon('copy').setTooltip('Duplicate style').onClick(async () => {
+                        const items2 = (this.plugin.settings.eventCategories || []).slice();
+                        const copy = { ...category, id: randomId(), name: category.name + ' (copy)' };
+                        items2.splice(items2.indexOf(category) + 1, 0, copy);
+                        this.plugin.settings.eventCategories = items2;
                         await this.plugin.saveSettings();
-                        renderTriggers();
+                        renderStyles();
                     });
                 });
 
+                // Settings icon
                 row.addExtraButton(btn => {
-                    btn.setIcon('x').setTooltip('Delete').onClick(async () => {
-                        const updated = items.filter((_, i) => i !== idx);
-                        this.plugin.settings.triggers = updated;
-                        await this.plugin.saveSettings();
-                        renderTriggers();
-                    });
-                });
-            });
-            const addTriggerSetting = new Setting(triggersWrap);
-            addTriggerSetting.settingEl.addClass('dayble-transparent-setting');
-            addTriggerSetting.addButton(b => {
-                b.setButtonText('+ add trigger');
-                (b.buttonEl).addClass('mod-cta');
-                b.onClick(async () => {
-                    const items2 = (this.plugin.settings.triggers || []).slice();
-                    items2.push({ id: randomId(), pattern: '', categoryId: '' });
-                    this.plugin.settings.triggers = items2;
-                    await this.plugin.saveSettings();
-                    renderTriggers();
-                });
-            });
-        };
-        renderTriggers();
-
-        new Setting(containerEl).setName('States').setDesc('Adds state options to the event context menu to quickly apply styling.').setHeading();
-        const statesWrap = containerEl.createDiv();
-        const renderStates = () => {
-            statesWrap.empty();
-            const items = this.plugin.settings.eventStates || [];
-            const swatches = [
-                ...(this.plugin.settings.swatches || []),
-                ...(this.plugin.settings.userCustomSwatches || []).map((s, idx) => ({ ...s, name: s.name || `custom-${idx}` }))
-            ];
-            items.forEach((state, idx) => {
-                const row = new Setting(statesWrap);
-                row.settingEl.classList.add('db-states-row');
-                row.settingEl.addClass('dayble-settings-state-row');
-                
-                // Drag Handle
-                const dragBtn = row.controlEl.createEl('button', {
-                    attr: {
-                        'aria-label': 'Drag to reorder'
-                    }
-                });
-                dragBtn.setCssProps({
-                    'padding': '0px',
-                    'border': 'none',
-                    'background': 'transparent',
-                    'box-shadow': 'none',
-                    'cursor': 'grab',
-                    'color': 'var(--text-muted)',
-                    'flex-shrink': '0',
-                    'display': 'flex',
-                    'align-items': 'center',
-                    'justify-content': 'center',
-                    'margin-right': '8px'
-                });
-                setIcon(dragBtn, 'menu');
-
-                dragBtn.addEventListener('mousedown', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    const wrap = row.settingEl;
-                    const startX = e.clientX;
-                    const startY = e.clientY;
-                    const rect = wrap.getBoundingClientRect();
-                    const offsetX = startX - rect.left;
-                    const offsetY = startY - rect.top;
-
-                    if (navigator.vibrate) navigator.vibrate(100);
-
-                    const ghost = document.body.createDiv({ cls: 'drag-reorder-ghost' });
-                    const clone = wrap.cloneNode(true) as HTMLElement;
-                    
-                    // Sync values for cloned inputs/selects
-                    const originalInputs = wrap.querySelectorAll('input, select');
-                    const clonedInputs = clone.querySelectorAll('input, select');
-                    originalInputs.forEach((el, idx) => {
-                        if (clonedInputs[idx]) {
-                            (clonedInputs[idx] as HTMLInputElement | HTMLSelectElement).value = (el as HTMLInputElement | HTMLSelectElement).value;
-                        }
-                    });
-                    
-                    ghost.appendChild(clone);
-                    ghost.setCssProps({
-                        'width': `${rect.width}px`,
-                        'height': `${rect.height}px`,
-                        'left': `${rect.left}px`,
-                        'top': `${rect.top}px`,
-                        'position': 'fixed',
-                        'z-index': '9999',
-                        'pointer-events': 'none',
-                        'opacity': '0.8',
-                        'box-shadow': '0 4px 12px rgba(0, 0, 0, 0.2)',
-                        'background-color': 'var(--background-primary)',
-                        'border-radius': '4px'
-                    });
-
-                    wrap.classList.add('drag-ghost-hidden');
-                    ghost.addClass('dayble-drag-ghost');
-
-                    const onMove = (moveEvent: MouseEvent) => {
-                        moveEvent.preventDefault();
-                        const currentX = moveEvent.clientX;
-                        const currentY = moveEvent.clientY;
-
-                        ghost.setCssProps({
-                            'left': `${currentX - offsetX}px`,
-                            'top': `${currentY - offsetY}px`
-                        });
-
-                        const target = document.elementFromPoint(currentX, currentY);
-                        const targetRow = target ? target.closest('.dayble-settings-state-row') : null;
-
-                        if (targetRow && targetRow !== wrap && targetRow.parentNode === statesWrap) {
-                            const rect = targetRow.getBoundingClientRect();
-                            const isAfter = (currentY - rect.top) > (rect.height / 2);
-                            
-                            if (isAfter) {
-                                if (targetRow.nextSibling !== wrap) {
-                                    targetRow.parentNode?.insertBefore(wrap, targetRow.nextSibling);
-                                }
-                            } else {
-                                if (targetRow !== wrap) {
-                                    targetRow.parentNode?.insertBefore(wrap, targetRow);
-                                }
-                            }
-                        }
-                    };
-
-                    const onEnd = async () => {
-                        document.removeEventListener('mousemove', onMove);
-                        document.removeEventListener('mouseup', onEnd);
-                        ghost.remove();
-                        wrap.classList.remove('drag-ghost-hidden');
-                        
-                        const updatedStates: EventState[] = [];
-                        statesWrap.querySelectorAll('.dayble-settings-state-row').forEach((el) => {
-                            const stateId = (el as HTMLElement).dataset.id;
-                            const state = this.plugin.settings.eventStates?.find(s => s.id === stateId);
-                            if (state) updatedStates.push(state);
-                        });
-
-                        if (updatedStates.length > 0) {
-                            this.plugin.settings.eventStates = updatedStates;
-                            await this.plugin.saveSettings();
-                        }
-                    };
-
-                    document.addEventListener('mousemove', onMove);
-                    document.addEventListener('mouseup', onEnd);
-                });
-
-                row.settingEl.dataset.id = state.id;
-
-                row.addExtraButton(btn => {
-                    btn.setIcon(state.icon || 'plus').setTooltip('Change icon').onClick(() => {
-                        new IconPickerModal(this.plugin.app, (icon) => {
-                            state.icon = icon;
-                            void this.plugin.saveSettings().then(() => renderStates());
-                        }, () => {
-                            state.icon = '';
-                            void this.plugin.saveSettings().then(() => renderStates());
+                    btn.setIcon('settings').setTooltip('Open style settings').onClick(() => {
+                        new EventStyleSettingsModal(this.app, this.plugin, category, () => {
+                            renderStyles();
+                            this.display(); // Refresh main settings if needed
                         }).open();
                     });
                 });
-
-                row.addText(text => {
-                    text.setPlaceholder('State name')
-                        .setValue(state.name)
-                        .onChange(async v => {
-                            state.name = v;
-                            await this.plugin.saveSettings();
-                        });
-                    (text.inputEl).addClass('dayble-trigger-input');
-                });
-
-                row.addDropdown(d => {
-                    d.addOption('', 'No color');
-                    swatches.forEach(s => d.addOption(s.name, s.name));
-                    d.setValue(state.colorName || '');
-                    d.onChange(async v => {
-                        state.colorName = v;
-                        await this.plugin.saveSettings();
-                        applyColorStyles();
-                    });
-
-                    const applyColorStyles = () => {
-                        const currentValue = d.getValue();
-                        const selectedSwatch = swatches.find(sw => sw.name === currentValue);
-                        if (selectedSwatch) {
-                            (d.selectEl).style.setProperty('background-color', selectedSwatch.color, 'important');
-                            (d.selectEl).style.setProperty('color', selectedSwatch.textColor || chooseTextColor(selectedSwatch.color), 'important');
-                        } else {
-                            (d.selectEl).style.removeProperty('background-color');
-                            (d.selectEl).style.removeProperty('color');
-                        }
-
-                        Array.from(d.selectEl.options).forEach(opt => {
-                            if (!opt.value) return;
-                            const s = swatches.find(sw => sw.name === opt.value);
-                            if (s) {
-                                opt.style.setProperty('background-color', s.color);
-                                opt.style.setProperty('color', s.textColor || chooseTextColor(s.color));
-                            }
-                        });
-                    };
-                    applyColorStyles();
-                    (d.selectEl).classList.add('db-select');
-                    (d.selectEl).addClass('dayble-select-max-width');
-                });
-
-                row.addDropdown(d => {
-                    d.addOptions({
-                        '': 'No effect',
-                        'striped-1': 'Striped (45°)',
-                        'striped-2': 'Striped (-45°)',
-                        'vertical-stripes': 'Vertical stripes',
-                        'thin-textured-stripes': 'Thin textured stripes',
-                        'crosshatched': 'Crosshatched',
-                        'checkerboard': 'Checkerboard',
-                        'hexaboard': 'Hexaboard',
-                        'wavy-lines': 'Wavy lines',
-                        'dotted': 'Dotted',
-                        'argyle': 'Argyle',
-                        'embossed': 'Embossed',
-                        'glass': 'Glass',
-                        'glow': 'Glow',
-                        'retro-button': 'Outset'
-                    }).setValue(state.effect || '').onChange(async v => {
-                        state.effect = v;
-                        await this.plugin.saveSettings();
-                    });
-                    (d.selectEl).classList.add('db-select');
-                });
-
-                row.addDropdown(d => {
-                    d.addOptions({
-                        '': 'No animation',
-                        'move-horizontally': 'Move horizontally',
-                        'move-vertically': 'Move vertically',
-                        'snow-falling': 'Snow Falling',
-                        'particles': 'Particles',
-                        'rain-falling': 'Raining',
-                        'stars': 'Stars',
-                        'sparkles': 'Sparkles',
-                        'glowing': 'Glowing',
-                        'glass-shine': 'Glass Shine',
-                        'animated-gradient': 'Gradient',
-                        'shine': 'Shine'
-                    }).setValue(state.animation || '').onChange(async v => {
-                        state.animation = v;
-                        await this.plugin.saveSettings();
-                    });
-                    (d.selectEl).classList.add('db-select');
-                });
-
-                row.addDropdown(d => {
-                    d.addOptions({
-                        '': 'No animation',
-                        'move-horizontally': 'Move horizontally',
-                        'move-vertically': 'Move vertically',
-                        'snow-falling': 'Snow Falling',
-                        'particles': 'Particles',
-                        'rain-falling': 'Raining',
-                        'stars': 'Stars',
-                        'sparkles': 'Sparkles',
-                        'glowing': 'Glowing',
-                        'glass-shine': 'Glass Shine',
-                        'animated-gradient': 'Gradient',
-                        'shine': 'Shine'
-                    }).setValue(state.animation2 || '').onChange(async v => {
-                        state.animation2 = v;
-                        await this.plugin.saveSettings();
-                    });
-                    (d.selectEl).classList.add('db-select');
-                });
-
-                row.addExtraButton(btn => {
-                    btn.setIcon('copy').setTooltip('Duplicate entry').onClick(async () => {
-                        const items2 = (this.plugin.settings.eventStates || []).slice();
-                        const copy = { ...state, id: randomId(), name: state.name + ' (copy)' };
-                        items2.splice(idx + 1, 0, copy);
-                        this.plugin.settings.eventStates = items2;
-                        await this.plugin.saveSettings();
-                        renderStates();
-                    });
-                });
-
-                row.addExtraButton(btn => {
-                    btn.setIcon('x').setTooltip('Delete').onClick(async () => {
-                        this.plugin.settings.eventStates = items.filter((_, i) => i !== idx);
-                        await this.plugin.saveSettings();
-                        renderStates();
-                    });
-                });
             });
 
-            const addStateSetting = new Setting(statesWrap);
-            addStateSetting.settingEl.addClass('dayble-transparent-setting');
-            addStateSetting.addButton(b => {
-                b.setButtonText('+ add state');
+            const addStyleBtn = new Setting(stylesWrap);
+            addStyleBtn.settingEl.addClass('dayble-transparent-setting');
+            addStyleBtn.addButton(b => {
+                b.setButtonText('+ add style');
                 (b.buttonEl).addClass('mod-cta');
                 b.onClick(async () => {
-                    const items2 = (this.plugin.settings.eventStates || []).slice();
-                    items2.push({ id: randomId(), name: '', icon: '', colorName: '', effect: '', animation: '', animation2: '' });
-                    this.plugin.settings.eventStates = items2;
+                    const category: EventCategory = { 
+                        id: randomId(), 
+                        name: 'New style', 
+                        bgColor: '#8392a4', 
+                        textColor: '#ffffff', 
+                        effect: '', 
+                        animation: '', 
+                        animation2: '', 
+                        icon: undefined 
+                    };
+                    this.plugin.settings.eventCategories.push(category);
                     await this.plugin.saveSettings();
-                    renderStates();
+                    renderStyles();
                 });
             });
         };
-        renderStates();
+        renderStyles();
 
         new Setting(containerEl).setName('Data management').setHeading();
         new Setting(containerEl)
@@ -8411,6 +7926,695 @@ class DaybleSettingTab extends PluginSettingTab {
     }
 }
 
+
+class EventStyleSettingsModal extends Modal {
+    plugin: DaybleCalendarPlugin;
+    category: EventCategory;
+    onSave: () => void;
+    tempTriggers: any[];
+    tempStates: EventState[];
+    isDeleted = false;
+    isSaved = false;
+
+    constructor(app: App, plugin: DaybleCalendarPlugin, category: EventCategory, onSave: () => void) {
+        super(app);
+        this.plugin = plugin;
+        this.category = { ...category }; // Work on a copy
+        this.onSave = onSave;
+        
+        // Filter triggers and states for this category
+        this.tempTriggers = (this.plugin.settings.triggers || [])
+            .filter(t => t.categoryId === category.id)
+            .map(t => ({ ...t }));
+        
+        this.tempStates = (this.plugin.settings.eventStates || [])
+            .filter(s => s.categoryId === category.id)
+            .map(s => ({ ...s }));
+    }
+
+    async save() {
+        if (this.isDeleted || this.isSaved) return;
+        this.isSaved = true;
+
+        // Update the category
+        const idx = this.plugin.settings.eventCategories.findIndex(c => c.id === this.category.id);
+        if (idx !== -1) {
+            this.plugin.settings.eventCategories[idx] = this.category;
+        }
+
+        // Update triggers
+        // 1. Remove old triggers for this category
+        this.plugin.settings.triggers = (this.plugin.settings.triggers || []).filter(t => t.categoryId !== this.category.id);
+        // 2. Add new/updated triggers
+        this.plugin.settings.triggers.push(...this.tempTriggers);
+
+        // Update states
+        // 1. Remove old states for this category
+        this.plugin.settings.eventStates = (this.plugin.settings.eventStates || []).filter(s => s.categoryId !== this.category.id);
+        // 2. Add new/updated states
+        this.plugin.settings.eventStates.push(...this.tempStates);
+
+        await this.plugin.saveSettings();
+        this.onSave();
+
+        // Refresh calendar view to apply new styles
+        const view = this.plugin.getCalendarView();
+        if (view) {
+            await view.render();
+        }
+    }
+
+    async onClose() {
+        await this.save();
+        this.contentEl.empty();
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.empty();
+        this.modalEl.addClass('dayble-style-settings-modal');
+        this.modalEl.setCssStyles({
+            maxWidth: '500px',
+            width: '100%',
+            padding: '20px'
+        });
+
+        contentEl.createEl('h2', { text: 'Event Style Settings', cls: 'dayble-centered-heading' });
+
+        // Preview Box
+        const previewContainer = contentEl.createDiv({ cls: 'dayble-event-preview-container' });
+        previewContainer.setCssStyles({
+            margin: '10px 0',
+            padding: '10px',
+            borderRadius: 'var(--setting-items-radius)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '8px',
+            backgroundColor: 'var(--background-primary-alt)',
+            flexShrink: '0'
+        });
+
+        const eventBox = previewContainer.createDiv({ cls: 'dayble-event-item' });
+        eventBox.setCssStyles({
+            padding: '4px 8px',
+            display: 'flex',
+            alignItems: 'center',
+            flexShrink: '0'
+        });
+
+        const eventIcon = eventBox.createDiv({ cls: 'dayble-event-icon' });
+        const eventTextContainer = eventBox.createDiv({ cls: 'dayble-event-text-container' });
+        eventTextContainer.setCssStyles({
+            display: 'flex',
+            flexDirection: 'column',
+            flexGrow: '1',
+            minWidth: '0'
+        });
+        const eventTitle = eventTextContainer.createDiv({ text: this.category.name || 'todo', cls: 'dayble-event-title' });
+        const eventDesc = eventTextContainer.createDiv({ text: 'description', cls: 'dayble-event-desc' });
+
+        const updatePreview = () => {
+            const settings = this.plugin.settings;
+            eventTitle.setText(this.category.name || 'todo');
+            
+            // Always stay as "description"
+            eventDesc.setText('description');
+            
+            const opacity = settings.eventBgOpacity ?? 1;
+            const borderOpacity = settings.eventBorderOpacity ?? 1;
+            const borderWidth = settings.eventBorderWidth ?? 2;
+            const borderRadius = settings.eventBorderRadius ?? 6;
+            const titleAlign = settings.eventTitleAlign ?? 'center';
+            const descAlign = settings.eventDescAlign ?? 'center';
+            const verticalPadding = settings.eventVerticalPadding ?? 2;
+
+            let finalDescAlign = descAlign;
+            if (titleAlign === 'center-left' && descAlign === 'center-left') {
+                finalDescAlign = titleAlign;
+            }
+
+            // Apply style colors - strictly using this.category (no triggers)
+            let bgColor = this.category.bgColor;
+            let textColor = this.category.textColor;
+            
+            if (bgColor.startsWith('var')) {
+                eventBox.style.backgroundColor = `rgba(from ${bgColor} r g b / ${opacity})`;
+                if (textColor.startsWith('var')) {
+                    eventBox.style.border = `${borderWidth}px solid rgba(from ${textColor} r g b / ${borderOpacity})`;
+                } else {
+                    eventBox.style.border = `${borderWidth}px solid ${textColor}`;
+                    if (textColor.startsWith('#')) {
+                        const r = parseInt(textColor.slice(1, 3), 16);
+                        const g = parseInt(textColor.slice(3, 5), 16);
+                        const b = parseInt(textColor.slice(5, 7), 16);
+                        eventBox.style.borderColor = `rgba(${r}, ${g}, ${b}, ${borderOpacity})`;
+                    }
+                }
+            } else {
+                eventBox.style.backgroundColor = bgColor;
+                eventBox.setCssStyles({ opacity: String(opacity) });
+                if (textColor.startsWith('#')) {
+                    const r = parseInt(textColor.slice(1, 3), 16);
+                    const g = parseInt(textColor.slice(3, 5), 16);
+                    const b = parseInt(textColor.slice(5, 7), 16);
+                    eventBox.setCssStyles({ border: `${borderWidth}px solid rgba(${r}, ${g}, ${b}, ${borderOpacity})` });
+                } else {
+                    eventBox.setCssStyles({ border: `${borderWidth}px solid ${textColor}` });
+                }
+            }
+            eventBox.setCssStyles({ 
+                color: textColor,
+                borderRadius: `${borderRadius}px`,
+                paddingTop: `${verticalPadding}px`,
+                paddingBottom: `${verticalPadding}px`
+            });
+
+            // Effects & Animations
+            // Remove old classes
+            Array.from(eventBox.classList).forEach(cls => {
+                if (cls.startsWith('dayble-effect-') || cls.startsWith('dayble-anim-') || cls === 'dayble-event-colored') {
+                    eventBox.classList.remove(cls);
+                }
+            });
+            
+            // Add dayble-event-colored if we have a background color
+            if (bgColor) {
+                eventBox.addClass('dayble-event-colored');
+            }
+
+            // Add new classes
+            if (this.category.effect) eventBox.addClass(`dayble-effect-${this.category.effect}`);
+            if (this.category.animation) eventBox.addClass(`dayble-anim-${this.category.animation}`);
+            if (this.category.animation2) eventBox.addClass(`dayble-anim-${this.category.animation2}`);
+            
+            // Align title and desc
+            eventTitle.setCssStyles({ 
+                fontSize: '0.85em',
+                fontWeight: '600'
+            });
+            eventTitle.style.setProperty('text-align', (titleAlign === 'center-left' ? 'left' : titleAlign), 'important');
+            eventTitle.style.setProperty('width', '100%', 'important');
+
+            eventDesc.setCssStyles({ 
+                fontSize: '0.75em',
+                opacity: '0.8'
+            });
+            eventDesc.style.setProperty('text-align', (finalDescAlign === 'center-left' ? 'left' : finalDescAlign), 'important');
+            eventDesc.style.setProperty('width', '100%', 'important');
+            
+            // Handle overall flex alignment based on title alignment
+            if (titleAlign === 'center' || titleAlign === 'center-left') {
+                eventBox.setCssStyles({ justifyContent: 'center' });
+            } else if (titleAlign === 'right') {
+                eventBox.setCssStyles({ justifyContent: 'flex-end' });
+            } else {
+                eventBox.setCssStyles({ justifyContent: 'flex-start' });
+            }
+            
+            // Icon placement
+            const placement = settings.iconPlacement ?? 'left';
+            const showIcon = placement !== 'none';
+            const iconToUse = this.category.icon || 'clock';
+            
+            eventIcon.setCssStyles({ display: showIcon ? 'block' : 'none' });
+            if (showIcon) {
+                setIcon(eventIcon, iconToUse);
+            }
+
+            // Reset placement classes
+            Array.from(eventBox.classList).forEach(cls => {
+                if (cls.startsWith('dayble-icon-placement-')) {
+                    eventBox.classList.remove(cls);
+                }
+            });
+            
+            // Re-stack icon based on placement
+            if (placement === 'right') {
+                eventBox.addClass('dayble-icon-placement-right');
+                eventBox.setCssStyles({ flexDirection: 'row', alignItems: 'center' });
+                eventBox.appendChild(eventIcon);
+            } else if (placement === 'left') {
+                eventBox.addClass('dayble-icon-placement-left');
+                eventBox.setCssStyles({ flexDirection: 'row', alignItems: 'center' });
+                eventBox.prepend(eventIcon);
+            } else if (placement.startsWith('top') || placement.startsWith('bottom')) {
+                eventBox.setCssStyles({ flexDirection: 'column' });
+                if (placement.startsWith('top')) {
+                    eventBox.addClass('dayble-icon-placement-top');
+                    eventBox.prepend(eventIcon);
+                } else {
+                    eventBox.addClass('dayble-icon-placement-bottom');
+                    eventBox.appendChild(eventIcon);
+                }
+                
+                if (placement.endsWith('-left')) {
+                    eventBox.setCssStyles({ alignItems: 'flex-start' });
+                } else if (placement.endsWith('-right')) {
+                    eventBox.setCssStyles({ alignItems: 'flex-end' });
+                } else {
+                    eventBox.setCssStyles({ alignItems: 'center' });
+                }
+
+                if (titleAlign === 'center' || titleAlign === 'center-left') {
+                    eventTextContainer.setCssStyles({ alignItems: 'center' });
+                } else if (titleAlign === 'right') {
+                    eventTextContainer.setCssStyles({ alignItems: 'flex-end' });
+                } else {
+                    eventTextContainer.setCssStyles({ alignItems: 'flex-start' });
+                }
+            } else {
+                eventBox.setCssStyles({ flexDirection: 'row', alignItems: 'center' });
+                eventBox.prepend(eventIcon);
+            }
+
+            if (!placement.startsWith('top')) {
+                eventTextContainer.setCssStyles({ alignItems: 'stretch' });
+            }
+        };
+        updatePreview();
+
+        // Sections Container
+        const sectionsEl = contentEl.createDiv({ cls: 'dayble-style-sections' });
+
+        // 1. Event Styling Section
+        this.createAccordion(sectionsEl, 'Event Styling', (body) => {
+            const row1 = body.createDiv({ cls: 'dayble-modal-row' });
+            row1.setCssStyles({ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center' });
+
+            // Icon Picker
+            const iconBtn = row1.createEl('button', { cls: 'dayble-icon-btn' });
+            setIcon(iconBtn, this.category.icon || 'plus');
+            iconBtn.onclick = () => {
+                new IconPickerModal(this.app, (icon) => {
+                    this.category.icon = icon;
+                    setIcon(iconBtn, icon);
+                    updatePreview();
+                }, () => {
+                    this.category.icon = undefined;
+                    setIcon(iconBtn, 'plus');
+                    updatePreview();
+                }).open();
+            };
+
+            // Name Input
+            const nameInput = row1.createEl('input', { type: 'text', cls: 'db-input', value: this.category.name });
+            nameInput.setCssStyles({ flex: '1', minWidth: '0' });
+            nameInput.oninput = () => {
+                this.category.name = nameInput.value;
+                updatePreview();
+            };
+
+            // Color Dropdown
+            const swatches = [
+                ...(this.plugin.settings.swatches || []),
+                ...(this.plugin.settings.userCustomSwatches || []).map((s, idx) => ({ ...s, name: s.name || `custom-${idx}` }))
+            ];
+            const colorSelect = row1.createEl('select', { cls: 'db-select' });
+            colorSelect.setCssStyles({ flex: '1' });
+            colorSelect.add(new Option('No color', ''));
+            swatches.forEach(s => {
+                const opt = new Option(s.name, s.name);
+                opt.style.backgroundColor = s.color;
+                opt.style.color = s.textColor || chooseTextColor(s.color);
+                colorSelect.add(opt);
+            });
+            const currentSwatch = swatches.find(s => s.color === this.category.bgColor);
+            colorSelect.value = currentSwatch ? currentSwatch.name : '';
+            const updateColorSelectStyle = () => {
+                const s = swatches.find(sw => sw.name === colorSelect.value);
+                if (s) {
+                    colorSelect.setCssStyles({ backgroundColor: s.color, color: s.textColor || chooseTextColor(s.color) });
+                } else {
+                    colorSelect.setCssProps({ 'background-color': '', 'color': '' });
+                }
+            };
+            updateColorSelectStyle();
+            colorSelect.onchange = () => {
+                const s = swatches.find(sw => sw.name === colorSelect.value);
+                if (s) {
+                    this.category.bgColor = s.color;
+                    this.category.textColor = s.textColor || chooseTextColor(s.color);
+                }
+                updateColorSelectStyle();
+                updatePreview();
+            };
+            
+            // Color options styling
+            Array.from(colorSelect.options).forEach(opt => {
+                if (!opt.value) {
+                    opt.style.setProperty('background-color', 'var(--background-primary)');
+                    opt.style.setProperty('color', 'var(--text-normal)');
+                    return;
+                }
+                const swatch = swatches.find(sw => sw.name === opt.value);
+                if (swatch) {
+                    opt.style.setProperty('background-color', swatch.color);
+                    opt.style.setProperty('color', swatch.textColor || chooseTextColor(swatch.color));
+                }
+            });
+
+            // Effects & Animations Row
+            const row2 = body.createDiv({ cls: 'dayble-modal-row' });
+            row2.setCssStyles({ display: 'flex', gap: '8px' });
+
+            const effects = {
+                '': 'No effect',
+                'striped-1': 'Striped (45°)',
+                'striped-2': 'Striped (-45°)',
+                'vertical-stripes': 'Vertical stripes',
+                'thin-textured-stripes': 'Thin textured stripes',
+                'crosshatched': 'Crosshatched',
+                'checkerboard': 'Checkerboard',
+                'hexaboard': 'Hexaboard',
+                'wavy-lines': 'Wavy lines',
+                'dotted': 'Dotted',
+                'argyle': 'Argyle',
+                'embossed': 'Embossed',
+                'glass': 'Glass',
+                'glow': 'Glow',
+                'retro-button': 'Outset'
+            };
+            const effectSelect = row2.createEl('select', { cls: 'db-select' });
+            effectSelect.setCssStyles({ flex: '1', minWidth: '0', width: 'auto' });
+            Object.entries(effects).forEach(([k, v]) => effectSelect.add(new Option(v, k)));
+            effectSelect.value = this.category.effect || '';
+            effectSelect.onchange = () => { 
+                this.category.effect = effectSelect.value; 
+                updatePreview();
+            };
+
+            const animations = {
+                '': 'No animation',
+                'move-horizontally': 'Move horizontally',
+                'move-vertically': 'Move vertically',
+                'snow-falling': 'Snow Falling',
+                'particles': 'Particles',
+                'rain-falling': 'Raining',
+                'stars': 'Stars',
+                'sparkles': 'Sparkles',
+                'glowing': 'Glowing',
+                'glass-shine': 'Glass Shine',
+                'animated-gradient': 'Gradient',
+                'shine': 'Shine'
+            };
+            const anim1Select = row2.createEl('select', { cls: 'db-select' });
+            anim1Select.setCssStyles({ flex: '1', minWidth: '0', width: 'auto' });
+            Object.entries(animations).forEach(([k, v]) => anim1Select.add(new Option(v, k)));
+            anim1Select.value = this.category.animation || '';
+            anim1Select.onchange = () => { 
+                this.category.animation = anim1Select.value; 
+                updatePreview();
+            };
+
+            const anim2Select = row2.createEl('select', { cls: 'db-select' });
+            anim2Select.setCssStyles({ flex: '1', minWidth: '0', width: 'auto' });
+            Object.entries(animations).forEach(([k, v]) => anim2Select.add(new Option(v, k)));
+            anim2Select.value = this.category.animation2 || '';
+            anim2Select.onchange = () => { 
+                this.category.animation2 = anim2Select.value; 
+                updatePreview();
+            };
+        });
+
+        // 2. Triggers Section
+        this.createAccordion(sectionsEl, 'Triggers', (body) => {
+            const triggersList = body.createDiv();
+            const renderTriggers = () => {
+                triggersList.empty();
+                this.tempTriggers.forEach((tr, idx) => {
+                    const trRow = triggersList.createDiv({ cls: 'dayble-modal-row' });
+                    trRow.setCssStyles({ display: 'flex', gap: '8px', marginBottom: '4px', alignItems: 'center' });
+
+                    // Clickable Trigger Icon
+                    const stIconBtn = trRow.createEl('button', { cls: 'dayble-icon-btn' });
+                    setIcon(stIconBtn, tr.icon || 'plus');
+                    stIconBtn.onclick = () => {
+                        new IconPickerModal(this.app, (icon) => {
+                            tr.icon = icon;
+                            setIcon(stIconBtn, icon);
+                            updatePreview();
+                        }, () => {
+                            tr.icon = undefined;
+                            setIcon(stIconBtn, 'plus');
+                            updatePreview();
+                        }).open();
+                    };
+
+                    const trInput = trRow.createEl('input', { type: 'text', cls: 'db-input', value: tr.pattern, placeholder: 'work, pray, eat' });
+                    trInput.setCssStyles({ flex: '1', width: 'auto', minWidth: '0' });
+                    trInput.oninput = () => { 
+                        tr.pattern = trInput.value; 
+                        updatePreview();
+                    };
+
+                    // Color Dropdown for Trigger
+                    const swatches = [
+                        ...(this.plugin.settings.swatches || []),
+                        ...(this.plugin.settings.userCustomSwatches || []).map((s, idx) => ({ ...s, name: s.name || `custom-${idx}` }))
+                    ];
+                    const trColorSelect = trRow.createEl('select', { cls: 'db-select' });
+                    trColorSelect.add(new Option('Default', ''));
+                    swatches.forEach(s => {
+                        const opt = new Option(s.name, s.name);
+                        opt.style.backgroundColor = s.color;
+                        opt.style.color = s.textColor || chooseTextColor(s.color);
+                        trColorSelect.add(opt);
+                    });
+                    trColorSelect.value = tr.colorName || '';
+                    const updateTrColorStyle = () => {
+                        const s = swatches.find(sw => sw.name === trColorSelect.value);
+                        if (s) {
+                            trColorSelect.setCssStyles({ backgroundColor: s.color, color: s.textColor || chooseTextColor(s.color) });
+                        } else {
+                            trColorSelect.setCssProps({ 'background-color': '', 'color': '' });
+                        }
+                    };
+                    updateTrColorStyle();
+                    trColorSelect.onchange = () => {
+                        tr.colorName = trColorSelect.value;
+                        updateTrColorStyle();
+                        updatePreview();
+                    };
+                    
+                    // Color options styling
+                    Array.from(trColorSelect.options).forEach(opt => {
+                        if (!opt.value) {
+                            opt.style.setProperty('background-color', 'var(--background-primary)');
+                            opt.style.setProperty('color', 'var(--text-normal)');
+                            return;
+                        }
+                        const swatch = swatches.find(sw => sw.name === opt.value);
+                        if (swatch) {
+                            opt.style.setProperty('background-color', swatch.color);
+                            opt.style.setProperty('color', swatch.textColor || chooseTextColor(swatch.color));
+                        }
+                    });
+
+                    const delBtn = trRow.createEl('button', { cls: 'clickable-icon' });
+                    setIcon(delBtn, 'x');
+                    delBtn.onclick = () => {
+                        this.tempTriggers.splice(idx, 1);
+                        renderTriggers();
+                    };
+                });
+            };
+            renderTriggers();
+
+            const addTrBtn = body.createEl('button', { text: '+ Add trigger', cls: 'mod-cta' });
+            addTrBtn.setCssStyles({ marginTop: '8px', width: '100%' });
+            addTrBtn.onclick = () => {
+                this.tempTriggers.push({ id: randomId(), pattern: '', categoryId: this.category.id });
+                renderTriggers();
+            };
+        }, 'Automatically applies the set style to events when their title or description matches defined text.');
+
+        // 3. States Section
+        this.createAccordion(sectionsEl, 'States', (body) => {
+            const statesList = body.createDiv();
+            const renderStates = () => {
+                statesList.empty();
+                this.tempStates.forEach((st, idx) => {
+                    const stRow = statesList.createDiv({ cls: 'dayble-modal-row' });
+                    stRow.setCssStyles({ display: 'flex', gap: '8px', marginBottom: '4px', alignItems: 'center' });
+
+                    const stIconBtn = stRow.createEl('button', { cls: 'dayble-icon-btn' });
+                    setIcon(stIconBtn, st.icon || 'plus');
+                    stIconBtn.onclick = () => {
+                        new IconPickerModal(this.app, (icon) => {
+                            st.icon = icon;
+                            setIcon(stIconBtn, icon);
+                        }, () => {
+                            st.icon = 'plus';
+                            setIcon(stIconBtn, 'plus');
+                        }).open();
+                    };
+
+                    const stInput = stRow.createEl('input', { type: 'text', cls: 'db-input', value: st.name, placeholder: 'todo' });
+                    stInput.setCssStyles({ flex: '1', width: 'auto', minWidth: '0' });
+                    stInput.oninput = () => { st.name = stInput.value; };
+
+                    // Color Dropdown for State
+                    const swatches = [
+                        ...(this.plugin.settings.swatches || []),
+                        ...(this.plugin.settings.userCustomSwatches || []).map((s, idx) => ({ ...s, name: s.name || `custom-${idx}` }))
+                    ];
+                    const stColorSelect = stRow.createEl('select', { cls: 'db-select' });
+                    stColorSelect.add(new Option('Default', ''));
+                    swatches.forEach(s => {
+                        const opt = new Option(s.name, s.name);
+                        opt.style.backgroundColor = s.color;
+                        opt.style.color = s.textColor || chooseTextColor(s.color);
+                        stColorSelect.add(opt);
+                    });
+                    stColorSelect.value = st.colorName || '';
+                    const updateStColorStyle = () => {
+                        const s = swatches.find(sw => sw.name === stColorSelect.value);
+                        if (s) {
+                            stColorSelect.setCssStyles({ backgroundColor: s.color, color: s.textColor || chooseTextColor(s.color) });
+                        } else {
+                            stColorSelect.setCssProps({ 'background-color': '', 'color': '' });
+                        }
+                    };
+                    updateStColorStyle();
+                    stColorSelect.onchange = () => {
+                        st.colorName = stColorSelect.value;
+                        updateStColorStyle();
+                    };
+                    
+                    // Color options styling
+                    Array.from(stColorSelect.options).forEach(opt => {
+                        if (!opt.value) {
+                            opt.style.setProperty('background-color', 'var(--background-primary)');
+                            opt.style.setProperty('color', 'var(--text-normal)');
+                            return;
+                        }
+                        const swatch = swatches.find(sw => sw.name === opt.value);
+                        if (swatch) {
+                            opt.style.setProperty('background-color', swatch.color);
+                            opt.style.setProperty('color', swatch.textColor || chooseTextColor(swatch.color));
+                        }
+                    });
+
+                    const delBtn = stRow.createEl('button', { cls: 'clickable-icon' });
+                    setIcon(delBtn, 'x');
+                    delBtn.onclick = () => {
+                        this.tempStates.splice(idx, 1);
+                        renderStates();
+                    };
+                });
+            };
+            renderStates();
+
+            const addStBtn = body.createEl('button', { text: '+ Add state', cls: 'mod-cta' });
+            addStBtn.setCssStyles({ marginTop: '8px', width: '100%' });
+            addStBtn.onclick = () => {
+                this.tempStates.push({ 
+                    id: randomId(), 
+                    name: '', 
+                    icon: 'check', 
+                    colorName: '', 
+                    effect: '', 
+                    animation: '', 
+                    animation2: '',
+                    categoryId: this.category.id
+                });
+                renderStates();
+            };
+        }, 'Adds options to the event context menu to quickly apply styling.');
+
+        // Footer Buttons
+        const footer = contentEl.createDiv({ cls: 'dayble-modal-footer' });
+
+        const deleteBtn = footer.createEl('button', { text: 'Delete Style', cls: 'mod-warning' });
+        deleteBtn.onclick = () => {
+            new ConfirmModal(this.app, 'Are you sure you want to delete this style? All events using this style will be left unstyled.', async () => {
+                this.isDeleted = true;
+                this.plugin.settings.eventCategories = this.plugin.settings.eventCategories.filter(c => c.id !== this.category.id);
+                // We keep triggers and states but they'll have an orphan categoryId.
+                await this.plugin.saveSettings();
+                this.onSave();
+                this.close();
+            }).open();
+        };
+
+        const saveBtn = footer.createEl('button', { text: 'Save Style', cls: 'mod-cta' });
+        saveBtn.onclick = async () => {
+            await this.save();
+            this.close();
+        };
+    }
+
+    createAccordion(container: HTMLElement, title: string, renderBody: (body: HTMLElement) => void, infoText?: string) {
+        const wrap = container.createDiv({ cls: 'dayble-accordion' });
+        wrap.setCssStyles({ marginBottom: '10px' });
+
+        const header = wrap.createDiv({ cls: 'dayble-accordion-header' });
+        header.setCssStyles({ 
+            display: 'flex', 
+            justifyContent: 'flex-start', 
+            alignItems: 'center', 
+            padding: '5px 0', 
+            cursor: 'pointer',
+            gap: '8px'
+        });
+
+        const arrow = header.createSpan({ cls: 'dayble-accordion-arrow' });
+        setIcon(arrow, 'chevron-down');
+
+        header.createSpan({ text: title, cls: 'dayble-accordion-title' }).setCssStyles({ fontWeight: 'bold' });
+
+        if (infoText) {
+            const spacer = header.createDiv();
+            spacer.setCssStyles({ flexGrow: '1' });
+
+            const infoIcon = header.createSpan({ cls: 'clickable-icon dayble-info-icon' });
+            setIcon(infoIcon, 'info');
+            
+            let tooltipEl: HTMLElement | null = null;
+            
+            infoIcon.addEventListener('mouseenter', () => {
+                tooltipEl = document.body.createDiv({ cls: 'dayble-custom-tooltip', text: infoText });
+                const rect = infoIcon.getBoundingClientRect();
+                
+                // Position above the icon
+                const tooltipRect = tooltipEl.getBoundingClientRect();
+                const left = rect.left + (rect.width / 2) - (tooltipRect.width / 2);
+                const top = rect.top - tooltipRect.height - 8;
+                
+                tooltipEl.setCssStyles({
+                    left: `${left}px`,
+                    top: `${top}px`
+                });
+                
+                // Trigger transition
+                setTimeout(() => tooltipEl?.addClass('is-active'), 10);
+            });
+            
+            infoIcon.addEventListener('mouseleave', () => {
+                if (tooltipEl) {
+                    tooltipEl.remove();
+                    tooltipEl = null;
+                }
+            });
+
+            infoIcon.onclick = (e) => {
+                e.stopPropagation(); // prevent accordion toggle
+            };
+        }
+
+        const body = wrap.createDiv({ cls: 'dayble-accordion-body' });
+        body.setCssStyles({ padding: '10px 0' });
+        renderBody(body);
+
+        let open = true;
+        header.onclick = () => {
+            open = !open;
+            body.style.display = open ? 'block' : 'none';
+            setIcon(arrow, open ? 'chevron-down' : 'chevron-right');
+        };
+    }
+}
 
 class ChangelogModal extends Modal {
     plugin: DaybleCalendarPlugin;

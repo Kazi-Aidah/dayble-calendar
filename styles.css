@@ -1460,7 +1460,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     margin-top: 12px;
     gap: 8px;
     position: sticky;
-    bottom: 0 !important;
+    /* bottom: 0 !important; */
     margin-bottom: 0 !important;
     background-color: var(--background-primary);
     z-index: 20;
@@ -2360,60 +2360,63 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     margin-right: 6px;
 }
 
-.db-category-row {
-    grid-template-columns: minmax(0, 1fr) !important;
+.db-category-row,
+.db-triggers-row,
+.db-states-row {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    padding: 0.75em 1em !important;
 }
 
-.db-category-row .setting-item-info {
+.db-category-row .setting-item-info,
+.db-triggers-row .setting-item-info,
+.db-states-row .setting-item-info {
     display: none !important;
 }
 
+.db-category-row .setting-item-control,
+.db-triggers-row .setting-item-control,
+.db-states-row .setting-item-control {
+    width: 100% !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
 .db-category-row .setting-item-control {
-    width: 100%;
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 8px;
-    align-items: center;
     overflow: hidden;
 }
+
 @media (max-width: 700px) {
     .db-category-row .setting-item-control {
-        flex-wrap: wrap;
+        flex-wrap: wrap !important;
         overflow: visible;
     }
 }
 
 .db-triggers-row,
 .db-states-row {
-    grid-template-columns: minmax(0, 1fr) !important;
 }
 
-.db-triggers-row .setting-item-info,
-.db-states-row .setting-item-info {
-    display: none !important;
-}
-
-.db-triggers-row .setting-item-control,
-.db-states-row .setting-item-control {
-    width: 100%;
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 8px;
-    align-items: center;
-}
 @media (max-width: 700px) {
     .db-triggers-row .setting-item-control,
     .db-states-row .setting-item-control {
-        flex-wrap: wrap;
+        flex-wrap: wrap !important;
     }
     .db-triggers-row .setting-item-control input,
     .db-triggers-row .setting-item-control select,
     .db-states-row .setting-item-control input,
     .db-states-row .setting-item-control select {
-        flex: 1 1 110px;
-        max-width: 48%;
-        padding-inline: 6px;
-        font-size: 0.9em;
+        flex: 1 1 110px !important;
+        max-width: 48% !important;
+        padding-inline: 6px !important;
+        font-size: 0.9em !important;
     }
 }
 
@@ -2423,13 +2426,15 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .db-category-row .db-category-name {
-    flex: 0 1 120px;
-    min-width: 0;
+    flex: 1.5 1 0 !important;
+    min-width: 100px !important;
+    width: auto !important;
 }
 
 .db-category-row .db-select {
-    min-width: 100px;
-    width: 150px;
+    flex: 1 1 0 !important;
+    min-width: 120px !important;
+    width: auto !important;
 }
 
 .db-category-row .db-color {
@@ -2437,8 +2442,9 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .db-category-row .db-animation2 {
-    min-width: 100px;
-    width: 150px;
+    flex: 1 1 0 !important;
+    min-width: 100px !important;
+    width: auto !important;
 }
 
 .db-category-row .db-delete-category {
@@ -2447,11 +2453,15 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .db-category-row .db-effect {
-    width: 150px;
+    flex: 1 1 0 !important;
+    min-width: 120px !important;
+    width: auto !important;
 }
 
 .db-category-row .db-animation {
-    width: 170px;
+    flex: 1 1 0 !important;
+    min-width: 140px !important;
+    width: auto !important;
 }
 
 .dayble-color-swatches-row {
@@ -3719,4 +3729,120 @@ button.dayble-btn.db-btn.button {
 .dayble-day-mode .dayble-event.dayble-event-hidden,
 .dayble-3day-mode .dayble-event.dayble-event-hidden {
     display: none !important;
+}
+
+/* Event Style Settings Modal */
+.dayble-style-settings-modal .dayble-centered-heading {
+    text-align: center;
+    font-weight: 700;
+    margin-bottom: 4px;
+    margin-top: -12px;
+}
+
+.dayble-style-settings-modal .dayble-accordion {
+    margin-bottom: 15px !important;
+    border: none !important;
+}
+
+.dayble-style-settings-modal .dayble-accordion-header {
+    padding: 5px 0 !important;
+    background-color: transparent !important;
+    border: none !important;
+}
+
+.dayble-style-settings-modal .dayble-accordion-title {
+    font-size: 1.1em;
+    font-weight: 600;
+}
+
+.dayble-style-settings-modal .dayble-accordion-body {
+    padding: 10px 0 !important;
+}
+
+.dayble-style-settings-modal .dayble-icon-btn {
+    padding: 5px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.dayble-style-settings-modal .dayble-event-preview-container {
+    background-color: var(--background-primary-alt);
+    border: 1px solid var(--background-modifier-border);
+    overflow: hidden;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.dayble-event-preview-container .dayble-event-item.dayble-icon-placement-left,
+.dayble-event-preview-container .dayble-event-item.dayble-icon-placement-right {
+    gap: 8px !important;
+    width: 200px !important;
+}
+
+.dayble-event-preview-container .dayble-event-item.dayble-icon-placement-top,
+.dayble-event-preview-container .dayble-event-item.dayble-icon-placement-bottom {
+    gap: 4px !important;
+    width: 200px !important;
+}
+
+.dayble-style-settings-modal .dayble-event-preview-container .dayble-event-item.dayble-icon-placement-top,
+.dayble-style-settings-modal .dayble-event-preview-container .dayble-event-item.dayble-icon-placement-bottom {
+    gap: 0px !important;
+    width: 180px !important;
+}
+
+.dayble-custom-tooltip {
+    position: fixed;
+    z-index: 10000;
+    background-color: var(--background-primary);
+    color: var(--text-normal);
+    border: 1px solid var(--background-modifier-border);
+    padding: 4px 8px;
+    border-radius: var(--input-radius);
+    font-size: var(--font-ui-smaller);
+    pointer-events: none;
+    white-space: pre-wrap;
+    max-width: 250px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    opacity: 0;
+    transition: opacity 0.01s ease;
+}
+
+.dayble-custom-tooltip.is-active {
+    opacity: 1;
+}
+
+.dayble-style-settings-modal .dayble-modal-footer {
+    position: sticky;
+    bottom: -20px;
+    left: -20px;
+    right: -20px;
+    background-color: var(--background-primary);
+    padding: 15px 0px !important;
+    border-top: 1px solid var(--background-modifier-border);
+    margin-top: auto; /* Push to bottom if content is short */
+    margin-bottom: -20px;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+}
+
+.dayble-style-settings-modal .modal-content {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+    max-width: 500px;
+}
+
+.dayble-style-settings-modal .modal {
+    max-width: 500px;
+}
+
+.dayble-event-text-container {
+    width: 150px;
 }
