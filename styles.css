@@ -213,18 +213,8 @@
     border-radius: var(--button-radius);
 }
 
-.dayble-icon-btn {
-    border: 1px solid var(--background-modifier-border);
-    background: var(--background-primary);
-    border-radius: var(--button-radius);
-}
-
 .dayble-long-event-complex {
     transform: translateY(-2.5px) !important;
-}
-
-.dayble-icon-btn:hover {
-    background: var(--background-primary-alt);
 }
 
 .dayble-body {
@@ -3757,15 +3747,6 @@ button.dayble-btn.db-btn.button {
 
 .dayble-style-settings-modal .dayble-accordion-body {
     padding: 10px 0 !important;
-}
-
-.dayble-style-settings-modal .dayble-icon-btn {
-    padding: 5px;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
 }
 
 .dayble-style-settings-modal .dayble-event-preview-container {

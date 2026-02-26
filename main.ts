@@ -3165,8 +3165,40 @@ class DaybleCalendarView extends ItemView {
         }
 
         // Determine which colors to use: user-set or category
-        const category = this.plugin.settings.eventCategories?.find(c => c.id === ev.categoryId);
+        let category = this.plugin.settings.eventCategories?.find(c => c.id === ev.categoryId);
         
+        // Trigger matching for icon and color
+        let triggerIcon = '';
+        let triggerColorName = '';
+        
+        const fullText = `${ev.title || ''} ${ev.description || ''}`.toLowerCase();
+
+        // If no category is assigned, check triggers globally to find a category
+        if (!category && this.plugin.settings.triggers) {
+            for (const trigger of this.plugin.settings.triggers) {
+                const patterns = (trigger.pattern || '').split(',').map(p => p.trim().toLowerCase()).filter(p => p.length > 0);
+                if (patterns.some(p => fullText.includes(p))) {
+                    category = this.plugin.settings.eventCategories?.find(c => c.id === trigger.categoryId);
+                    if (category) {
+                        triggerIcon = trigger.icon || '';
+                        triggerColorName = trigger.colorName || '';
+                        break;
+                    }
+                }
+            }
+        } else if (category && this.plugin.settings.triggers) {
+            // If category IS assigned, check triggers within that category for overrides
+            const catTriggers = this.plugin.settings.triggers.filter(t => t.categoryId === category.id);
+            for (const trigger of catTriggers) {
+                const patterns = (trigger.pattern || '').split(',').map(p => p.trim().toLowerCase()).filter(p => p.length > 0);
+                if (patterns.some(p => fullText.includes(p))) {
+                    triggerIcon = trigger.icon || '';
+                    triggerColorName = trigger.colorName || '';
+                    break;
+                }
+            }
+        }
+
         let bgColor = '';
         let textColor = '';
         let colorName = ev.colorName || (!ev.color && !category ? this.plugin.settings.defaultEventColorName : undefined);
@@ -3278,22 +3310,6 @@ class DaybleCalendarView extends ItemView {
                 desc.setCssProps({ 'color': textColor });
             }
             renderMarkdown(ev.description, desc, this.plugin.app);
-        }
-        
-        // Trigger matching for icon and color
-        let triggerIcon = '';
-        let triggerColorName = '';
-        if (category && this.plugin.settings.triggers) {
-            const catTriggers = this.plugin.settings.triggers.filter(t => t.categoryId === category.id);
-            const fullText = `${ev.title || ''} ${ev.description || ''}`.toLowerCase();
-            for (const trigger of catTriggers) {
-                const patterns = trigger.pattern.split(',').map(p => p.trim().toLowerCase()).filter(p => p.length > 0);
-                if (patterns.some(p => fullText.includes(p))) {
-                    triggerIcon = trigger.icon || '';
-                    triggerColorName = trigger.colorName || '';
-                    break;
-                }
-            }
         }
 
         const iconToUse = (state && state.icon) || triggerIcon || ev.icon || (category?.icon || '');
@@ -4129,7 +4145,12 @@ class EventModal extends Modal {
             if (!payload.categoryId && !payload.color && !payload.colorName) {
                 const triggers = this.plugin.settings.triggers || [];
                 const txt = ((payload.title || '') + ' ' + (payload.description || '')).toLowerCase();
-                const found = triggers.find((t: { pattern: string, categoryId: string, color?: string, textColor?: string, colorName?: string }) => (t.pattern || '').toLowerCase() && txt.includes((t.pattern || '').toLowerCase()));
+                const found = triggers.find((t: { pattern: string, categoryId: string, color?: string, textColor?: string, colorName?: string }) => {
+                    const pattern = (t.pattern || '').toLowerCase();
+                    if (!pattern) return false;
+                    const parts = pattern.split(',').map(p => p.trim()).filter(p => p.length > 0);
+                    return parts.some(p => txt.includes(p));
+                });
                 if (found) {
                     if (!payload.categoryId && found.categoryId) payload.categoryId = found.categoryId;
                     if (!payload.color && !payload.colorName) {
@@ -4244,9 +4265,8 @@ class IconPickerModal extends Modal {
             list.empty();
             const toShow = limit > 0 ? icons.slice(0, limit) : icons;
             toShow.forEach(id => {
-                const btn = list.createEl('button', { cls: 'dayble-icon-btn' });
-                btn.addClass('db-icon-btn');
-                btn.title = id;
+                const btn = list.createDiv({ cls: 'clickable-icon' });
+                setTooltip(btn, id);
                 setIcon(btn, id);
                 btn.onclick = () => { this.onPick(id); this.close(); };
             });
@@ -6146,7 +6166,7 @@ class DaybleSettingTab extends PluginSettingTab {
         ;
 
         new Setting(containerEl)
-            .setName('Event styling shortcuts')
+            .setName('Event styling shortcut')
             .setDesc('Quickly jump to styling settings.')
             .addButton(b => {
                 b.setButtonText('Scroll to Event Styling').onClick(() => {
@@ -6656,11 +6676,22 @@ class DaybleSettingTab extends PluginSettingTab {
             });
             
             // Align title and desc
-            eventTitle.setCssStyles({ textAlign: titleAlign === 'center-left' ? 'left' : titleAlign });
-            eventDesc.setCssStyles({ textAlign: finalDescAlign === 'center-left' ? 'left' : finalDescAlign });
+            eventTitle.setCssStyles({ fontSize: '0.85em', fontWeight: '600' });
+            eventTitle.style.setProperty('text-align', (titleAlign === 'center-left' ? 'left' : titleAlign), 'important');
+            eventTitle.style.setProperty('width', '100%', 'important');
+
+            eventDesc.setCssStyles({ fontSize: '0.75em', opacity: '0.8' });
+            eventDesc.style.setProperty('text-align', (finalDescAlign === 'center-left' ? 'left' : finalDescAlign), 'important');
+            eventDesc.style.setProperty('width', '100%', 'important');
             
             // Handle overall flex alignment based on title alignment
-            eventBox.setCssStyles({ justifyContent: titleAlign === 'center' ? 'center' : (titleAlign === 'right' ? 'flex-end' : 'flex-start') });
+            if (titleAlign === 'center' || titleAlign === 'center-left') {
+                eventBox.setCssStyles({ justifyContent: 'center' });
+            } else if (titleAlign === 'right') {
+                eventBox.setCssStyles({ justifyContent: 'flex-end' });
+            } else {
+                eventBox.setCssStyles({ justifyContent: 'flex-start' });
+            }
             
             // Icon placement
             const placement = settings.iconPlacement ?? 'left';
@@ -8203,7 +8234,8 @@ class EventStyleSettingsModal extends Modal {
             row1.setCssStyles({ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center' });
 
             // Icon Picker
-            const iconBtn = row1.createEl('button', { cls: 'dayble-icon-btn' });
+            const iconBtn = row1.createDiv({ cls: 'clickable-icon' });
+            setTooltip(iconBtn, 'Change icon');
             setIcon(iconBtn, this.category.icon || 'plus');
             iconBtn.onclick = () => {
                 new IconPickerModal(this.app, (icon) => {
@@ -8347,7 +8379,8 @@ class EventStyleSettingsModal extends Modal {
                     trRow.setCssStyles({ display: 'flex', gap: '8px', marginBottom: '4px', alignItems: 'center' });
 
                     // Clickable Trigger Icon
-                    const stIconBtn = trRow.createEl('button', { cls: 'dayble-icon-btn' });
+                    const stIconBtn = trRow.createDiv({ cls: 'clickable-icon' });
+                    setTooltip(stIconBtn, 'Change icon');
                     setIcon(stIconBtn, tr.icon || 'plus');
                     stIconBtn.onclick = () => {
                         new IconPickerModal(this.app, (icon) => {
@@ -8438,7 +8471,8 @@ class EventStyleSettingsModal extends Modal {
                     const stRow = statesList.createDiv({ cls: 'dayble-modal-row' });
                     stRow.setCssStyles({ display: 'flex', gap: '8px', marginBottom: '4px', alignItems: 'center' });
 
-                    const stIconBtn = stRow.createEl('button', { cls: 'dayble-icon-btn' });
+                    const stIconBtn = stRow.createDiv({ cls: 'clickable-icon' });
+                    setTooltip(stIconBtn, 'Change icon');
                     setIcon(stIconBtn, st.icon || 'plus');
                     stIconBtn.onclick = () => {
                         new IconPickerModal(this.app, (icon) => {
