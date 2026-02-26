@@ -680,7 +680,8 @@
     align-items: center;
     justify-content: center;
     gap: 0px;
-    flex: 1;
+    flex: 0 0 auto;
+    width: 100%;
     min-width: 0;
 }
 
@@ -3093,9 +3094,14 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
-    justify-content: flex-start !important;
+    justify-content: inherit !important;
     gap: 6px !important;
-    /* Force left alignment override for all-day sections */
+}
+
+/* Force left for day/week all-day sections, but let agenda follow settings */
+.dayble-all-day-section .dayble-event,
+.dayble-3day-all-day-day .dayble-event {
+    justify-content: flex-start !important;
     text-align: left !important;
 }
 
@@ -3114,12 +3120,18 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .dayble-agenda-all-day .dayble-event-inner {
     display: flex !important;
     flex-direction: row !important;
-    justify-content: flex-start !important;
+    justify-content: inherit !important;
     align-items: center !important;
     width: 100% !important;
     gap: 6px !important;
     /* Ensure no centering logic applies here */
     margin: 0 !important;
+}
+
+/* Force left for day/week all-day sections */
+.dayble-all-day-section .dayble-event .dayble-event-inner,
+.dayble-3day-all-day-day .dayble-event .dayble-event-inner {
+    justify-content: flex-start !important;
 }
 
 .dayble-all-day-section .dayble-event-inner .dayble-event-icon,
@@ -3163,12 +3175,18 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .dayble-all-day-section .dayble-event .dayble-event-inner .dayble-event-title,
 .dayble-3day-all-day-day .dayble-event .dayble-event-inner .dayble-event-title,
 .dayble-agenda-all-day .dayble-event-inner .dayble-event-title {
-    text-align: left !important;
+    text-align: inherit !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
     flex: 1 1 auto !important; /* Changed from flex-shrink: 1 to give it priority */
     min-width: 0 !important;
+}
+
+/* Force left for day/week all-day sections */
+.dayble-all-day-section .dayble-event .dayble-event-inner .dayble-event-title,
+.dayble-3day-all-day-day .dayble-event .dayble-event-inner .dayble-event-title {
+    text-align: left !important;
 }
 
 .dayble-agenda-all-day .dayble-event-inner .dayble-event-title {
@@ -3194,18 +3212,18 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 /* Agenda all-day layout: stack title and description vertically */
 .dayble-agenda-all-day {
-    align-items: flex-start !important;
+    align-items: inherit !important;
 }
 
 .dayble-agenda-all-day .dayble-event-inner {
     flex-direction: column !important;
-    align-items: flex-start !important;
+    align-items: inherit !important;
     gap: 2px !important;
 }
 
 .dayble-agenda-all-day .dayble-event-inner .dayble-event-title-container {
-    justify-content: flex-start !important;
-    align-items: flex-start !important;
+    justify-content: inherit !important;
+    align-items: inherit !important;
 }
 
 .dayble-agenda-all-day .dayble-event-inner .dayble-event-title {

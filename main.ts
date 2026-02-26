@@ -2105,13 +2105,24 @@ class DaybleCalendarView extends ItemView {
                 dayMap.get(ev.date)?.push(ev);
             } else if (ev.startDate && ev.endDate) {
                 // For multi-day events, add them to each day in the range
-                let curr = new Date(ev.startDate + 'T00:00:00');
-                const end = new Date(ev.endDate + 'T00:00:00');
-                while (curr <= end) {
-                    const dStr = curr.toISOString().split('T')[0];
+                let curr = moment(ev.startDate, 'YYYY-MM-DD');
+                const end = moment(ev.endDate, 'YYYY-MM-DD');
+                
+                // If an event ends exactly at 00:00 on its end day, we shouldn't show it on that end day.
+                let effectiveEnd = end.clone();
+                if (ev.time) {
+                    const parts = String(ev.time).split('-');
+                    const endStr = parts[1] || '';
+                    if (endStr === '00:00' && ev.startDate !== ev.endDate) {
+                        effectiveEnd.subtract(1, 'day'); // Move back to previous day
+                    }
+                }
+
+                while (curr.isSameOrBefore(effectiveEnd, 'day')) {
+                    const dStr = curr.format('YYYY-MM-DD');
                     if (!dayMap.has(dStr)) dayMap.set(dStr, []);
                     dayMap.get(dStr)?.push(ev);
-                    curr.setDate(curr.getDate() + 1);
+                    curr.add(1, 'day');
                 }
             }
         });
@@ -2143,7 +2154,7 @@ class DaybleCalendarView extends ItemView {
                 dayEvents.forEach(ev => {
                     const isMultiDay = ev.startDate && ev.endDate && ev.startDate !== ev.endDate;
                     const isAllDay = !ev.time || isMultiDay;
-                    const item = agendaContainer.appendChild(this.createEventItem(ev, false, false, isAllDay));
+                    const item = agendaContainer.appendChild(this.createEventItem(ev, false, false, isAllDay, true));
                     const itemEl = item as HTMLElement;
                     itemEl.setCssProps({ 'width': '100%' });
                     
@@ -2413,13 +2424,24 @@ class DaybleCalendarView extends ItemView {
                 if (!dayMap.has(ev.date)) dayMap.set(ev.date, []);
                 dayMap.get(ev.date)!.push(ev);
             } else if (ev.startDate && ev.endDate) {
-                let curr = new Date(ev.startDate + 'T00:00:00');
-                const end = new Date(ev.endDate + 'T00:00:00');
-                while (curr <= end) {
-                    const dStr = curr.toISOString().split('T')[0];
+                let curr = moment(ev.startDate, 'YYYY-MM-DD');
+                const end = moment(ev.endDate, 'YYYY-MM-DD');
+                
+                // If an event ends exactly at 00:00 on its end day, we shouldn't show it on that end day.
+                let effectiveEnd = end.clone();
+                if (ev.time) {
+                    const parts = String(ev.time).split('-');
+                    const endStr = parts[1] || '';
+                    if (endStr === '00:00' && ev.startDate !== ev.endDate) {
+                        effectiveEnd.subtract(1, 'day'); // Move back to previous day
+                    }
+                }
+
+                while (curr.isSameOrBefore(effectiveEnd, 'day')) {
+                    const dStr = curr.format('YYYY-MM-DD');
                     if (!dayMap.has(dStr)) dayMap.set(dStr, []);
                     dayMap.get(dStr)!.push(ev);
-                    curr.setDate(curr.getDate() + 1);
+                    curr.add(1, 'day');
                 }
             }
         });
@@ -2457,12 +2479,23 @@ class DaybleCalendarView extends ItemView {
             if (ev.date) {
                 addForDate(ev.date);
             } else if (ev.startDate && ev.endDate) {
-                let curr = new Date(ev.startDate + 'T00:00:00');
-                const end = new Date(ev.endDate + 'T00:00:00');
-                while (curr <= end) {
-                    const dStr = curr.toISOString().split('T')[0];
+                let curr = moment(ev.startDate, 'YYYY-MM-DD');
+                const end = moment(ev.endDate, 'YYYY-MM-DD');
+
+                // If an event ends exactly at 00:00 on its end day, we shouldn't show it on that end day.
+                let effectiveEnd = end.clone();
+                if (ev.time) {
+                    const parts = String(ev.time).split('-');
+                    const endStr = parts[1] || '';
+                    if (endStr === '00:00' && ev.startDate !== ev.endDate) {
+                        effectiveEnd.subtract(1, 'day'); // Move back to previous day
+                    }
+                }
+
+                while (curr.isSameOrBefore(effectiveEnd, 'day')) {
+                    const dStr = curr.format('YYYY-MM-DD');
                     addForDate(dStr);
-                    curr.setDate(curr.getDate() + 1);
+                    curr.add(1, 'day');
                 }
             }
         });
@@ -3034,7 +3067,7 @@ class DaybleCalendarView extends ItemView {
         return lines.join('\n');
     }
 
-    createEventItem(ev: DaybleEvent, isLong = false, isDayMode = false, isAllDay = false): HTMLElement {
+    createEventItem(ev: DaybleEvent, isLong = false, isDayMode = false, isAllDay = false, isAgenda = false): HTMLElement {
         const item = document.createElement('div');
         item.className = 'dayble-event';
         if (isLong) item.addClass('dayble-long-event');
@@ -3054,9 +3087,6 @@ class DaybleCalendarView extends ItemView {
         
         const isAllDaySection = isAllDay;
 
-        const isAgenda = item.parentElement?.classList.contains('dayble-agenda-container') || 
-                        item.parentElement?.closest('.dayble-agenda-container') !== null;
-
         let titleAlign = eventSettings.titleAlign || globalSettings.eventTitleAlign || 'center';
         let descAlign = eventSettings.descAlign || globalSettings.eventDescAlign || 'center';
 
@@ -3064,8 +3094,8 @@ class DaybleCalendarView extends ItemView {
         if (isAgenda && titleAlign === 'center-left') titleAlign = 'center';
         if (isAgenda && descAlign === 'center-left') descAlign = 'center';
 
-        // FORCE LEFT for all-day sections
-        if (isAllDaySection) {
+        // FORCE LEFT for all-day sections (except in agenda mode)
+        if (isAllDaySection && !isAgenda) {
             titleAlign = 'left';
             descAlign = 'left';
         }
@@ -3455,6 +3485,14 @@ class DaybleCalendarView extends ItemView {
         const todayStr = `${yyyy}-${mm}-${dd}`;
         if (ev.date) return ev.date === todayStr;
         if (ev.startDate && ev.endDate) {
+            if (ev.time) {
+                const parts = String(ev.time).split('-');
+                const endStr = parts[1] || '';
+                if (endStr === '00:00') {
+                    // If it ends exactly at 00:00, the event does not occur on the end date
+                    if (todayStr === ev.endDate) return false;
+                }
+            }
             return ev.startDate <= todayStr && ev.endDate >= todayStr;
         }
         if (ev.startDate && !ev.endDate) {
@@ -4581,8 +4619,18 @@ class TodayModal extends Modal {
                 };
 
                 const dayEvents = (this.events || []).filter(e => {
-                    const isToday = (e.date === dStr) || (e.startDate === dStr) || 
+                    let isToday = (e.date === dStr) || (e.startDate === dStr) || 
                                     (e.startDate && e.endDate && dStr >= e.startDate && dStr <= e.endDate);
+                    
+                    // Special case: if a timed event ends exactly at 12am on the dStr, it's not today
+                    if (isToday && e.time && e.startDate && e.endDate && dStr === e.endDate) {
+                        const parts = String(e.time).split('-');
+                        const endStr = parts[1] || '';
+                        if (endStr === '00:00' && e.startDate !== e.endDate) {
+                            isToday = false;
+                        }
+                    }
+
                     if (!isToday) return false;
                     return !e.time;
                 }).sort((a, b) => {
@@ -4695,8 +4743,18 @@ class TodayModal extends Modal {
         // All-day section (for single day mode)
         if (!isMulti) {
             const allDayEvents = (this.events || []).filter(e => {
-                const isToday = (e.date === primaryDate) || (e.startDate === primaryDate) || 
+                let isToday = (e.date === primaryDate) || (e.startDate === primaryDate) || 
                                 (e.startDate && e.endDate && primaryDate >= e.startDate && primaryDate <= e.endDate);
+                
+                // Special case: if a timed event ends exactly at 12am on the primaryDate, it's not today
+                if (isToday && e.time && e.startDate && e.endDate && primaryDate === e.endDate) {
+                    const parts = String(e.time).split('-');
+                    const endStr = parts[1] || '';
+                    if (endStr === '00:00' && e.startDate !== e.endDate) {
+                        isToday = false;
+                    }
+                }
+
                 if (!isToday) return false;
                 return !e.time;
             }).sort((a, b) => {
@@ -5022,15 +5080,18 @@ class TodayModal extends Modal {
             const startTotalMin = sIdx15 * 15;
             const endTotalMin = (eIdx15 + 1) * 15;
             
-            const sh = Math.floor(startTotalMin / 60);
-            const sm = startTotalMin % 60;
-            const eh = Math.floor(endTotalMin / 60);
-            const em = endTotalMin % 60;
+            let sh = Math.floor(startTotalMin / 60);
+            let sm = startTotalMin % 60;
+            let eh = Math.floor(endTotalMin / 60);
+            let em = endTotalMin % 60;
+            
+            const endIsMidnightNext = (endTotalMin >= 24 * 60);
+            if (endIsMidnightNext) {
+                eh = 0; em = 0;
+            }
             
             const sTime = toTime(sh, sm);
-            let eTime = toTime(eh, em);
-            const endIsMidnightNext = (endTotalMin >= 24 * 60);
-            if (endIsMidnightNext) eTime = '00:00';
+            const eTime = toTime(eh, em);
             
             const isMulti = Array.isArray(this.date);
             const dates = isMulti ? (this.date as string[]) : [this.date as string];
@@ -5479,8 +5540,18 @@ class TodayModal extends Modal {
 
             dates.forEach((dStr, dIdx) => {
                 const dayEvents = (this.events || []).filter(e => {
-                    const isToday = (e.date === dStr) || (e.startDate === dStr) || 
+                    let isToday = (e.date === dStr) || (e.startDate === dStr) || 
                                     (e.startDate && e.endDate && dStr >= e.startDate && dStr <= e.endDate);
+                    
+                    // Special case: if a timed event ends exactly at 12am on the dStr, it's not today
+                    if (isToday && e.time && e.startDate && e.endDate && dStr === e.endDate) {
+                        const parts = String(e.time).split('-');
+                        const endStr = parts[1] || '';
+                        if (endStr === '00:00' && e.startDate !== e.endDate) {
+                            isToday = false;
+                        }
+                    }
+
                     if (!isToday) return false;
                     
                     // If it's an all-day event, we skip it here because it's in the all-day section
@@ -5496,7 +5567,14 @@ class TodayModal extends Modal {
                     if (!startStr) return null;
                     let startTotal = parseHM(startStr);
                     let endTotal = startTotal + 30;
-                    if (endStr) endTotal = parseHM(endStr);
+                    if (endStr) {
+                        endTotal = parseHM(endStr);
+                        // If end time is 00:00 (midnight), treat it as 24:00 (1440 mins)
+                        // so it stays on the same day instead of wrapping to next day's 00:00.
+                        if (endTotal === 0 && startTotal > 0) {
+                            endTotal = 24 * 60;
+                        }
+                    }
 
                     // Multi-day adjustment for grid segments
                     if (ev.startDate && ev.endDate && ev.startDate !== ev.endDate) {
@@ -5507,6 +5585,8 @@ class TodayModal extends Modal {
                             endTotal = 24 * 60; // Ends at midnight on previous days
                         }
                     }
+
+                    if (startTotal >= endTotal) return null;
 
                     return { ev, startTotal, endTotal, column: 0, totalColumns: 1 };
                 }).filter(item => item !== null) as { ev: DaybleEvent, startTotal: number, endTotal: number, column: number, totalColumns: number }[];
@@ -5542,6 +5622,14 @@ class TodayModal extends Modal {
                     const boundary = 12 * 60; // 12:00 PM
                     
                     const renderSegment = (sMin: number, eMin: number, segmentType: 'full' | 'start' | 'end') => {
+                        // Special handling for 12:00 AM (midnight) end time
+                        // If an event ends at 00:00, we treat it as 24:00 (1440 mins) for rendering
+                        // so it stays on the correct day grid.
+                        let effectiveEMin = eMin;
+                        if (segmentType === 'full' && eMin === 0 && sMin > 0) {
+                            effectiveEMin = 24 * 60;
+                        }
+
                         const sh = Math.floor(sMin / 60);
                         const sm = sMin % 60;
                         let startIdx = toIdx(sh, sm);
@@ -5556,7 +5644,7 @@ class TodayModal extends Modal {
                         const withinMin = (sm % 30);
                         
                         const top = (sRect.top - gRect.top) + (withinMin / 15) * pxPer15;
-                        const durationMin = eMin - sMin;
+                        const durationMin = effectiveEMin - sMin;
                         const height = Math.max(4, Math.round((durationMin / 15) * pxPer15));
 
                         // Calculate width and left based on columns within the cell area
@@ -5711,14 +5799,31 @@ class TodayModal extends Modal {
                                     else newEndTotal = newStartTotal + 15;
                                 }
 
-                                const formatTime = (h: number, m: number) => `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-                                const newTimeRange = `${formatTime(Math.floor(newStartTotal / 60), newStartTotal % 60)}-${formatTime(Math.floor(newEndTotal / 60), newEndTotal % 60)}`;
+            const formatTime = (h: number, m: number) => `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                                
+                                let newStartTime = formatTime(Math.floor(newStartTotal / 60), newStartTotal % 60);
+                                let newEndTime = formatTime(Math.floor(newEndTotal / 60), newEndTotal % 60);
+                                let newEndDate = ev.endDate || ev.date || ev.startDate || dStr;
+
+                                if (newEndTotal >= 24 * 60) {
+                                    newEndTime = '00:00';
+                                    if (newEndDate === dStr) {
+                                        const [yy, mm, dd] = dStr.split('-').map(Number);
+                                        const t = new Date(yy, (mm || 1) - 1, dd || 1);
+                                        t.setDate(t.getDate() + 1);
+                                        const pad = (n: number) => String(n).padStart(2,'0');
+                                        newEndDate = `${t.getFullYear()}-${pad(t.getMonth()+1)}-${pad(t.getDate())}`;
+                                    }
+                                }
+
+                                const newTimeRange = `${newStartTime}-${newEndTime}`;
                                 
                                 try {
                                     const evIdx = (this.view?.events || []).findIndex(event => event.id === ev.id);
                                     if (evIdx !== -1 && this.view) {
                                         const updatedEv = JSON.parse(JSON.stringify(this.view.events[evIdx]));
                                         updatedEv.time = newTimeRange;
+                                        updatedEv.endDate = newEndDate;
                                         this.view.events[evIdx] = updatedEv;
                                         await this.view.saveAllEntries();
                                         await this.view.render();
