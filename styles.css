@@ -1198,6 +1198,20 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
     box-sizing: border-box;
 }
 
+/* Selection Mirror styles moved to end of file */
+
+.dayble-selected {
+    outline: 2px dashed var(--color-accent);
+    background: var(--background-primary-alt);
+}
+
+.dayble-modal-title {
+    margin: 0 0 8px;
+    margin-top: -10px;
+    font-size: 1.1em;
+    color: var(--text-normal);
+}
+
 .dayble-focus-selection-mirror {
     border: 2px solid var(--color-accent);
     background: var(--color-accent);
@@ -1225,30 +1239,6 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
     z-index: 30;
     opacity: 1 !important;
     pointer-events: none !important;
-}
-
-.dayble-focus-selection-mirror .dayble-focus-event-inner {
-    opacity: 1 !important;
-    color: var(--text-normal) !important;
-}
-
-.dayble-focus-selection-mirror .dayble-selection-duration {
-    font-size: 0.8em;
-    opacity: 1 !important;
-    color: var(--text-muted) !important;
-    font-weight: normal;
-}
-
-.dayble-selected {
-    outline: 2px dashed var(--color-accent);
-    background: var(--background-primary-alt);
-}
-
-.dayble-modal-title {
-    margin: 0 0 8px;
-    margin-top: -10px;
-    font-size: 1.1em;
-    color: var(--text-normal);
 }
 
 .dayble-modal-row {
@@ -2850,6 +2840,16 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     position: relative;
 }
 
+.dayble-5min-mode .dayble-focus-cell {
+    min-height: 150px;
+}
+
+/* Hide the 15-min split indicators in 5-min mode since we use the selection mirror */
+.dayble-5min-mode .dayble-focus-cell::before,
+.dayble-5min-mode .dayble-focus-cell::after {
+    display: none !important;
+}
+
 .dayble-focus-cell::after {
     content: "";
     position: absolute;
@@ -2859,6 +2859,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     border-top: 1px dashed var(--background-modifier-border);
     opacity: 0.3;
     pointer-events: none;
+    height: 0; /* Changed to 0 so it doesn't overlap with the selection areas if they were visible */
 }
 
 .dayble-focus-cell.dayble-selected {
@@ -2883,6 +2884,11 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .dayble-focus-cell::after {
     bottom: 0;
 }
+
+/* We reuse the after pseudo element for selection logic when not in 5-min mode, 
+   but we need to be careful with the dashed line above. 
+   The dashed line is on ::after, but it's only a border-top. 
+   The selection highlight (sel-bottom) will apply an outline to the whole ::after area. */
 
 .dayble-focus-cell.sel-top::before {
     outline: 1px dashed var(--interactive-accent);
@@ -2923,14 +2929,43 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     align-items: center;
 }
 
-.dayble-focus-overlay {
+.dayble-focus-selection-mirror-container {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
     pointer-events: none;
-    z-index: 10;
+    z-index: 1000; /* Ensure it's above events but below dragging */
+}
+
+.dayble-focus-selection-mirror {
+    position: absolute;
+    background-color: var(--color-accent);
+    opacity: 0.3;
+    pointer-events: none;
+    border: 2px solid var(--color-accent);
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.dayble-focus-selection-mirror .dayble-focus-event-inner {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    color: var(--text-normal);
+    font-size: 1.1em;
+    font-weight: 700;
+    padding: 4px;
+    text-align: center;
+}
+
+.dayble-selection-duration {
+    font-size: 0.9em;
+    color: var(--text-muted);
+    margin-top: 4px;
 }
 
 .dayble-quarter-lines {
@@ -3374,12 +3409,33 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 /* Duration based styling for day mode (15 min) */
-.dayble-focus-scroll .dayble-event.min15 {
+.dayble-focus-scroll .dayble-event.min15,
+.dayble-focus-scroll .dayble-event.min5,
+.dayble-focus-scroll .dayble-event.min10 {
     flex-direction: row !important;
     justify-content: center !important; /* Default to center */
     align-items: center !important;
     padding: 0 6px !important;
     gap: 4px !important;
+}
+
+.dayble-focus-scroll .dayble-event.min5,
+.dayble-focus-scroll .dayble-event.min10 {
+    font-size: 0.7em !important;
+    padding: 0 4px !important;
+}
+
+.dayble-focus-scroll .dayble-event.min5 .dayble-event-title,
+.dayble-focus-scroll .dayble-event.min10 .dayble-event-title {
+    font-size: 0.85em !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+.dayble-focus-scroll .dayble-event.min5 .dayble-event-desc,
+.dayble-focus-scroll .dayble-event.min10 .dayble-event-desc {
+     display: none !important;
 }
 
 /* Current Time Indicator */
@@ -3413,13 +3469,16 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     box-shadow: 0px 2px #00000050 !important;
 }
 
-
 /* Left align only if it has a description */
-.dayble-focus-scroll .dayble-event.min15:has(.dayble-event-desc) {
+.dayble-focus-scroll .dayble-event.min15:has(.dayble-event-desc),
+.dayble-focus-scroll .dayble-event.min5:has(.dayble-event-desc),
+.dayble-focus-scroll .dayble-event.min10:has(.dayble-event-desc) {
     justify-content: flex-start !important;
 }
 
-.dayble-focus-scroll .dayble-event.min15 .dayble-event-icon {
+.dayble-focus-scroll .dayble-event.min15 .dayble-event-icon,
+.dayble-focus-scroll .dayble-event.min5 .dayble-event-icon,
+.dayble-focus-scroll .dayble-event.min10 .dayble-event-icon {
     margin: 0 !important;
     padding: 0 !important;
     align-self: center !important;
@@ -3431,6 +3490,12 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     justify-content: center !important;
     width: 14px !important; /* Reset to 14px as requested earlier */
     height: 14px !important;
+}
+
+.dayble-focus-scroll .dayble-event.min5 .dayble-event-icon,
+.dayble-focus-scroll .dayble-event.min10 .dayble-event-icon {
+    width: 12px !important;
+    height: 12px !important;
 }
 
 .dayble-focus-scroll .dayble-event.min15 .dayble-event-icon svg {

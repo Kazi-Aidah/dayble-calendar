@@ -67,6 +67,7 @@ interface DaybleSettings {
     soundNextEvent?: string;
     soundMarkCompleteName?: string;
     soundNextEventName?: string;
+    enableFiveMinIntervals?: boolean;
 } 
 
 const DEFAULT_SETTINGS: DaybleSettings = {
@@ -116,11 +117,12 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     threeDayDateFormat: 'ddd D',
     agendaTitleFormat: 'MMMM YYYY',
     agendaDateFormat: 'dddd, D MMMM',
-    dimPastEvents: 0.60,
+    dimPastEvents: 0.75,
     soundMarkComplete: '',
     soundNextEvent: '',
     soundMarkCompleteName: '',
     soundNextEventName: '',
+    enableFiveMinIntervals: true,
     swatches: [
         // { name: 'Red', color: '#eb3b5a', textColor: '#f9c6d0' },
         // { name: 'Orange', color: '#fa8231', textColor: '#fed8be' },
@@ -3091,9 +3093,11 @@ class DaybleCalendarView extends ItemView {
         let titleAlign = eventSettings.titleAlign || globalSettings.eventTitleAlign || 'center';
         let descAlign = eventSettings.descAlign || globalSettings.eventDescAlign || 'center';
 
-        // Agenda override: Force center if globally set to center-left
-        if (isAgenda && titleAlign === 'center-left') titleAlign = 'center';
-        if (isAgenda && descAlign === 'center-left') descAlign = 'center';
+        // Agenda override: Force center ALWAYS
+        if (isAgenda) {
+            titleAlign = 'center';
+            descAlign = 'center';
+        }
 
         // FORCE LEFT for all-day sections (except in agenda mode)
         if (isAllDaySection && !isAgenda) {
@@ -4918,6 +4922,9 @@ class TodayModal extends Modal {
         // Container for grids
         const gridContainer = scroller.createDiv({ cls: 'dayble-focus-grid-container' });
         this.gridContainer = gridContainer;
+        if (this.view?.plugin.settings.enableFiveMinIntervals) {
+            gridContainer.addClass('dayble-5min-mode');
+        }
 
         if (this.view?.plugin.settings.showCurrentTimeLine ?? true) {
             if (this.currentTimeInterval) clearInterval(this.currentTimeInterval);
@@ -4944,6 +4951,7 @@ class TodayModal extends Modal {
         
         const overlay = gridContainer.createDiv({ cls: 'dayble-focus-overlay' });
         this.overlay = overlay;
+        const selectionMirrorContainer = gridContainer.createDiv({ cls: 'dayble-focus-selection-mirror-container' });
         let dropIndicator: HTMLElement | null = null;
         let selectionMirror: HTMLElement | null = null;
         
@@ -4951,7 +4959,7 @@ class TodayModal extends Modal {
             const morningRect = morningGrid.getBoundingClientRect();
             const afternoonRect = afternoonGrid.getBoundingClientRect();
             
-            const isAfternoon = !isMulti && split && (clientX > (morningRect.right + afternoonRect.left) / 2);
+            const isAfternoon = !isMulti && split && (clientX > (morningRect.right + (afternoonRect.left - morningRect.right) / 2));
             const targetGrid = isAfternoon ? afternoonGrid : morningGrid;
             const targetRect = targetGrid.getBoundingClientRect();
             
@@ -4960,7 +4968,10 @@ class TodayModal extends Modal {
 
             const firstCellRect = cells[0].getBoundingClientRect();
             const pxPer30 = firstCellRect.height;
-            const pxPer15 = pxPer30 / 2;
+            const enable5 = this.view?.plugin?.settings?.enableFiveMinIntervals;
+            const stepsPerRow = enable5 ? 6 : 2;
+            const pxPerStep = pxPer30 / stepsPerRow;
+            const stepMin = enable5 ? 5 : 15;
 
             let targetCell: HTMLElement | null = null;
             let slotIdx = -1;
@@ -4994,17 +5005,18 @@ class TodayModal extends Modal {
 
             const targetCellRect = targetCell.getBoundingClientRect();
             const relYInCell = clientY - targetCellRect.top;
-            const isSecondHalf = relYInCell > pxPer15;
+            const stepInCell = Math.floor(relYInCell / pxPerStep);
             
             const startHour = 0;
             const baseIdx = (split && !isMulti && isAfternoon) ? 24 : startHour;
-            const n = (slotIdx - baseIdx) * 2 + (isSecondHalf ? 1 : 0);
+            const n = (slotIdx - baseIdx) * stepsPerRow + stepInCell;
 
             return {
                 slotIdx,
                 dayIdx,
-                isSecondHalf,
-                pxPer15,
+                stepInCell,
+                pxPerStep,
+                stepMin,
                 isAfternoon,
                 targetRect,
                 targetCell,
@@ -5037,32 +5049,38 @@ class TodayModal extends Modal {
             if (sel.active && typeof sel.start15 === 'number' && typeof sel.end15 === 'number' && typeof sel.startDayIdx === 'number' && typeof sel.endDayIdx === 'number') {
                 const s15 = Math.min(sel.start15, sel.end15);
                 const e15 = Math.max(sel.start15, sel.end15);
-                const dIdx = sel.endDayIdx; // Use the current day index for visual highlight
+                const dIdx = sel.endDayIdx; 
 
-                // Visual Highlight on cells (min15 precision)
-                for (let i = s15; i <= e15; i++) {
-                    const slotIdx = Math.floor(i / 2);
-                    const cell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${slotIdx}"][data-day="${dIdx}"]`) as HTMLElement;
-                    if (cell) {
-                        if (i % 2 === 0) cell.addClass('sel-top');
-                        else cell.addClass('sel-bottom');
+                const enable5 = this.view?.plugin?.settings?.enableFiveMinIntervals;
+                const stepsPerRow = enable5 ? 6 : 2;
+                const stepMin = enable5 ? 5 : 15;
+
+                // Visual Highlight on cells (if not 5-min mode, we can still use classes)
+                if (!enable5) {
+                    for (let i = s15; i <= e15; i++) {
+                        const slotIdx = Math.floor(i / stepsPerRow);
+                        const cell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${slotIdx}"][data-day="${dIdx}"]`) as HTMLElement;
+                        if (cell) {
+                            if (i % 2 === 0) cell.addClass('sel-top');
+                            else cell.addClass('sel-bottom');
+                        }
                     }
                 }
 
                 if (selectionMirror) { selectionMirror.remove(); selectionMirror = null; }
                 selectionMirror = document.createElement('div');
-                selectionMirror.className = 'dayble-focus-selection-mirror-container';
-                overlay.appendChild(selectionMirror);
+                selectionMirror.className = 'dayble-focus-selection-mirror';
+                selectionMirrorContainer.appendChild(selectionMirror);
 
-                const renderMirrorSegment = (start15: number, end15: number, type: 'full'|'start'|'end') => {
-                    const startSlotIdx = Math.floor(start15 / 2);
+                const renderMirrorSegment = (startN: number, endN: number, type: 'full'|'start'|'end') => {
+                    const startSlotIdx = Math.floor(startN / stepsPerRow);
                     const startCell = gridContainer.querySelector(`.dayble-focus-cell[data-idx="${startSlotIdx}"][data-day="${dIdx}"]`) as HTMLElement;
                     if (!startCell) return;
 
                     const gRect = gridContainer.getBoundingClientRect();
                     const sRect = startCell.getBoundingClientRect();
                     const rowHeight = startCell.offsetHeight || 60;
-                    const pxPer15 = rowHeight / 2;
+                    const pxPerStep = rowHeight / stepsPerRow;
 
                     const segment = document.createElement('div');
                     segment.className = 'dayble-focus-event-abs dayble-focus-selection-mirror';
@@ -5071,9 +5089,9 @@ class TodayModal extends Modal {
                     selectionMirror?.appendChild(segment);
 
                     const left = sRect.left - gRect.left;
-                    const top = (sRect.top - gRect.top) + (start15 % 2 === 0 ? 0 : pxPer15);
+                    const top = (sRect.top - gRect.top) + (startN % stepsPerRow) * pxPerStep;
                     const width = startCell.offsetWidth;
-                    const height = Math.max(4, ((end15 - start15) + 1) * pxPer15);
+                    const height = Math.max(4, ((endN - startN) + 1) * pxPerStep);
                     
                     segment.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
                     segment.style.setProperty('--focus-item-top', `${Math.round(top)}px`);
@@ -5081,28 +5099,30 @@ class TodayModal extends Modal {
                     segment.style.setProperty('--focus-item-height', `${Math.round(height)}px`);
                 };
 
-                const boundary15 = 48; // 12:00 PM is at min15 index 48
-                if (split && s15 < boundary15 && e15 >= boundary15) {
-                    renderMirrorSegment(s15, boundary15 - 1, 'start');
-                    renderMirrorSegment(boundary15, e15, 'end');
+                const boundaryN = 12 * (60 / stepMin); 
+                if (split && s15 < boundaryN && e15 >= boundaryN) {
+                    renderMirrorSegment(s15, boundaryN - 1, 'start');
+                    renderMirrorSegment(boundaryN, e15, 'end');
                 } else {
                     renderMirrorSegment(s15, e15, 'full');
                 }
                 
                 if (selectionMirror) {
-                    // Show time range and duration in the container or segments
-                    const sTotal = s15 * 15;
-                    const eTotal = (e15 + 1) * 15;
+                    const sTotal = s15 * stepMin;
+                    const eTotal = (e15 + 1) * stepMin;
                     const sh_m = Math.floor(sTotal / 60);
                     const sm_m = sTotal % 60;
                     const eh_m = Math.floor(eTotal / 60);
                     const em_m = eTotal % 60;
                     const formatHM = (h: number, m: number) => {
-                        const ampm = h >= 12 ? 'pm' : 'am';
-                        return `${h % 12 || 12}:${m.toString().padStart(2, '0')}${ampm}`;
+                        const fmt = this.view?.plugin?.settings?.timeFormat ?? 'system';
+                        const isPM = h >= 12;
+                        const h12 = h % 12 || 12;
+                        if (fmt === '24h') return `${pad(h)}:${pad(m)}`;
+                        return `${h12}:${pad(m)}${isPM?'pm':'am'}`;
                     };
 
-                    const durationTotalMin = (e15 - s15 + 1) * 15;
+                    const durationTotalMin = (e15 - s15 + 1) * stepMin;
                     let durationText = '';
                     if (durationTotalMin < 60) {
                         durationText = `${durationTotalMin} mins`;
@@ -5116,12 +5136,22 @@ class TodayModal extends Modal {
                         }
                     }
 
-                    // For now, just add text to the first segment
                     const firstSeg = selectionMirror.querySelector('.dayble-focus-selection-mirror') as HTMLElement;
                     if (firstSeg) {
                         const inner = firstSeg.createDiv({ cls: 'dayble-focus-event-inner' });
+                        const h = parseFloat(firstSeg.style.getPropertyValue('--focus-item-height') || '0');
+                        
+                        // Dynamic font size and content based on height
+                        if (h < 30) {
+                            inner.style.fontSize = '0.7em';
+                        } else if (h < 60) {
+                            inner.style.fontSize = '0.9em';
+                        }
+                        
                         inner.createDiv().setText(`${formatHM(sh_m, sm_m)} - ${formatHM(eh_m, em_m)}`);
-                        inner.createDiv({ cls: 'dayble-selection-duration' }).setText(durationText);
+                        if (h >= 40) {
+                            inner.createDiv({ cls: 'dayble-selection-duration' }).setText(durationText);
+                        }
                     }
                 }
             }
@@ -5132,8 +5162,11 @@ class TodayModal extends Modal {
             const sIdx15 = Math.min(sel.start15, sel.end15);
             const eIdx15 = Math.max(sel.start15, sel.end15);
             
-            const startTotalMin = sIdx15 * 15;
-            const endTotalMin = (eIdx15 + 1) * 15;
+            const enable5 = this.view?.plugin?.settings?.enableFiveMinIntervals;
+            const stepMin = enable5 ? 5 : 15;
+
+            const startTotalMin = sIdx15 * stepMin;
+            const endTotalMin = (eIdx15 + 1) * stepMin;
             
             let sh = Math.floor(startTotalMin / 60);
             let sm = startTotalMin % 60;
@@ -5167,6 +5200,10 @@ class TodayModal extends Modal {
             window.removeEventListener('mouseup', onGlobalMouseUp);
         };
 
+        const enable5 = this.view?.plugin?.settings?.enableFiveMinIntervals;
+        const stepsPerRow = enable5 ? 6 : 2;
+        const stepMin = enable5 ? 5 : 15;
+
         slots.forEach((slot, idx) => {
             const targetGrid = (!isMulti && split && slot.hour >= 12) ? afternoonGrid : morningGrid;
             const row = targetGrid.createDiv({ cls: 'dayble-focus-row' });
@@ -5182,7 +5219,11 @@ class TodayModal extends Modal {
                 
                 sel.active = true; 
                 gridContainer.addClass('dayble-selecting');
-                sel.start15 = idx * 2; 
+                
+                const rect = time.getBoundingClientRect();
+                const relY = e.clientY - rect.top;
+                const step = Math.floor(relY / (rect.height / stepsPerRow));
+                sel.start15 = idx * stepsPerRow + step; 
                 sel.end15 = sel.start15;
                 sel.startDayIdx = 0;
                 sel.endDayIdx = 0;
@@ -5191,12 +5232,17 @@ class TodayModal extends Modal {
                 applySelection();
                 window.addEventListener('mouseup', onGlobalMouseUp);
             };
-            time.onmouseover = (e) => {
-                if (!sel.active) return;
+            time.onmousemove = (e) => {
+                if (!sel.active) {
+                    return;
+                }
                 e.preventDefault();
                 e.stopPropagation();
                 
-                sel.end15 = idx * 2;
+                const rect = time.getBoundingClientRect();
+                const relY = e.clientY - rect.top;
+                const step = Math.floor(relY / (rect.height / stepsPerRow));
+                sel.end15 = idx * stepsPerRow + step;
                 sel.endDayIdx = 0;
                 
                 clearSelection(false); 
@@ -5215,7 +5261,8 @@ class TodayModal extends Modal {
                     
                     sel.active = true; 
                     gridContainer.addClass('dayble-selecting');
-                    sel.start15 = info.isAfternoon ? (24*2 + (info.n % 48)) : info.n;
+                    const boundaryIdx = 24; 
+                    sel.start15 = info.isAfternoon ? (boundaryIdx * stepsPerRow + (info.n % (boundaryIdx * stepsPerRow))) : info.n;
                     sel.end15 = sel.start15;
                     sel.startDayIdx = info.dayIdx;
                     sel.endDayIdx = info.dayIdx;
@@ -5230,7 +5277,8 @@ class TodayModal extends Modal {
                     const info = getSlotInfo(e.clientX, e.clientY);
                     if (!info) return;
 
-                    sel.end15 = info.isAfternoon ? (24*2 + (info.n % 48)) : info.n;
+                    const boundaryIdx = 24; 
+                    sel.end15 = info.isAfternoon ? (boundaryIdx * stepsPerRow + (info.n % (boundaryIdx * stepsPerRow))) : info.n;
                     sel.endDayIdx = info.dayIdx;
                     
                     clearSelection(false); 
@@ -5247,7 +5295,8 @@ class TodayModal extends Modal {
             const info = getSlotInfo(e.clientX, e.clientY);
             if (!info) return;
 
-            const currentN = info.isAfternoon ? (24*2 + (info.n % 48)) : info.n;
+            const boundaryIdx = 24; 
+            const currentN = info.isAfternoon ? (boundaryIdx * stepsPerRow + (info.n % (boundaryIdx * stepsPerRow))) : info.n;
             
             // If the time label interaction was used, info.n is already adjusted
             // but for safety we recalculate sel.end15 whenever mouse moves
@@ -5266,21 +5315,26 @@ class TodayModal extends Modal {
         if (cells.length > 0) {
             const gRect = gridContainer.getBoundingClientRect();
             const rowHeight = cells[0].offsetHeight || 60;
-            const pxPer15 = rowHeight / 2;
+            const pxPerStep = rowHeight / stepsPerRow;
             
             // Draw lines for columns
             const grids = split && !isMulti ? [morningGrid, afternoonGrid] : [morningGrid];
             grids.forEach(grid => {
                 const gridRect = grid.getBoundingClientRect();
                 const numSlots = slots.length;
-                const intervals = numSlots * 2;
+                const intervals = numSlots * stepsPerRow;
                 for (let i = 1; i < intervals; i++) {
                     const line = quarter.createDiv({ cls: 'dayble-quarter-line' });
                     line.setCssProps({
                         'left': `${gridRect.left - gRect.left}px`,
                         'width': `${gridRect.width}px`
                     });
-                    line.style.setProperty('--quarter-line-top', `${Math.round((gridRect.top - gRect.top) + i * pxPer15)}px`);
+                    line.style.setProperty('--quarter-line-top', `${Math.round((gridRect.top - gRect.top) + i * pxPerStep)}px`);
+                    if (enable5) {
+                        if (i % stepsPerRow === 0) line.style.opacity = '0.3'; // 30-min marks
+                        else if (i % (stepsPerRow / 2) === 0) line.style.opacity = '0.15'; // 15-min marks
+                        else line.style.opacity = '0.05'; // 5-min marks
+                    }
                 }
             });
         }
@@ -5326,10 +5380,10 @@ class TodayModal extends Modal {
             
             // Calculate relative to gridContainer, accounting for scroll
             const left = targetCellRect.left - gRect.left;
-            const topLocal = (targetCellRect.top - gRect.top) + (info.isSecondHalf ? info.pxPer15 : 0);
+            const topLocal = (targetCellRect.top - gRect.top) + (info.stepInCell * info.pxPerStep);
             
             const width = info.targetCell.offsetWidth;
-            const heightLocal = Math.max(4, Math.round((durationMin / 15) * info.pxPer15));
+            const heightLocal = Math.max(4, Math.round((durationMin / info.stepMin) * info.pxPerStep));
             
             // Visual follow for the dragged element
             if (this.dragEl) {
@@ -5378,7 +5432,7 @@ class TodayModal extends Modal {
                 const gRect = gridContainer.getBoundingClientRect();
                 const targetCellRect = info.targetCell.getBoundingClientRect();
                 const left = targetCellRect.left - gRect.left;
-                const topLocal = (targetCellRect.top - gRect.top) + (info.isSecondHalf ? info.pxPer15 : 0);
+                const topLocal = (targetCellRect.top - gRect.top) + (info.stepInCell * info.pxPerStep);
                 
                 el.removeClass('dragging');
                 el.addClass('settling');
@@ -5391,8 +5445,7 @@ class TodayModal extends Modal {
             const targetDate = dates[info.dayIdx] || dates[0];
 
             const startHour = 0;
-            const baseMin = (!Array.isArray(this.date) && split && info.isAfternoon) ? 12 * 60 : startHour * 60;
-            const startTotalMin = baseMin + (info.n * 15);
+            const startTotalMin = info.n * info.stepMin;
             
             const newH = Math.floor(startTotalMin / 60);
             const newM = startTotalMin % 60;
@@ -5492,10 +5545,13 @@ class TodayModal extends Modal {
         if (containerRect.width === 0 || cellRect.width === 0) return;
         
         const rowHeight = cell.offsetHeight || 60;
-        const pxPer15 = rowHeight / 2;
+        const enable5 = this.view?.plugin?.settings?.enableFiveMinIntervals;
+        const stepMin = enable5 ? 5 : 15;
+        const stepsPerRow = enable5 ? 6 : 2;
+        const pxPerStep = rowHeight / stepsPerRow;
         const withinMin = (mm % 30);
         
-        const top = (cellRect.top - containerRect.top) + (withinMin / 15) * pxPer15;
+        const top = (cellRect.top - containerRect.top) + (withinMin / stepMin) * pxPerStep;
         
         const line = gridContainer.createDiv({ cls: 'dayble-current-time-line' });
         line.style.top = `${Math.round(top)}px`;
@@ -5564,10 +5620,13 @@ class TodayModal extends Modal {
         if (containerRect.width === 0 || cellRect.width === 0) return;
         
         const rowHeight = cell.offsetHeight || 60;
-        const pxPer15 = rowHeight / 2;
+        const enable5 = this.view?.plugin?.settings?.enableFiveMinIntervals;
+        const stepMin = enable5 ? 5 : 15;
+        const stepsPerRow = enable5 ? 6 : 2;
+        const pxPerStep = rowHeight / stepsPerRow;
         const withinMin = (mm % 30);
         
-        const top = (cellRect.top - containerRect.top) + (withinMin / 15) * pxPer15;
+        const top = (cellRect.top - containerRect.top) + (withinMin / stepMin) * pxPerStep;
         
         // Scroll so the current time is at the center of the scroller
         const scrollerHeight = this.scroller.offsetHeight;
@@ -5695,12 +5754,15 @@ class TodayModal extends Modal {
                         const gRect = gridContainer.getBoundingClientRect();
                         
                         const rowHeight = startCell.offsetHeight || 60; 
-                        const pxPer15 = rowHeight / 2;
+                        const enable5 = this.view?.plugin?.settings?.enableFiveMinIntervals;
+                        const stepMin = enable5 ? 5 : 15;
+                        const stepsPerRow = enable5 ? 6 : 2;
+                        const pxPerStep = rowHeight / stepsPerRow;
                         const withinMin = (sm % 30);
                         
-                        const top = (sRect.top - gRect.top) + (withinMin / 15) * pxPer15;
+                        const top = (sRect.top - gRect.top) + (withinMin / stepMin) * pxPerStep;
                         const durationMin = effectiveEMin - sMin;
-                        const height = Math.max(4, Math.round((durationMin / 15) * pxPer15));
+                        const height = Math.max(4, Math.round((durationMin / stepMin) * pxPerStep));
 
                         // Calculate width and left based on columns within the cell area
                         const fullWidth = startCell.offsetWidth;
@@ -5744,6 +5806,11 @@ class TodayModal extends Modal {
                         } else {
                             item.removeClass('dayble-event-compact');
                             item.addClass('dayble-layout-center-flex');
+                        }
+
+                        if (durationMin <= 15) {
+                            item.addClass('min15');
+                            if (durationMin <= 5) item.addClass('min5');
                         }
 
                         if (durationMin === 30 && ev.description) {
@@ -5795,6 +5862,11 @@ class TodayModal extends Modal {
                             
                             item.addClass('resizing');
                             
+                            const enable5 = this.view?.plugin?.settings?.enableFiveMinIntervals;
+                            const stepsPerRow = enable5 ? 6 : 2;
+                            const pxPerStep = rowHeight / stepsPerRow;
+                            const stepMin = enable5 ? 5 : 15;
+
                             const onMove = (moveEvent: MouseEvent) => {
                                 const deltaY = moveEvent.clientY - initialY;
                                 let newTop = initialTop;
@@ -5807,14 +5879,14 @@ class TodayModal extends Modal {
                                     newHeight = initialHeight + deltaY;
                                 }
 
-                                // Snapping to 15-min increments
-                                const snappedTop = Math.round(newTop / pxPer15) * pxPer15;
-                                const snappedHeight = Math.max(pxPer15, Math.round(newHeight / pxPer15) * pxPer15);
+                                // Snapping to intervals
+                                const snappedTop = Math.round(newTop / pxPerStep) * pxPerStep;
+                                const snappedHeight = Math.max(pxPerStep, Math.round(newHeight / pxPerStep) * pxPerStep);
                                 
                                 if (edge === 'top') {
                                     const actualNewTop = snappedTop;
                                     const actualNewHeight = initialHeight - (snappedTop - initialTop);
-                                    if (actualNewHeight >= pxPer15) {
+                                    if (actualNewHeight >= pxPerStep) {
                                         item.style.setProperty('--focus-item-top', `${Math.round(actualNewTop)}px`);
                                         item.style.setProperty('--focus-item-height', `${Math.round(actualNewHeight)}px`);
                                     }
@@ -5836,13 +5908,13 @@ class TodayModal extends Modal {
                                 let newEndTotal = endTotal;
 
                                 if (edge === 'top') {
-                                    let segmentStartMins = Math.round(finalTop / pxPer15) * 15;
+                                    let segmentStartMins = Math.round(finalTop / pxPerStep) * stepMin;
                                     if (!isMulti && split && sMin >= boundary) {
                                         segmentStartMins += boundary;
                                     }
                                     newStartTotal = segmentStartMins;
                                 } else {
-                                    let segmentEndMins = Math.round((finalTop + finalHeight) / pxPer15) * 15;
+                                    let segmentEndMins = Math.round((finalTop + finalHeight) / pxPerStep) * stepMin;
                                     if (!isMulti && split && sMin >= boundary) {
                                         segmentEndMins += boundary;
                                     }
@@ -5850,8 +5922,8 @@ class TodayModal extends Modal {
                                 }
 
                                 if (newStartTotal >= newEndTotal) {
-                                    if (edge === 'top') newStartTotal = newEndTotal - 15;
-                                    else newEndTotal = newStartTotal + 15;
+                                    if (edge === 'top') newStartTotal = newEndTotal - stepMin;
+                                    else newEndTotal = newStartTotal + stepMin;
                                 }
 
             const formatTime = (h: number, m: number) => `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
@@ -6238,6 +6310,19 @@ class DaybleSettingTab extends PluginSettingTab {
                             const view = this.plugin.getCalendarView();
                             await view?.render();
                         });
+                    });
+            });
+
+        new Setting(containerEl)
+            .setName('Enable 5 minute intervals')
+            .setDesc('Use 5-minute intervals in the Day and 3-Day views instead of 15-minute intervals.')
+            .addToggle(t => {
+                t.setValue(this.plugin.settings.enableFiveMinIntervals ?? true)
+                    .onChange(async v => {
+                        this.plugin.settings.enableFiveMinIntervals = v;
+                        await this.plugin.saveSettings();
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
                     });
             });
 
