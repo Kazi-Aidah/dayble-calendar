@@ -115,47 +115,57 @@
 
 @media (max-width: 700px) {
     .dayble-header {
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-        padding: 12px;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        padding: 12px 16px !important;
     }
-    .dayble-nav-row {
-        width: 100%;
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-    }
+    
     .dayble-month-title {
-        position: static;
-        left: auto;
-        transform: none;
-        order: -1;
-        margin-top: 8px;
-        margin-bottom: 2px;
-        white-space: normal;
-    }
-    .dayble-header-buttons {
-        width: 100%;
-        display: flex;
-        flex-wrap: nowrap;
-        align-items: center;
-        justify-content: flex-start;
-        gap: 8px;
-        order: 0;
+        position: static !important;
+        left: auto !important;
+        transform: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        text-align: center !important;
+        width: 100% !important;
+        font-size: 1.4em !important;
+        order: 1 !important;
     }
 
+    .dayble-nav-row {
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 8px !important;
+        order: 2 !important;
+    }
+    
     .dayble-nav-left, .dayble-nav-right {
-        gap: 0;
-        padding: 0;
-        margin: 0;
+        display: flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        flex: 1 !important;
+    }
+    
+    .dayble-nav-right {
+        justify-content: flex-end !important;
+    }
+    
+    .dayble-nav-left {
+        justify-content: flex-start !important;
     }
 
-    .dayble-nav-left button, .dayble-nav-right button {
-        padding: 8px;
+    .dayble-header-buttons {
+        padding: 6px !important;
+    }
+    
+    .dayble-view-select {
+        width: 65px !important;
+        margin-right: 2px !important;
     }
 }
 
@@ -228,9 +238,36 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
     width: 100%;
+    position: relative;
+}
+
+.dayble-calendar.dayble-month-mode,
+.dayble-calendar.dayble-week-mode {
+    overflow-x: auto;
+}
+
+.dayble-calendar.dayble-day-mode,
+.dayble-calendar.dayble-3day-mode,
+.dayble-calendar.dayble-agenda-mode {
+    overflow-x: hidden;
+}
+
+.dayble-calendar.dayble-day-mode .dayble-grid,
+.dayble-calendar.dayble-3day-mode .dayble-grid,
+.dayble-calendar.dayble-agenda-mode .dayble-grid {
+    display: block !important;
+    width: 100%;
+    min-width: 0;
+}
+
+.dayble-day-mode-container,
+.dayble-3day-container,
+.dayble-agenda-container {
+    width: 100%;
+    min-width: 0;
 }
 
 .dayble-holder {
@@ -359,34 +396,39 @@
     top: 0;
     background: var(--background-primary);
     z-index: 100;
-    width: 100%;
+    width: fit-content;
+    min-width: 100%;
 }
 
 .dayble-grid {
     flex: 1 1 auto !important;
     position: relative;
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(7, minmax(var(--dayble-cell-min-width, 0px), 1fr));
     gap: 6px;
     padding: 8px;
     background: var(--background-primary);
     margin-top: -6px;
-    overflow-y: scroll !important;
-    overflow-x: scroll !important;
-    width: 100%;
+    overflow: visible !important;
+    width: fit-content;
+    min-width: 100%;
 }
 
 .dayble-grid.dayble-day-mode,
 .dayble-grid.dayble-day-mode {
     padding-bottom: 0 !important;
     margin-bottom: 0 !important;
+    width: 100%;
+    min-width: 0;
 }
 
 .dayble-grid-header {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(7, minmax(var(--dayble-cell-min-width, 0px), 1fr));
     gap: 6px;
     padding: 8px;
+    width: fit-content;
+    min-width: 100%;
 }
 
 .dayble-grid-header-cell {
@@ -1874,6 +1916,48 @@ input[type="time"]::-webkit-calendar-picker-indicator {
         background-position: 0 200px;
     }
 }
+
+/* ===== CAPTURE MODE ===== */
+.dayble-capturing {
+    height: auto !important;
+    width: auto !important;
+    min-width: fit-content !important;
+    overflow: visible !important;
+}
+
+.dayble-capturing.dayble-root,
+.dayble-capturing .dayble-body,
+.dayble-capturing .dayble-calendar,
+.dayble-capturing .dayble-grid,
+.dayble-capturing .dayble-weekdays,
+.dayble-capturing .dayble-grid-header,
+.dayble-capturing .dayble-3day-header,
+.dayble-capturing .dayble-3day-all-day-section,
+.dayble-capturing .dayble-holder-list,
+.dayble-capturing .dayble-weekly-notes-textarea,
+.dayble-capturing .dayble-focus-scroll,
+.dayble-capturing .dayble-agenda-container,
+.dayble-capturing .dayble-3day-container,
+.dayble-capturing .dayble-scroll-y {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    flex: none !important;
+}
+
+.dayble-capturing.dayble-root {
+    width: fit-content !important;
+}
+
+.dayble-capturing * {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+}
+
+.dayble-capturing *::-webkit-scrollbar {
+    display: none !important;
+}
+
 .dayble-anim-stars {
     position: relative;
     overflow: hidden;
@@ -1885,21 +1969,21 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     inset: -10%;
     pointer-events: none;
     background-image:
-        radial-gradient(circle at 5% 10%, currentColor 1px, transparent 2.5px),
-        radial-gradient(circle at 15% 30%, currentColor 1.4px, transparent 3px),
-        radial-gradient(circle at 25% 70%, currentColor 0.9px, transparent 2px),
-        radial-gradient(circle at 35% 50%, currentColor 1.8px, transparent 3.5px),
-        radial-gradient(circle at 45% 20%, currentColor 1.2px, transparent 2.8px),
-        radial-gradient(circle at 55% 80%, currentColor 1.6px, transparent 3.2px),
-        radial-gradient(circle at 65% 40%, currentColor 1px, transparent 2.5px),
-        radial-gradient(circle at 75% 60%, currentColor 1.9px, transparent 3.8px),
-        radial-gradient(circle at 85% 25%, currentColor 1.3px, transparent 3px),
-        radial-gradient(circle at 95% 75%, currentColor 1.5px, transparent 3px),
-        radial-gradient(circle at 20% 5%, currentColor 1.1px, transparent 2.5px),
-        radial-gradient(circle at 40% 95%, currentColor 1.7px, transparent 3.4px),
-        radial-gradient(circle at 60% 8%, currentColor 1.2px, transparent 2.8px),
-        radial-gradient(circle at 80% 92%, currentColor 1.4px, transparent 3px);
-    background-size: 160px 160px;
+        radial-gradient(circle at 5% 10%, currentColor 0.6px, transparent 1.8px),
+        radial-gradient(circle at 15% 30%, currentColor 0.8px, transparent 2px),
+        radial-gradient(circle at 25% 70%, currentColor 0.55px, transparent 1.6px),
+        radial-gradient(circle at 35% 50%, currentColor 0.9px, transparent 2.2px),
+        radial-gradient(circle at 45% 20%, currentColor 0.7px, transparent 1.9px),
+        radial-gradient(circle at 55% 80%, currentColor 0.85px, transparent 2.1px),
+        radial-gradient(circle at 65% 40%, currentColor 0.6px, transparent 1.8px),
+        radial-gradient(circle at 75% 60%, currentColor 1.0px, transparent 2.4px),
+        radial-gradient(circle at 85% 25%, currentColor 0.75px, transparent 2px),
+        radial-gradient(circle at 95% 75%, currentColor 0.8px, transparent 2.1px),
+        radial-gradient(circle at 20% 5%, currentColor 0.65px, transparent 1.8px),
+        radial-gradient(circle at 40% 95%, currentColor 0.95px, transparent 2.3px),
+        radial-gradient(circle at 60% 8%, currentColor 0.7px, transparent 1.9px),
+        radial-gradient(circle at 80% 92%, currentColor 0.8px, transparent 2px);
+    background-size: 140px 140px;
     background-repeat: repeat;
     animation: stars-twinkle-1 6s ease-in-out infinite alternate,
                stars-drift-1 80s linear infinite;
@@ -1913,17 +1997,17 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     inset: -10%;
     pointer-events: none;
     background-image:
-        radial-gradient(circle at 8% 2%, currentColor 2px, transparent 4px),
-        radial-gradient(circle at 18% 98%, currentColor 1.6px, transparent 3.2px),
-        radial-gradient(circle at 28% 12%, currentColor 1.3px, transparent 2.8px),
-        radial-gradient(circle at 38% 88%, currentColor 2.2px, transparent 4.2px),
-        radial-gradient(circle at 48% 6%, currentColor 1.5px, transparent 3px),
-        radial-gradient(circle at 58% 94%, currentColor 1.9px, transparent 3.8px),
-        radial-gradient(circle at 68% 18%, currentColor 1.4px, transparent 3px),
-        radial-gradient(circle at 78% 82%, currentColor 2.1px, transparent 4px),
-        radial-gradient(circle at 88% 10%, currentColor 1.7px, transparent 3.5px),
-        radial-gradient(circle at 98% 90%, currentColor 1.2px, transparent 2.6px);
-    background-size: 140px 140px;
+        radial-gradient(circle at 8% 2%, currentColor 1.0px, transparent 2.4px),
+        radial-gradient(circle at 18% 98%, currentColor 0.85px, transparent 2.1px),
+        radial-gradient(circle at 28% 12%, currentColor 0.7px, transparent 1.9px),
+        radial-gradient(circle at 38% 88%, currentColor 1.1px, transparent 2.6px),
+        radial-gradient(circle at 48% 6%, currentColor 0.8px, transparent 2.0px),
+        radial-gradient(circle at 58% 94%, currentColor 0.95px, transparent 2.3px),
+        radial-gradient(circle at 68% 18%, currentColor 0.75px, transparent 2.0px),
+        radial-gradient(circle at 78% 82%, currentColor 1.05px, transparent 2.5px),
+        radial-gradient(circle at 88% 10%, currentColor 0.9px, transparent 2.2px),
+        radial-gradient(circle at 98% 90%, currentColor 0.65px, transparent 1.8px);
+    background-size: 120px 120px;
     background-repeat: repeat;
     animation: stars-twinkle-2 8s ease-in-out infinite alternate,
                stars-drift-2 110s linear infinite;
@@ -1959,7 +2043,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
         background-position: 0 0;
     }
     100% {
-        background-position: 0 160px;
+        background-position: 0 140px;
     }
 }
 
@@ -1968,7 +2052,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
         background-position: 0 0;
     }
     100% {
-        background-position: 0 -140px;
+        background-position: 0 -120px;
     }
 }
 

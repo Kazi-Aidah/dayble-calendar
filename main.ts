@@ -1,4 +1,5 @@
-import { App, ItemView, Modal, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, setIcon, Menu, TFile, FuzzySuggestModal, TFolder, Vault, DataAdapter, setTooltip, getIconIds, moment, requestUrl, Component, MarkdownRenderer } from 'obsidian';
+import { App, ItemView, Modal, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, setIcon, Menu, TFile, FuzzySuggestModal, TFolder, Vault, DataAdapter, setTooltip, getIconIds, moment, requestUrl, Component, MarkdownRenderer, normalizePath } from 'obsidian';
+import * as htmlToImage from 'html-to-image';
 
 const VIEW_TYPE = 'dayble-calendar-view';
 
@@ -51,6 +52,8 @@ interface DaybleSettings {
     tooltipEnabled?: boolean;
     showCopyTextOption?: boolean;
     showCopyCalendarIcon?: boolean;
+    showSaveImageIcon?: boolean;
+    saveImageFolder?: string;
     onlyShowPinnedEventsMonth?: boolean;
     onlyShowPinnedEventsWeek?: boolean;
     onlyShowPinnedEventsAgenda?: boolean;
@@ -106,6 +109,8 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     tooltipEnabled: true,
     showCopyTextOption: false,
     showCopyCalendarIcon: false,
+    showSaveImageIcon: false,
+    saveImageFolder: '',
     onlyShowPinnedEventsMonth: false,
     onlyShowPinnedEventsWeek: false,
     onlyShowPinnedEventsAgenda: false,
@@ -635,6 +640,7 @@ class DaybleCalendarView extends ItemView {
     _dayMode3ROs?: ResizeObserver[];
     viewSelectEl: HTMLSelectElement;
     copyBtn?: HTMLButtonElement;
+    saveImageBtn?: HTMLButtonElement;
     saveTimeout: any;
     isResizingWeeklyNotes = false;
     weeklyNotesResizeStartY = 0;
@@ -751,6 +757,7 @@ class DaybleCalendarView extends ItemView {
             this.rootEl.style.removeProperty('--dayble-cell-min-width');
         }
         this.headerEl = this.rootEl.createDiv({ cls: 'dayble-header' });
+        
         const left = this.headerEl.createDiv({ cls: 'dayble-nav-left' });
         const holderToggle = document.createElement('button');
         holderToggle.className = 'dayble-btn dayble-header-buttons dayble-holder-toggle';
@@ -848,30 +855,52 @@ class DaybleCalendarView extends ItemView {
         setIcon(copyBtn, 'copy');
         copyBtn.onclick = () => { void this.copyCalendarAsMarkdown(); };
         this.copyBtn = copyBtn;
+
+        const saveImageBtn = document.createElement('button');
+        saveImageBtn.className = 'dayble-btn dayble-header-buttons dayble-save-image-toggle';
+        setIcon(saveImageBtn, 'image');
+        saveImageBtn.onclick = () => { void this.saveCalendarAsImage(); };
+        this.saveImageBtn = saveImageBtn;
         
         right.appendChild(viewSelect);
         right.appendChild(settingsBtn);
         right.appendChild(searchBtn);
         this.updateCopyCalendarButtonVisibility();
         if (placement === 'right') right.appendChild(holderToggle);
+        
         const navRow = document.createElement('div');
         navRow.className = 'dayble-nav-row';
+        
         const applyHeaderLayout = () => {
             const isMobile = window.innerWidth <= 700;
             if (isMobile) {
+                if (this.monthTitleEl.parentElement !== this.headerEl) {
+                    this.headerEl.appendChild(this.monthTitleEl);
+                }
+                if (navRow.parentElement !== this.headerEl) {
+                    this.headerEl.appendChild(navRow);
+                }
                 if (left.parentElement !== navRow) navRow.appendChild(left);
                 if (right.parentElement !== navRow) navRow.appendChild(right);
-                if (this.monthTitleEl.parentElement !== this.headerEl) this.headerEl.appendChild(this.monthTitleEl);
-                if (navRow.parentElement !== this.headerEl) this.headerEl.appendChild(navRow);
-                if (this.headerEl.firstChild !== this.monthTitleEl) this.headerEl.insertBefore(this.monthTitleEl, this.headerEl.firstChild);
+                
+                // Ensure title is at the top
+                if (this.headerEl.firstChild !== this.monthTitleEl) {
+                    this.headerEl.insertBefore(this.monthTitleEl, this.headerEl.firstChild);
+                }
             } else {
-                if (left.parentElement !== this.headerEl) this.headerEl.insertBefore(left, this.monthTitleEl);
-                if (right.parentElement !== this.headerEl) this.headerEl.appendChild(right);
+                if (left.parentElement !== this.headerEl) {
+                    this.headerEl.insertBefore(left, this.monthTitleEl);
+                }
+                if (right.parentElement !== this.headerEl) {
+                    this.headerEl.appendChild(right);
+                }
                 if (navRow.parentElement) navRow.remove();
             }
         };
+        
         applyHeaderLayout();
         this.plugin.registerDomEvent(window, 'resize', applyHeaderLayout);
+
         this.bodyEl = this.rootEl.createDiv({ cls: 'dayble-body' });
         if (placement === 'right') {
             this.bodyEl.addClass('dayble-holder-right');
@@ -954,6 +983,28 @@ class DaybleCalendarView extends ItemView {
         
         if (this.plugin.settings.holderOpen) this.holderEl.addClass('open'); else this.holderEl.removeClass('open');
         this.calendarEl = this.bodyEl.createDiv({ cls: 'dayble-calendar' });
+        
+        // Improve horizontal scrolling sensitivity
+        this.calendarEl.addEventListener('wheel', (e: WheelEvent) => {
+            if (e.deltaX !== 0) return; // Already horizontal
+            if (e.shiftKey) return; // Standard horizontal scroll
+            
+            const view = this.plugin.settings.calendarView;
+            // For Month/Week, we often prefer horizontal scroll if min-width is set
+            const isMostlyHorizontalView = view === 'Month' || view === 'Week';
+            
+            if (isMostlyHorizontalView) {
+                const isHorizontalPossible = this.calendarEl.scrollWidth > this.calendarEl.clientWidth;
+                const isVerticalPossible = this.calendarEl.scrollHeight > this.calendarEl.clientHeight;
+                
+                // If horizontal is possible and vertical is NOT, or if we want to prioritize horizontal
+                if (isHorizontalPossible && !isVerticalPossible) {
+                    this.calendarEl.scrollLeft += e.deltaY;
+                    e.preventDefault();
+                }
+            }
+        }, { passive: false });
+
         this.weekHeaderEl = this.calendarEl.createDiv({ cls: 'dayble-weekdays' });
         this.gridEl = this.calendarEl.createDiv({ cls: 'dayble-grid' });
         await this.loadAllEntries();
@@ -1251,27 +1302,29 @@ class DaybleCalendarView extends ItemView {
         const view = this.plugin.settings.calendarView || (this.plugin.settings.calendarWeekActive ? 'Week' : 'Month');
         if (this.viewSelectEl) this.viewSelectEl.value = view;
 
-        this.gridEl.removeClass('dayble-week-mode');
-        this.gridEl.removeClass('dayble-3day-mode');
-        this.gridEl.removeClass('dayble-day-mode');
-        this.gridEl.removeClass('dayble-agenda-mode');
-        this.gridEl.removeClass('dayble-month-mode');
+        const viewClasses = ['dayble-week-mode', 'dayble-3day-mode', 'dayble-day-mode', 'dayble-agenda-mode', 'dayble-month-mode'];
+        this.gridEl.removeClass(...viewClasses);
+        this.calendarEl.removeClass(...viewClasses);
 
         if (view === 'Week') {
             this.gridEl.addClass('dayble-week-mode');
-            this.gridEl.addClass('dayble-day-mode');
+            this.calendarEl.addClass('dayble-week-mode');
             await this.renderWeekView(titleEl);
         } else if (view === '3day') {
             this.gridEl.addClass('dayble-3day-mode');
+            this.calendarEl.addClass('dayble-3day-mode');
             await this.render3DayView(titleEl);
         } else if (view === 'Day') {
             this.gridEl.addClass('dayble-day-mode');
+            this.calendarEl.addClass('dayble-day-mode');
             await this.renderDayView(titleEl);
         } else if (view === 'Agenda') {
             this.gridEl.addClass('dayble-agenda-mode');
+            this.calendarEl.addClass('dayble-agenda-mode');
             await this.renderAgendaView(titleEl);
         } else {
             this.gridEl.addClass('dayble-month-mode');
+            this.calendarEl.addClass('dayble-month-mode');
             await this.renderMonthView(titleEl);
         }
 
@@ -2181,8 +2234,7 @@ class DaybleCalendarView extends ItemView {
             'display': 'flex',
             'flex-direction': 'column',
             'gap': '15px',
-            'padding': '15px',
-            'overflow-y': 'auto'
+            'padding': '15px'
         });
 
         const startOfMonth = moment(this.currentDate).startOf('month');
@@ -2264,15 +2316,119 @@ class DaybleCalendarView extends ItemView {
     }
 
     updateCopyCalendarButtonVisibility() {
-        if (!this.navRightEl || !this.copyBtn) return;
+        if (!this.navRightEl || !this.copyBtn || !this.saveImageBtn) return;
+        
+        const searchBtn = this.navRightEl.querySelector('.dayble-search-toggle');
+
         if (this.plugin.settings.showCopyCalendarIcon) {
             if (!this.copyBtn.parentElement) {
-                this.navRightEl.insertBefore(this.copyBtn, this.navRightEl.querySelector('.dayble-search-toggle') || null);
+                this.navRightEl.insertBefore(this.copyBtn, searchBtn || null);
             }
         } else {
             if (this.copyBtn.parentElement === this.navRightEl) {
                 this.navRightEl.removeChild(this.copyBtn);
             }
+        }
+
+        if (this.plugin.settings.showSaveImageIcon) {
+            if (!this.saveImageBtn.parentElement) {
+                this.navRightEl.insertBefore(this.saveImageBtn, searchBtn || null);
+            }
+        } else {
+            if (this.saveImageBtn.parentElement === this.navRightEl) {
+                this.navRightEl.removeChild(this.saveImageBtn);
+            }
+        }
+    }
+
+    async saveCalendarAsImage() {
+        const folderPath = this.plugin.settings.saveImageFolder || '';
+        const view = this.plugin.settings.calendarView || (this.plugin.settings.calendarWeekActive ? 'Week' : 'Month');
+        const fileName = `Dayble-Calendar-${view}-${moment().format('YYYY-MM-DD-HHmmss')}.png`;
+        const fullPath = normalizePath(folderPath ? `${folderPath}/${fileName}` : fileName);
+
+        // Find the calendar container to capture
+        const container = this.rootEl;
+        if (!container) {
+            new Notice('Calendar container not found');
+            return;
+        }
+
+        const notice = new Notice('Generating image...', 0);
+        try {
+            // Ensure folder exists
+            if (folderPath) {
+                const folder = this.app.vault.getAbstractFileByPath(folderPath);
+                if (!folder || !(folder instanceof TFolder)) {
+                    try {
+                        await this.app.vault.createFolder(folderPath);
+                    } catch (e) {
+                        // Folder might already exist or be invalid
+                    }
+                }
+            }
+
+            // Add capture class to expand everything and hide scrollbars
+            container.addClass('dayble-capturing');
+            
+            // Get dimensions after class is added to see how much it wants to expand
+            // but we'll cap the width to the current scrollWidth to prevent unnecessary stretching
+            const captureWidth = container.scrollWidth;
+            const captureHeight = container.scrollHeight;
+
+            // Wait for layout to update and styles to apply
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            // Use htmlToImage to convert to Blob
+            const blob = await htmlToImage.toBlob(container, {
+                backgroundColor: getComputedStyle(document.body).getPropertyValue('--background-primary'),
+                width: captureWidth,
+                height: captureHeight,
+                style: {
+                    color: getComputedStyle(document.body).getPropertyValue('--text-normal'),
+                    // Let CSS handle the dimensions via .dayble-capturing
+                    height: `${captureHeight}px`,
+                    width: `${captureWidth}px`,
+                    maxWidth: 'none',
+                    maxHeight: 'none',
+                    overflow: 'visible'
+                },
+                filter: (node: any) => {
+                    if (node && node.classList && typeof node.classList.contains === 'function') {
+                        if (
+                            node.classList.contains('dayble-header-buttons') || 
+                            node.classList.contains('dayble-holder-toggle') ||
+                            node.classList.contains('dayble-settings-toggle') ||
+                            node.classList.contains('dayble-search-toggle') ||
+                            node.classList.contains('dayble-copy-toggle') ||
+                            node.classList.contains('dayble-save-image-toggle')
+                        ) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            });
+
+            // Remove capture class
+            container.removeClass('dayble-capturing');
+
+            if (!blob) {
+                throw new Error('Failed to generate image blob');
+            }
+
+            const buffer = await blob.arrayBuffer();
+
+            // Save to vault
+            await this.app.vault.adapter.writeBinary(fullPath, buffer);
+            
+            notice.hide();
+            new Notice(`Calendar image saved to: ${fullPath}`);
+        } catch (error) {
+            console.error('Dayble Calendar: Failed to save image', error);
+            container.removeClass('dayble-capturing');
+            notice.hide();
+            new Notice('Failed to save calendar image');
         }
     }
 
@@ -3823,6 +3979,7 @@ class EventRepeatModal extends Modal {
     recurrence: EventRecurrence;
     onSave: (recurrence: EventRecurrence) => void;
     currentDate: string;
+    isSaved: boolean = false;
 
     constructor(app: App, recurrence: EventRecurrence | undefined, currentDate: string, onSave: (recurrence: EventRecurrence) => void) {
         super(app);
@@ -3830,6 +3987,13 @@ class EventRepeatModal extends Modal {
         if (!this.recurrence.startDate) this.recurrence.startDate = currentDate;
         this.currentDate = currentDate;
         this.onSave = onSave;
+    }
+
+    async onClose() {
+        if (!this.isSaved) {
+            this.onSave(this.recurrence);
+        }
+        this.contentEl.empty();
     }
 
     onOpen() {
@@ -3968,9 +4132,13 @@ class EventRepeatModal extends Modal {
 
         const footer = contentEl.createDiv({ cls: 'db-modal-footer', attr: { style: 'display: flex; gap: 10px; justify-content: flex-end;' } });
         const cancelBtn = footer.createEl('button', { text: 'Cancel', cls: 'db-btn' });
-        cancelBtn.onclick = () => this.close();
+        cancelBtn.onclick = () => {
+            this.isSaved = true; // Prevent onClose from saving
+            this.close();
+        };
         const saveBtn = footer.createEl('button', { text: 'Save', cls: 'mod-cta db-btn' });
         saveBtn.onclick = () => {
+            this.isSaved = true;
             this.onSave(this.recurrence);
             this.close();
         };
@@ -7604,6 +7772,20 @@ class DaybleSettingTab extends PluginSettingTab {
             });
 
         new Setting(containerEl)
+                .setName('Color swatch position')
+                .setDesc('Position of color swatches in event modal')
+                .addDropdown(d => {
+                    d.addOption('under-title', 'Under title')
+                        .addOption('under-description', 'Under description')
+                        .addOption('none', 'Do not show')
+                        .setValue(this.plugin.settings.colorSwatchPosition ?? 'under-title')
+                        .onChange(v => {
+                            this.plugin.settings.colorSwatchPosition = v as "none" | "under-title" | "under-description" | undefined;
+                            void this.plugin.saveSettings();
+                        });
+                });
+
+        new Setting(containerEl)
             .setName('Show current time line')
             .setDesc('Show a current time indicator in day and 3-day view.')
             .addToggle(t => {
@@ -7682,20 +7864,59 @@ class DaybleSettingTab extends PluginSettingTab {
                         }
                     });
             });
-            
+
             new Setting(containerEl)
-                .setName('Color swatch position')
-                .setDesc('Position of color swatches in event modal')
-                .addDropdown(d => {
-                    d.addOption('under-title', 'Under title')
-                        .addOption('under-description', 'Under description')
-                        .addOption('none', 'Do not show')
-                        .setValue(this.plugin.settings.colorSwatchPosition ?? 'under-title')
-                        .onChange(v => {
-                            this.plugin.settings.colorSwatchPosition = v as "none" | "under-title" | "under-description" | undefined;
-                            void this.plugin.saveSettings();
+            .setName('Save view as image')
+            .setDesc('Enable a header button to save the current calendar view as an image.')
+            .addToggle(t => {
+                t.setValue(this.plugin.settings.showSaveImageIcon ?? false)
+                    .onChange(async value => {
+                        this.plugin.settings.showSaveImageIcon = value;
+                        await this.plugin.saveSettings();
+                        
+                        // Toggle folder setting visibility
+                        if (value) {
+                            imageFolderSetting.settingEl.show();
+                        } else {
+                            imageFolderSetting.settingEl.hide();
+                        }
+
+                        const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
+                        for (const leaf of leaves) {
+                            if (leaf.view instanceof DaybleCalendarView) {
+                                leaf.view.updateCopyCalendarButtonVisibility();
+                            }
+                        }
+                    });
+            });
+
+            const imageFolderSetting = new Setting(containerEl)
+                .setName('Save image folder')
+                .setDesc('The folder where the calendar image will be saved.')
+                .addButton(b => {
+                    b.setButtonText(this.plugin.settings.saveImageFolder?.trim() ? this.plugin.settings.saveImageFolder : 'Root')
+                        .onClick(() => {
+                            const folders = this.app.vault.getAllLoadedFiles()
+                                .filter((f): f is TFolder => f instanceof TFolder)
+                                .map(f => f.path)
+                                .sort();
+                            if (!folders.includes('')) folders.unshift('');
+                            new FolderSuggestModal(this.app, folders, async (folder) => {
+                                this.plugin.settings.saveImageFolder = folder;
+                                await this.plugin.saveSettings();
+                                b.setButtonText(folder?.trim() ? folder : 'Root');
+                            }).open();
                         });
                 });
+
+            // Initial visibility
+            if (!this.plugin.settings.showSaveImageIcon) {
+                imageFolderSetting.settingEl.hide();
+            }
+
+            
+            
+            
 
         
         const swatchesSectionTop = containerEl.createDiv();
@@ -8406,6 +8627,51 @@ class EventStyleSettingsModal extends Modal {
         this.contentEl.empty();
     }
 
+    addContextMenu(inputEl: HTMLInputElement, list: any[], index: number, renderFn: () => void) {
+        inputEl.addEventListener('contextmenu', (e: MouseEvent) => {
+            e.preventDefault();
+            const menu = new Menu();
+            
+            menu.addItem((item) => {
+                item.setTitle('Duplicate')
+                    .setIcon('copy')
+                    .onClick(() => {
+                        const newItem = { ...list[index], id: randomId() };
+                        list.splice(index + 1, 0, newItem);
+                        renderFn();
+                    });
+            });
+
+            if (index > 0) {
+                menu.addItem((item) => {
+                    item.setTitle('Move up')
+                        .setIcon('arrow-up')
+                        .onClick(() => {
+                            const item = list[index];
+                            list.splice(index, 1);
+                            list.splice(index - 1, 0, item);
+                            renderFn();
+                        });
+                });
+            }
+
+            if (index < list.length - 1) {
+                menu.addItem((item) => {
+                    item.setTitle('Move down')
+                        .setIcon('arrow-down')
+                        .onClick(() => {
+                            const item = list[index];
+                            list.splice(index, 1);
+                            list.splice(index + 1, 0, item);
+                            renderFn();
+                        });
+                });
+            }
+
+            menu.showAtMouseEvent(e);
+        });
+    }
+
     onOpen() {
         const { contentEl } = this;
         contentEl.empty();
@@ -8753,7 +9019,7 @@ class EventStyleSettingsModal extends Modal {
                 this.category.animation2 = anim2Select.value; 
                 updatePreview();
             };
-        });
+        }, 'Set the default icon, colors, and animations for this style.');
 
         // 2. Triggers Section
         this.createAccordion(sectionsEl, 'Triggers', (body) => {
@@ -8780,12 +9046,13 @@ class EventStyleSettingsModal extends Modal {
                         }).open();
                     };
 
-                    const trInput = trRow.createEl('input', { type: 'text', cls: 'db-input', value: tr.pattern, placeholder: 'work, pray, eat' });
+                    const trInput = trRow.createEl('input', { type: 'text', cls: 'db-input', value: tr.pattern, placeholder: 'work, pray, eat' }) as HTMLInputElement;
                     trInput.setCssStyles({ flex: '1', width: 'auto', minWidth: '0' });
                     trInput.oninput = () => { 
                         tr.pattern = trInput.value; 
                         updatePreview();
                     };
+                    this.addContextMenu(trInput, this.tempTriggers, idx, renderTriggers);
 
                     // Color Dropdown for Trigger
                     const swatches = [
@@ -8846,7 +9113,7 @@ class EventStyleSettingsModal extends Modal {
                 this.tempTriggers.push({ id: randomId(), pattern: '', categoryId: this.category.id });
                 renderTriggers();
             };
-        }, 'Automatically applies the set style to events when their title or description matches defined text.');
+        }, 'Auto-applies style when event title or description contains these keywords.');
 
         // 3. States Section
         this.createAccordion(sectionsEl, 'States', (body) => {
@@ -8870,9 +9137,10 @@ class EventStyleSettingsModal extends Modal {
                         }).open();
                     };
 
-                    const stInput = stRow.createEl('input', { type: 'text', cls: 'db-input', value: st.name, placeholder: 'todo' });
+                    const stInput = stRow.createEl('input', { type: 'text', cls: 'db-input', value: st.name, placeholder: 'todo' }) as HTMLInputElement;
                     stInput.setCssStyles({ flex: '1', width: 'auto', minWidth: '0' });
                     stInput.oninput = () => { st.name = stInput.value; };
+                    this.addContextMenu(stInput, this.tempStates, idx, renderStates);
 
                     // Color Dropdown for State
                     const swatches = [
@@ -8941,7 +9209,7 @@ class EventStyleSettingsModal extends Modal {
                 });
                 renderStates();
             };
-        }, 'Adds options to the event context menu to quickly apply styling.');
+        }, 'Quickly apply any predefined style via right-click on an event.');
 
         // Footer Buttons
         const footer = contentEl.createDiv({ cls: 'dayble-modal-footer' });
