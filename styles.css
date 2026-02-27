@@ -1254,7 +1254,6 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
 
 .dayble-input {
     flex: 1;
-    background: var(--background-primary);
     color: var(--text-normal);
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--input-radius);
@@ -3891,4 +3890,52 @@ button.dayble-btn.db-btn.button {
 
 .dayble-event-text-container {
     width: 150px;
+}
+
+.dayble-repeat-modal-container {
+    padding: 10px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.dayble-repeat-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.dayble-repeat-days-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.dayble-repeat-day-btn {
+    padding: 4px 8px !important;
+    font-size: 0.8em;
+    min-width: 40px;
+}
+
+.dayble-repeat-day-btn.mod-cta {
+    background-color: var(--interactive-accent) !important;
+    color: var(--text-on-accent) !important;
+}
+
+.dayble-repeat-btn {
+    width: 100%;
+    margin: 10px 0;
+    justify-content: flex-start !important;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+}
+
+.dayble-repeat-btn svg {
+    margin-right: 8px;
+}
+
+.dayble-repeat-modal-container .db-modal-row {
+	margin-bottom: 0 !important;
 }

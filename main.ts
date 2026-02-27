@@ -160,6 +160,16 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     triggers: []
 };
 
+interface EventRecurrence {
+    type: 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+    interval?: number;
+    daysOfWeek?: number[];
+    monthDate?: number;
+    startDate?: string;
+    endDate?: string;
+    monthlyMode?: 'days' | 'date';
+}
+
 interface DaybleEvent {
     id: string;
     title: string;
@@ -179,6 +189,8 @@ interface DaybleEvent {
     effect?: string;
     animation?: string;
     animation2?: string;
+    recurrence?: EventRecurrence;
+    isOccurrence?: boolean;
     settings?: {
         titleAlign?: 'left' | 'center' | 'right' | 'center-left';
         descAlign?: 'left' | 'center' | 'right' | 'center-left';
@@ -642,6 +654,76 @@ class DaybleCalendarView extends ItemView {
     debouncedSave() {
         if (this.saveTimeout) clearTimeout(this.saveTimeout);
         this.saveTimeout = setTimeout(() => void this.saveAllEntries(), 1000);
+    }
+
+    matchesRecurrence(rec: EventRecurrence, date: moment.Moment, start: moment.Moment): boolean {
+        if (!rec || rec.type === 'none') return false;
+        
+        if (rec.type === 'daily') {
+            const diff = date.diff(start, 'days');
+            return diff >= 0 && diff % (rec.interval || 1) === 0;
+        }
+        
+        if (rec.type === 'weekly') {
+            const diffWeeks = date.clone().startOf('week').diff(start.clone().startOf('week'), 'weeks');
+            if (diffWeeks < 0 || diffWeeks % (rec.interval || 1) !== 0) return false;
+            return (rec.daysOfWeek || []).includes(date.day());
+        }
+        
+        if (rec.type === 'monthly') {
+            const matchesDayOfWeek = (rec.daysOfWeek || []).length > 0 ? (rec.daysOfWeek || []).includes(date.day()) : false;
+            const matchesDate = rec.monthDate ? date.date() === rec.monthDate : false;
+            
+            if (rec.monthlyMode === 'days') return matchesDayOfWeek;
+            if (rec.monthlyMode === 'date') return matchesDate;
+            
+            return matchesDayOfWeek || matchesDate;
+        }
+        
+        if (rec.type === 'yearly') {
+            return date.month() === start.month() && date.date() === (rec.monthDate || start.date());
+        }
+        
+        return false;
+    }
+
+    getExpandedEvents(startRange: moment.Moment, endRange: moment.Moment): DaybleEvent[] {
+        const expanded: DaybleEvent[] = [];
+        this.events.forEach(ev => {
+            if (!ev.recurrence || ev.recurrence.type === 'none') {
+                expanded.push(ev);
+                return;
+            }
+            
+            const rec = ev.recurrence;
+            const recStart = moment(rec.startDate || ev.date || ev.startDate);
+            const recEnd = rec.endDate ? moment(rec.endDate) : null;
+            
+            if (recStart.isAfter(endRange)) return;
+            if (recEnd && recEnd.isBefore(startRange)) return;
+
+            const checkStart = moment.max(recStart, startRange.clone().startOf('day'));
+            const checkEnd = recEnd ? moment.min(recEnd, endRange.clone().endOf('day')) : endRange.clone().endOf('day');
+            
+            let limit = 500;
+            const checkCur = checkStart.clone();
+            
+            while (checkCur.isSameOrBefore(checkEnd) && limit-- > 0) {
+                if (this.matchesRecurrence(rec, checkCur, recStart)) {
+                    const occurrence = { ...ev, id: `${ev.id}-${checkCur.format('YYYY-MM-DD')}`, isOccurrence: true };
+                    const dateStr = checkCur.format('YYYY-MM-DD');
+                    if (ev.date) occurrence.date = dateStr;
+                    if (ev.startDate) {
+                        const diff = moment(ev.endDate).diff(moment(ev.startDate), 'days');
+                        occurrence.startDate = dateStr;
+                        occurrence.endDate = checkCur.clone().add(diff, 'days').format('YYYY-MM-DD');
+                    }
+                    expanded.push(occurrence);
+                }
+                checkCur.add(1, 'days');
+            }
+        });
+        return expanded;
     }
 
     getViewType() { return VIEW_TYPE; }
@@ -1328,6 +1410,7 @@ class DaybleCalendarView extends ItemView {
         
         const weekStart = weekStartSetting;
         const start = startOfWeek;
+        const expandedEvents = this.getExpandedEvents(moment(start), moment(endOfWeek));
 
         // Header
         const header = this.weekHeaderEl.createDiv({ cls: 'dayble-grid-header' });
@@ -1397,7 +1480,7 @@ class DaybleCalendarView extends ItemView {
             // Create lane walls container for intelligent stacking
             container.createDiv({ cls: 'dayble-lane-walls' });
 
-            let dayEvents = this.events.filter(e => e.date === fullDate);
+            let dayEvents = expandedEvents.filter(e => e.date === fullDate);
             if (this.plugin.settings.onlyShowPinnedEventsWeek) {
                 dayEvents = dayEvents.filter(e => e.pinned);
             }
@@ -1694,6 +1777,10 @@ class DaybleCalendarView extends ItemView {
         const ordered = days.slice(weekStart).concat(days.slice(0, weekStart));
         ordered.forEach(d => header.createDiv({ text: d, cls: 'dayble-grid-header-cell' }));
 
+        const gridStart = moment(new Date(y, m, 1)).subtract(leading, 'days');
+        const gridEnd = gridStart.clone().add(41, 'days');
+        const expandedEvents = this.getExpandedEvents(gridStart, gridEnd);
+
         // Filter long events for month view
         // let longEventsPreset = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
         // if (this.plugin.settings.onlyShowPinnedEventsMonth) {
@@ -1745,7 +1832,7 @@ class DaybleCalendarView extends ItemView {
             // Create lane walls container for intelligent stacking
             container.createDiv({ cls: 'dayble-lane-walls' });
             
-            let dayEvents = this.events.filter(e => e.date === fullDate);
+            let dayEvents = expandedEvents.filter(e => e.date === fullDate);
             if (this.plugin.settings.onlyShowPinnedEventsMonth) {
                 dayEvents = dayEvents.filter(e => e.pinned);
             }
@@ -2098,10 +2185,14 @@ class DaybleCalendarView extends ItemView {
             'overflow-y': 'auto'
         });
 
+        const startOfMonth = moment(this.currentDate).startOf('month');
+        const endOfMonth = moment(this.currentDate).endOf('month');
+        const expandedEvents = this.getExpandedEvents(startOfMonth, endOfMonth);
+
         // Filter and sort all events by their dates (including each day of multi-day events)
         const dayMap = new Map<string, DaybleEvent[]>();
         
-        this.events.forEach(ev => {
+        expandedEvents.forEach(ev => {
             if (this.plugin.settings.onlyShowPinnedEventsAgenda && !ev.pinned) return;
             if (ev.date) {
                 if (!dayMap.has(ev.date)) dayMap.set(ev.date, []);
@@ -3660,7 +3751,17 @@ class DaybleCalendarView extends ItemView {
         if (!folder) { new StorageFolderNotSetModal(this.app).open(); return; }
         try { await this.app.vault.adapter.stat(folder); }
         catch { new StorageFolderNotSetModal(this.app).open(); return; }
-        const existing = id ? (this.events.find(e => e.id === id) ?? this.holderEvents.find(e => e.id === id)) : undefined;
+        
+        let originalId = id;
+        if (id && id.includes('-')) {
+            const parts = id.split('-');
+            const lastPart = parts[parts.length - 1];
+            if (/^\d{4}-\d{2}-\d{2}$/.test(lastPart)) {
+                originalId = id.substring(0, id.lastIndexOf('-'));
+            }
+        }
+        
+        const existing = originalId ? (this.events.find(e => e.id === originalId) ?? this.holderEvents.find(e => e.id === originalId)) : undefined;
         const fromHolder = !!(existing && this.holderEvents.some(e => e.id === existing.id));
         const modal = new EventModal(this.app, this.plugin, existing, date, endDate, startTime, endTime, async result => {
             const isMulti = !!(result.startDate && result.endDate);
@@ -3718,6 +3819,164 @@ class DaybleCalendarView extends ItemView {
     }
 }
 
+class EventRepeatModal extends Modal {
+    recurrence: EventRecurrence;
+    onSave: (recurrence: EventRecurrence) => void;
+    currentDate: string;
+
+    constructor(app: App, recurrence: EventRecurrence | undefined, currentDate: string, onSave: (recurrence: EventRecurrence) => void) {
+        super(app);
+        this.recurrence = recurrence ? JSON.parse(JSON.stringify(recurrence)) : { type: 'none', startDate: currentDate };
+        if (!this.recurrence.startDate) this.recurrence.startDate = currentDate;
+        this.currentDate = currentDate;
+        this.onSave = onSave;
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.empty();
+        contentEl.addClass('db-modal');
+        const heading = contentEl.createEl('h3', { text: 'Event repeat', cls: 'db-modal-title' });
+        heading.setCssProps({ 'margin-bottom': '0px' });
+
+        const container = contentEl.createDiv({ cls: 'dayble-repeat-modal-container' });
+
+        // Start and End dates for recurrence
+        const rangeRow = container.createDiv({ cls: 'db-modal-row', attr: { style: 'margin-bottom: 15px; gap: 10px; display: flex; align-items: center;' } });
+        rangeRow.createSpan({ text: 'From:' });
+        const startInput = rangeRow.createEl('input', { type: 'date', value: this.recurrence.startDate || this.currentDate });
+        startInput.addClass('db-input');
+        startInput.onchange = () => { this.recurrence.startDate = startInput.value; };
+        
+        rangeRow.createSpan({ text: 'To:' });
+        const endInput = rangeRow.createEl('input', { type: 'date', value: this.recurrence.endDate || '' });
+        endInput.addClass('db-input');
+        endInput.onchange = () => { this.recurrence.endDate = endInput.value; };
+
+        const options = [
+            { label: 'Never Repeat', value: 'none' },
+            { label: 'Repeat everyday', value: 'daily' },
+            { label: 'Repeat weekly', value: 'weekly' },
+            { label: 'Repeat monthly', value: 'monthly' },
+            { label: 'Repeat yearly', value: 'yearly' },
+        ];
+
+        const selectEl = container.createEl('select', { cls: 'db-select dayble-repeat-type-select' });
+        options.forEach(opt => {
+            const o = selectEl.createEl('option', { text: opt.label, value: opt.value });
+            if (this.recurrence.type === opt.value) o.selected = true;
+        });
+
+        const optionsContainer = container.createDiv({ cls: 'dayble-repeat-options' });
+
+        const renderOptions = () => {
+            optionsContainer.empty();
+            const type = selectEl.value as EventRecurrence['type'];
+            this.recurrence.type = type;
+
+            if (type === 'daily') {
+                const row = optionsContainer.createDiv({ cls: 'db-modal-row' });
+                row.createSpan({ text: 'Repeat every ' });
+                const input = row.createEl('input', { type: 'number', value: String(this.recurrence.interval || 1), attr: { min: '1', style: 'width: 60px;' } });
+                input.addClass('db-input');
+                input.onchange = () => { this.recurrence.interval = parseInt(input.value); };
+                row.createSpan({ text: ' days' });
+            } else if (type === 'weekly') {
+                const rowDays = optionsContainer.createDiv({ cls: 'db-modal-row dayble-repeat-days-row' });
+                rowDays.createSpan({ text: 'Repeat every: ' });
+                const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+                this.recurrence.daysOfWeek = this.recurrence.daysOfWeek || [];
+                days.forEach((day, i) => {
+                    const btn = rowDays.createEl('button', { text: day, cls: 'db-btn dayble-repeat-day-btn' });
+                    if (this.recurrence.daysOfWeek?.includes(i)) btn.addClass('mod-cta');
+                    btn.onclick = () => {
+                        if (this.recurrence.daysOfWeek?.includes(i)) {
+                            this.recurrence.daysOfWeek = this.recurrence.daysOfWeek!.filter(d => d !== i);
+                            btn.removeClass('mod-cta');
+                        } else {
+                            this.recurrence.daysOfWeek?.push(i);
+                            btn.addClass('mod-cta');
+                        }
+                    };
+                });
+
+                const rowInterval = optionsContainer.createDiv({ cls: 'db-modal-row' });
+                rowInterval.createSpan({ text: 'Repeat every ' });
+                const input = rowInterval.createEl('input', { type: 'number', value: String(this.recurrence.interval || 1), attr: { min: '1', max: '52', style: 'width: 60px;' } });
+                input.addClass('db-input');
+                input.onchange = () => { this.recurrence.interval = parseInt(input.value); };
+                rowInterval.createSpan({ text: ' weeks' });
+            } else if (type === 'monthly') {
+                this.recurrence.monthlyMode = this.recurrence.monthlyMode || 'days';
+                
+                const rowRadioDays = optionsContainer.createDiv({ cls: 'db-modal-row', attr: { style: 'display: flex; align-items: center; gap: 10px;' } });
+                const radioDays = rowRadioDays.createEl('input', { type: 'radio', attr: { name: 'monthly-mode', id: 'monthly-mode-days' } });
+                if (this.recurrence.monthlyMode === 'days') radioDays.checked = true;
+                rowRadioDays.createEl('label', { text: 'On weekdays:', attr: { for: 'monthly-mode-days' } });
+                
+                const daysRow = optionsContainer.createDiv({ cls: 'db-modal-row dayble-repeat-days-row', attr: { style: 'margin-left: 25px;' } });
+                const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+                this.recurrence.daysOfWeek = this.recurrence.daysOfWeek || [];
+                days.forEach((day, i) => {
+                    const btn = daysRow.createEl('button', { text: day, cls: 'db-btn dayble-repeat-day-btn' });
+                    if (this.recurrence.daysOfWeek?.includes(i)) btn.addClass('mod-cta');
+                    btn.onclick = () => {
+                        if (this.recurrence.monthlyMode !== 'days') {
+                            this.recurrence.monthlyMode = 'days';
+                            radioDays.checked = true;
+                        }
+                        if (this.recurrence.daysOfWeek?.includes(i)) {
+                            this.recurrence.daysOfWeek = this.recurrence.daysOfWeek!.filter(d => d !== i);
+                            btn.removeClass('mod-cta');
+                        } else {
+                            this.recurrence.daysOfWeek?.push(i);
+                            btn.addClass('mod-cta');
+                        }
+                    };
+                });
+
+                const rowRadioDate = optionsContainer.createDiv({ cls: 'db-modal-row', attr: { style: 'display: flex; align-items: center; gap: 10px; margin-top: 10px;' } });
+                const radioDate = rowRadioDate.createEl('input', { type: 'radio', attr: { name: 'monthly-mode', id: 'monthly-mode-date' } });
+                if (this.recurrence.monthlyMode === 'date') radioDate.checked = true;
+                rowRadioDate.createEl('label', { text: 'Repeat on:', attr: { for: 'monthly-mode-date' } });
+                
+                const dateInput = rowRadioDate.createEl('input', { type: 'number', value: String(this.recurrence.monthDate || moment(this.currentDate).date()), attr: { min: '1', max: '31', style: 'width: 60px;' } });
+                dateInput.addClass('db-input');
+                dateInput.onchange = () => { 
+                    this.recurrence.monthlyMode = 'date';
+                    radioDate.checked = true;
+                    this.recurrence.monthDate = parseInt(dateInput.value); 
+                };
+
+                radioDays.onchange = () => { if (radioDays.checked) this.recurrence.monthlyMode = 'days'; };
+                radioDate.onchange = () => { if (radioDate.checked) this.recurrence.monthlyMode = 'date'; };
+
+            } else if (type === 'yearly') {
+                const row = optionsContainer.createDiv({ cls: 'db-modal-row' });
+                row.createSpan({ text: 'Repeat on: ' });
+                const dateInput = row.createEl('input', { type: 'date', value: this.recurrence.monthDate ? moment(this.currentDate).date(this.recurrence.monthDate).format('YYYY-MM-DD') : this.currentDate });
+                dateInput.addClass('db-input');
+                dateInput.onchange = () => {
+                    const d = moment(dateInput.value);
+                    this.recurrence.monthDate = d.date();
+                };
+            }
+        };
+
+        selectEl.onchange = renderOptions;
+        renderOptions();
+
+        const footer = contentEl.createDiv({ cls: 'db-modal-footer', attr: { style: 'display: flex; gap: 10px; justify-content: flex-end;' } });
+        const cancelBtn = footer.createEl('button', { text: 'Cancel', cls: 'db-btn' });
+        cancelBtn.onclick = () => this.close();
+        const saveBtn = footer.createEl('button', { text: 'Save', cls: 'mod-cta db-btn' });
+        saveBtn.onclick = () => {
+            this.onSave(this.recurrence);
+            this.close();
+        };
+    }
+}
+
 class EventModal extends Modal {
     plugin: DaybleCalendarPlugin;
     categories: EventCategory[] = [];
@@ -3736,6 +3995,7 @@ class EventModal extends Modal {
     selectedColorName?: string;
     isPinned: boolean = false;
     selectedLayout?: string;
+    recurrence: EventRecurrence = { type: 'none' };
     _suggestionKeydownHandler?: (e: KeyboardEvent) => void;
 
     constructor(app: App, plugin: DaybleCalendarPlugin, ev: DaybleEvent | undefined, date: string | undefined, endDate: string | undefined, defaultStartTime: string | undefined, defaultEndTime: string | undefined, onSubmit: (ev: Partial<DaybleEvent>) => Promise<void>, onDelete: () => Promise<void>, onPickIcon: () => Promise<void>) {
@@ -3755,9 +4015,36 @@ class EventModal extends Modal {
         this.selectedColorName = ev?.colorName;
         this.isPinned = ev?.pinned ?? false;
         this.selectedLayout = ev?.settings?.layout;
+        this.recurrence = ev?.recurrence || { type: 'none' };
     }
 
     setIcon(icon: string) { this.icon = icon; if (this.iconBtnEl) setIcon(this.iconBtnEl, icon || 'plus'); }
+
+    getRecurrenceText(rec: EventRecurrence): string {
+        if (!rec || rec.type === 'none') return 'Never Repeat';
+        let text = '';
+        if (rec.type === 'daily') text = `Repeat every ${rec.interval || 1} day${(rec.interval || 1) > 1 ? 's' : ''}`;
+        else if (rec.type === 'weekly') {
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const selectedDays = (rec.daysOfWeek || []).map(i => days[i]).join(', ');
+            text = `Repeat every ${rec.interval || 1} week${(rec.interval || 1) > 1 ? 's' : ''}${selectedDays ? ' on ' + selectedDays : ''}`;
+        }
+        else if (rec.type === 'monthly') {
+            if (rec.monthlyMode === 'days') {
+                const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                const selectedDays = (rec.daysOfWeek || []).map(i => days[i]).join(', ');
+                text = `Repeat every month on ${selectedDays || 'weekdays'}`;
+            } else {
+                text = `Repeat every month on date ${rec.monthDate || 1}`;
+            }
+        }
+        else if (rec.type === 'yearly') text = 'Repeat every year';
+        
+        if (rec.endDate) {
+            text += ` until ${rec.endDate}`;
+        }
+        return text || 'Never Repeat';
+    }
 
     createCustomTimeInput(parent: HTMLElement, initialValue: string, format: '12h' | '24h') {
         const wrap = parent.createDiv({ cls: 'dayble-custom-time-input' });
@@ -4056,13 +4343,10 @@ class EventModal extends Modal {
         
         const ruleRow = c.createDiv({ cls: 'dayble-modal-row dayble-modal-row-center' });
         ruleRow.addClass('db-modal-row');
-        const categoryLabel = ruleRow.createEl('label', { text: 'Category:' });
-        categoryLabel.addClass('db-label');
-        categoryLabel.addClass('dayble-category-label');
         let selectedCategoryId = this.ev?.categoryId;
         const categorySelect = ruleRow.createEl('select', { cls: 'dayble-input dayble-category-select' });
         categorySelect.addClass('db-select');
-        const emptyOpt = categorySelect.createEl('option'); emptyOpt.value=''; emptyOpt.text='Default';
+        const emptyOpt = categorySelect.createEl('option'); emptyOpt.value=''; emptyOpt.text='Choose category';
         const categories = this.plugin.settings.eventCategories || [];
         categories.forEach((c: EventCategory) => { const opt = categorySelect.createEl('option'); opt.value = c.id; opt.text = c.name; });
         categorySelect.value = selectedCategoryId ?? '';
@@ -4097,6 +4381,19 @@ class EventModal extends Modal {
 
         const customStart = this.createCustomTimeInput(rowTime, startVal, timeFmt);
         const customEnd = this.createCustomTimeInput(rowTime, endVal, timeFmt);
+        
+        const repeatBtn = c.createEl('button', { cls: 'dayble-btn dayble-repeat-btn' });
+        repeatBtn.addClass('db-btn');
+        setIcon(repeatBtn, 'refresh-cw');
+        repeatBtn.createSpan({ text: this.getRecurrenceText(this.recurrence), cls: 'dayble-repeat-btn-text' });
+        
+        repeatBtn.onclick = (e) => {
+            e.preventDefault();
+            new EventRepeatModal(this.app, this.recurrence, startDate.value, (newRec) => {
+                this.recurrence = newRec;
+                (repeatBtn.querySelector('.dayble-repeat-btn-text') as HTMLElement).textContent = this.getRecurrenceText(newRec);
+            }).open();
+        };
         
         const descInput = c.createEl('textarea', { cls: 'dayble-textarea', attr: { placeholder: 'Description' } });
         descInput.addClass('db-textarea');
@@ -4140,6 +4437,7 @@ class EventModal extends Modal {
                 color: this.selectedColor,
                 textColor: this.selectedTextColor,
                 colorName: this.selectedColorName,
+                recurrence: this.recurrence,
                 settings: {
                     titleAlign: this.ev?.settings?.titleAlign,
                     descAlign: this.ev?.settings?.descAlign,
@@ -4552,6 +4850,8 @@ class TodayModal extends Modal {
         const dates = isMulti ? (this.date as string[]) : [this.date as string];
         const primaryDate = dates[0];
 
+        const expandedEvents = this.view ? this.view.getExpandedEvents(moment(dates[0]), moment(dates[dates.length - 1])) : this.events;
+
         if (split && !isMulti) this.modalEl.addClass('dayble-modal-wide');
         c.empty();
         c.addClass('dayble-modal-column');
@@ -4677,7 +4977,7 @@ class TodayModal extends Modal {
                     this.dragId = undefined; this.dragDuration = undefined; this.dragEl = undefined;
                 };
 
-                const dayEvents = (this.events || []).filter(e => {
+                const dayEvents = (expandedEvents || []).filter(e => {
                     let isToday = (e.date === dStr) || (e.startDate === dStr) || 
                                     (e.startDate && e.endDate && dStr >= e.startDate && dStr <= e.endDate);
                     
@@ -5642,6 +5942,7 @@ class TodayModal extends Modal {
 
         const isMulti = Array.isArray(this.date);
         const dates = isMulti ? (this.date as string[]) : [this.date as string];
+        const expandedEvents = this.view ? this.view.getExpandedEvents(moment(dates[0]), moment(dates[dates.length - 1])) : this.events;
 
         // Render existing events for this date spanning above the grid
         try {
@@ -5653,7 +5954,7 @@ class TodayModal extends Modal {
             };
 
             dates.forEach((dStr, dIdx) => {
-                const dayEvents = (this.events || []).filter(e => {
+                const dayEvents = (expandedEvents || []).filter(e => {
                     let isToday = (e.date === dStr) || (e.startDate === dStr) || 
                                     (e.startDate && e.endDate && dStr >= e.startDate && dStr <= e.endDate);
                     
