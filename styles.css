@@ -648,7 +648,15 @@
 .dayble-event.dayble-anim-animated-gradient,
 .dayble-event.dayble-anim-glowing,
 .dayble-event.dayble-anim-stars,
-.dayble-event.dayble-anim-snow-falling {
+.dayble-event.dayble-anim-snow-falling,
+.dayble-event-item.dayble-anim-glass-shine,
+.dayble-event-item.dayble-anim-shine,
+.dayble-event-item.dayble-anim-sparkles,
+.dayble-event-item.dayble-anim-particles,
+.dayble-event-item.dayble-anim-animated-gradient,
+.dayble-event-item.dayble-anim-glowing,
+.dayble-event-item.dayble-anim-stars,
+.dayble-event-item.dayble-anim-snow-falling {
     overflow: hidden !important;
 }
 
@@ -1636,6 +1644,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 .dayble-anim-shine {
     position: relative;
+    overflow: hidden;
     isolation: isolate;
 }
 
@@ -3907,6 +3916,10 @@ button.dayble-btn.db-btn.button {
     flex-shrink: 0;
 }
 
+.dayble-event-preview-container .dayble-event-item {
+    overflow: hidden !important;
+}
+
 .dayble-event-preview-container .dayble-event-item.dayble-icon-placement-left,
 .dayble-event-preview-container .dayble-event-item.dayble-icon-placement-right {
     gap: 8px !important;
@@ -3921,7 +3934,7 @@ button.dayble-btn.db-btn.button {
 
 .dayble-style-settings-modal .dayble-event-preview-container .dayble-event-item.dayble-icon-placement-top,
 .dayble-style-settings-modal .dayble-event-preview-container .dayble-event-item.dayble-icon-placement-bottom {
-    gap: 0px !important;
+    gap: 2px !important;
     width: 180px !important;
 }
 

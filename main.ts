@@ -208,6 +208,7 @@ interface EventCategory {
     name: string;
     bgColor: string;
     textColor: string;
+    colorName?: string;
     effect: string;
     animation: string;
     animation2: string;
@@ -552,6 +553,80 @@ try { await this.ensureEntriesFolder(); } catch { }
             if (data.onlyShowPinnedEventsWeek === undefined) {
                 this.settings.onlyShowPinnedEventsWeek = data.onlyShowPinnedEvents;
             }
+        }
+
+        await this.migrateSettings();
+    }
+
+    async migrateSettings() {
+        let modified = false;
+        const settings = this.settings;
+        const swatches = [
+            ...(settings.swatches || []),
+            ...(settings.userCustomSwatches || [])
+        ];
+
+        if (settings.eventCategories) {
+            for (const category of settings.eventCategories) {
+                // If it doesn't have a colorName, try to find or create one
+                if (!category.colorName && category.bgColor) {
+                    let matchingSwatch = swatches.find(s => s.color === category.bgColor && (!s.textColor || s.textColor === category.textColor));
+                    
+                    if (!matchingSwatch) {
+                        const swatchName = `Category: ${category.name}`;
+                        let uniqueName = swatchName;
+                        let counter = 1;
+                        while (swatches.some(s => s.name === uniqueName)) {
+                            uniqueName = `${swatchName} ${counter++}`;
+                        }
+
+                        const newSwatch = {
+                            name: uniqueName,
+                            color: category.bgColor,
+                            textColor: category.textColor || chooseTextColor(category.bgColor)
+                        };
+                        if (!settings.userCustomSwatches) settings.userCustomSwatches = [];
+                        settings.userCustomSwatches.push(newSwatch);
+                        swatches.push(newSwatch);
+                        matchingSwatch = newSwatch;
+                    }
+
+                    category.colorName = matchingSwatch.name;
+                    modified = true;
+                }
+            }
+        }
+
+        // Also check triggers for inline colors
+        if (settings.triggers) {
+            for (const trigger of settings.triggers) {
+                if (!trigger.colorName && trigger.color) {
+                    let matchingSwatch = swatches.find(s => s.color === trigger.color && (!s.textColor || s.textColor === trigger.textColor));
+                    if (!matchingSwatch) {
+                        const swatchName = `Trigger: ${trigger.pattern}`;
+                        let uniqueName = swatchName;
+                        let counter = 1;
+                        while (swatches.some(s => s.name === uniqueName)) {
+                            uniqueName = `${swatchName} ${counter++}`;
+                        }
+                        const newSwatch = {
+                            name: uniqueName,
+                            color: trigger.color,
+                            textColor: trigger.textColor || chooseTextColor(trigger.color)
+                        };
+                        if (!settings.userCustomSwatches) settings.userCustomSwatches = [];
+                        settings.userCustomSwatches.push(newSwatch);
+                        swatches.push(newSwatch);
+                        matchingSwatch = newSwatch;
+                    }
+                    trigger.colorName = matchingSwatch.name;
+                    modified = true;
+                }
+            }
+        }
+
+        if (modified) {
+            await this.saveSettings();
         }
     }
 
@@ -3452,7 +3527,7 @@ class DaybleCalendarView extends ItemView {
 
         let bgColor = '';
         let textColor = '';
-        let colorName = ev.colorName || (!ev.color && !category ? this.plugin.settings.defaultEventColorName : undefined);
+        let colorName = ev.colorName || (!ev.color && !category ? this.plugin.settings.defaultEventColorName : (category?.colorName || undefined));
 
         // Color selection logic (user-set color always preferred)
         if (colorName) {
@@ -3473,7 +3548,10 @@ class DaybleCalendarView extends ItemView {
                 bgColor = swatchBg;
                 textColor = swatchText;
             }
-        } else {
+        }
+        
+        // If still no color (no colorName or swatch not found), fallback to inline colors
+        if (!bgColor) {
             if (ev.color) {
                 bgColor = ev.color;
                 textColor = ev.textColor || chooseTextColor(ev.color);
@@ -8358,11 +8436,10 @@ class DaybleSettingTab extends PluginSettingTab {
                     d.addOption('', 'No color');
                     swatches.forEach(s => d.addOption(s.name, s.name));
                     
-                    // Find if current bgColor matches any swatch
-                    const currentSwatch = swatches.find(s => s.color === category.bgColor);
-                    d.setValue(currentSwatch ? currentSwatch.name : '');
+                    d.setValue(category.colorName || '');
                     
                     d.onChange(async v => {
+                        category.colorName = v || undefined;
                         const s = swatches.find(sw => sw.name === v);
                         if (s) {
                             category.bgColor = s.color;
@@ -8923,8 +9000,7 @@ class EventStyleSettingsModal extends Modal {
                 opt.style.color = s.textColor || chooseTextColor(s.color);
                 colorSelect.add(opt);
             });
-            const currentSwatch = swatches.find(s => s.color === this.category.bgColor);
-            colorSelect.value = currentSwatch ? currentSwatch.name : '';
+            colorSelect.value = this.category.colorName || '';
             const updateColorSelectStyle = () => {
                 const s = swatches.find(sw => sw.name === colorSelect.value);
                 if (s) {
@@ -8935,6 +9011,7 @@ class EventStyleSettingsModal extends Modal {
             };
             updateColorSelectStyle();
             colorSelect.onchange = () => {
+                this.category.colorName = colorSelect.value || undefined;
                 const s = swatches.find(sw => sw.name === colorSelect.value);
                 if (s) {
                     this.category.bgColor = s.color;
