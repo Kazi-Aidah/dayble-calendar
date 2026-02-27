@@ -337,8 +337,26 @@ export default class DaybleCalendarPlugin extends Plugin {
         new Notice(`Storage folder updated to: ${newFolder || 'root'}`);
     }
 
+    reorderTriggersGlobally() {
+        const categories = this.settings.eventCategories || [];
+        const allTriggers = this.settings.triggers || [];
+        
+        const sortedTriggers: any[] = [];
+        for (const cat of categories) {
+            const catTriggers = allTriggers.filter(t => t.categoryId === cat.id);
+            sortedTriggers.push(...catTriggers);
+        }
+        
+        // Add any orphan triggers (triggers with a categoryId that no longer exists or is missing)
+        const orphanTriggers = allTriggers.filter(t => !categories.some(c => c.id === t.categoryId));
+        sortedTriggers.push(...orphanTriggers);
+        
+        this.settings.triggers = sortedTriggers;
+    }
+
     async onload() {
         await this.loadSettings();
+        this.reorderTriggersGlobally(); // Ensure triggers follow category order from start
         
         this.registerView(VIEW_TYPE, leaf => new DaybleCalendarView(leaf, this));
 
@@ -8393,6 +8411,7 @@ class DaybleSettingTab extends PluginSettingTab {
 
                         if (updatedCategories.length > 0) {
                             this.plugin.settings.eventCategories = updatedCategories;
+                            this.plugin.reorderTriggersGlobally(); // Ensure triggers follow category order
                             await this.plugin.saveSettings();
                             renderStyles();
                             
@@ -8682,6 +8701,9 @@ class EventStyleSettingsModal extends Modal {
         this.plugin.settings.triggers = (this.plugin.settings.triggers || []).filter(t => t.categoryId !== this.category.id);
         // 2. Add new/updated triggers
         this.plugin.settings.triggers.push(...this.tempTriggers);
+
+        // Ensure triggers follow global category order
+        this.plugin.reorderTriggersGlobally();
 
         // Update states
         // 1. Remove old states for this category
@@ -9297,6 +9319,7 @@ class EventStyleSettingsModal extends Modal {
                 this.isDeleted = true;
                 this.plugin.settings.eventCategories = this.plugin.settings.eventCategories.filter(c => c.id !== this.category.id);
                 // We keep triggers and states but they'll have an orphan categoryId.
+                this.plugin.reorderTriggersGlobally();
                 await this.plugin.saveSettings();
                 this.onSave();
                 this.close();
