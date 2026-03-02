@@ -840,12 +840,14 @@ class DaybleCalendarView extends ItemView {
 
     async onOpen() {
         this.rootEl = this.containerEl.createDiv({ cls: 'dayble-root' });
-        this.rootEl.style.setProperty('--event-border-radius', `${this.plugin.settings.eventBorderRadius ?? 6}px`);
-        this.rootEl.style.setProperty('--day-cell-radius', `${this.plugin.settings.dayCellRadius ?? 8}px`);
-        this.rootEl.style.setProperty('--event-vertical-padding', `${this.plugin.settings.eventVerticalPadding ?? 2}px`);
+        this.rootEl.setCssProps({
+            '--event-border-radius': `${this.plugin.settings.eventBorderRadius ?? 6}px`,
+            '--day-cell-radius': `${this.plugin.settings.dayCellRadius ?? 8}px`,
+            '--event-vertical-padding': `${this.plugin.settings.eventVerticalPadding ?? 2}px`
+        });
         const initialMinW = this.plugin.settings.dayCellMinWidth ?? 0;
         if (initialMinW > 0) {
-            this.rootEl.style.setProperty('--dayble-cell-min-width', `${initialMinW}px`);
+            this.rootEl.setCssProps({ '--dayble-cell-min-width': `${initialMinW}px` });
         } else {
             this.rootEl.style.removeProperty('--dayble-cell-min-width');
         }
@@ -1376,12 +1378,14 @@ class DaybleCalendarView extends ItemView {
             this._dayMode3ROs = [];
         }
         if (this.rootEl) {
-            this.rootEl.style.setProperty('--event-border-radius', `${this.plugin.settings.eventBorderRadius ?? 6}px`);
-            this.rootEl.style.setProperty('--day-cell-radius', `${this.plugin.settings.dayCellRadius ?? 8}px`);
-            this.rootEl.style.setProperty('--event-vertical-padding', `${this.plugin.settings.eventVerticalPadding ?? 2}px`);
+            this.rootEl.setCssProps({
+                '--event-border-radius': `${this.plugin.settings.eventBorderRadius ?? 6}px`,
+                '--day-cell-radius': `${this.plugin.settings.dayCellRadius ?? 8}px`,
+                '--event-vertical-padding': `${this.plugin.settings.eventVerticalPadding ?? 2}px`
+            });
             const minW = this.plugin.settings.dayCellMinWidth ?? 0;
             if (minW > 0) {
-                this.rootEl.style.setProperty('--dayble-cell-min-width', `${minW}px`);
+                this.rootEl.setCssProps({ '--dayble-cell-min-width': `${minW}px` });
             } else {
                 this.rootEl.style.removeProperty('--dayble-cell-min-width');
             }
@@ -1845,7 +1849,7 @@ class DaybleCalendarView extends ItemView {
                 if (!this.isResizingWeeklyNotes || !this.weeklyNotesEl) return;
                 const dy = me.clientY - this.weeklyNotesResizeStartY;
                 const newH = Math.max(100, this.weeklyNotesResizeStartHeight - dy);
-                this.weeklyNotesEl.style.setProperty('height', `${newH}px`, 'important');
+                this.weeklyNotesEl.setCssProps({ 'height': `${newH}px !important` });
             };
             this._boundWeeklyNotesMouseUp = async () => {
             if (!this.isResizingWeeklyNotes) return;
@@ -2455,7 +2459,7 @@ class DaybleCalendarView extends ItemView {
                 if (!folder || !(folder instanceof TFolder)) {
                     try {
                         await this.app.vault.createFolder(folderPath);
-                    } catch (e) {
+                    } catch {
                         // Folder might already exist or be invalid
                     }
                 }
@@ -3160,7 +3164,7 @@ class DaybleCalendarView extends ItemView {
             // Use a single spacer wall for efficiency and smoother layout
             let wall = wallsContainer.firstElementChild as HTMLElement;
             if (!wall) wall = wallsContainer.createDiv({ cls: 'dayble-lane-wall' });
-            wall.style.height = `${totalHeight}px`; // LN
+            wall.setCssProps({ 'height': `${totalHeight}px` }); // LN
             
             while (wallsContainer.children.length > 1) {
                 wallsContainer.lastElementChild?.remove();
@@ -3316,7 +3320,7 @@ class DaybleCalendarView extends ItemView {
                 if (container) {
                     const maxH = this.plugin.settings.dayCellMaxHeight ?? 0;
                     if (maxH > 0) {
-                        (cell as HTMLElement).style.setProperty('--dayble-cell-max-height', `${maxH}px`);
+                        (cell as HTMLElement).setCssProps({ '--dayble-cell-max-height': `${maxH}px` });
                         (cell as HTMLElement).addClass('dayble-cell-max');
                         container.removeClass('dayble-overflow-visible');
                         container.addClass('dayble-scroll-y', 'dayble-scroll-x-hidden');
@@ -3449,11 +3453,10 @@ class DaybleCalendarView extends ItemView {
 
         // Strip '-left' for actual alignment classes
         let actualTitleAlign = titleAlign.replace('-left', '') as 'left' | 'center' | 'right';
-        let actualDescAlign = descAlign.replace('-left', '') as 'left' | 'center' | 'right';
 
         // If in center-left mode, description MUST follow title's alignment
         if (isCenterLeftMode) {
-            actualDescAlign = actualTitleAlign;
+            // actualDescAlign = actualTitleAlign;
         }
 
         item.addClass(`dayble-title-align-${titleAlign}`);
@@ -3559,9 +3562,11 @@ class DaybleCalendarView extends ItemView {
                 const swatchBg = swatch.color;
                 const swatchText = swatch.textColor || chooseTextColor(swatchBg);
                 
-                item.style.setProperty('--event-bg-color', hexToRgba(swatchBg, opacity));
-                item.style.setProperty('--event-text-color', swatchText);
-                item.style.setProperty('--event-border-color', hexToRgba(swatchText, bOpacity));
+                item.setCssProps({
+                    '--event-bg-color': hexToRgba(swatchBg, opacity),
+                    '--event-text-color': swatchText,
+                    '--event-border-color': hexToRgba(swatchText, bOpacity)
+                });
                 
                 bgColor = swatchBg;
                 textColor = swatchText;
@@ -3668,9 +3673,12 @@ class DaybleCalendarView extends ItemView {
             if (swatch) {
                 const opacity = this.plugin.settings.eventBgOpacity ?? 1;
                 const bOpacity = this.plugin.settings.eventBorderOpacity ?? 1;
-                item.style.setProperty('--event-bg-color', hexToRgba(swatch.color, opacity));
-                item.style.setProperty('--event-text-color', swatch.textColor || chooseTextColor(swatch.color));
-                item.style.setProperty('--event-border-color', hexToRgba(swatch.textColor || chooseTextColor(swatch.color), bOpacity));
+                const textColorToUse = swatch.textColor || chooseTextColor(swatch.color);
+                item.setCssProps({
+                    '--event-bg-color': hexToRgba(swatch.color, opacity),
+                    '--event-text-color': textColorToUse,
+                    '--event-border-color': hexToRgba(textColorToUse, bOpacity)
+                });
                 item.classList.add('dayble-event-colored');
             }
         }
@@ -3728,15 +3736,17 @@ class DaybleCalendarView extends ItemView {
                 if (s) {
                     const bgColor = s.color;
                     const textColor = s.textColor || chooseTextColor(bgColor);
-                    item.style.setProperty('--event-bg-color', bgColor);
-                    item.style.setProperty('--event-text-color', textColor);
                     const bOpacity = this.plugin.settings.eventBorderOpacity ?? 1;
                     const borderColor = hexToRgba(bgColor, bOpacity);
-                    item.style.setProperty('--event-border-color', borderColor);
+                    item.setCssProps({
+                        '--event-bg-color': bgColor,
+                        '--event-text-color': textColor,
+                        '--event-border-color': borderColor
+                    });
                     item.classList.add('dayble-event-colored');
                     // Update desc text color if present
                     const desc = item.querySelector('.dayble-event-desc') as HTMLElement;
-                    if (desc) (desc as HTMLElement).style.setProperty('color', textColor);
+                    if (desc) (desc as HTMLElement).setCssProps({ 'color': textColor });
                 }
             }
         }
@@ -4934,9 +4944,11 @@ class PromptSearchModal extends Modal {
                         const bOpacity = this.view.plugin.settings.eventBorderOpacity ?? 1;
                         const swatchBg = swatch.color;
                         const swatchText = swatch.textColor || chooseTextColor(swatchBg);
-                        preview.style.setProperty('--event-bg-color', hexToRgba(swatchBg, opacity));
-                        preview.style.setProperty('--event-text-color', swatchText);
-                        preview.style.setProperty('--event-border-color', hexToRgba(swatchText, bOpacity));
+                        preview.setCssProps({
+                            '--event-bg-color': hexToRgba(swatchBg, opacity),
+                            '--event-text-color': swatchText,
+                            '--event-border-color': hexToRgba(swatchText, bOpacity)
+                        });
                         bgColor = swatchBg;
                         textColor = swatchText;
                     }
@@ -4952,14 +4964,16 @@ class PromptSearchModal extends Modal {
                     if (bgColor && textColor) {
                         const opacity = this.view.plugin.settings.eventBgOpacity ?? 1;
                         const rgbaColor = hexToRgba(bgColor, opacity);
-                        preview.style.setProperty('--event-bg-color', rgbaColor);
-                        preview.style.setProperty('--event-text-color', textColor);
                         const bOpacity = this.view.plugin.settings.eventBorderOpacity ?? 1;
                         const borderColor = hexToRgba(textColor, bOpacity);
-                        preview.style.setProperty('--event-border-color', borderColor);
+                        preview.setCssProps({
+                            '--event-bg-color': rgbaColor,
+                            '--event-text-color': textColor,
+                            '--event-border-color': borderColor
+                        });
                         preview.classList.add('dayble-event-colored');
                         const descEl = preview.querySelector('.dayble-event-desc') as HTMLElement;
-                        if (descEl) descEl.style.setProperty('color', textColor);
+                        if (descEl) descEl.setCssProps({ 'color': textColor });
                     }
                 }
                 
@@ -5170,8 +5184,8 @@ class TodayModal extends Modal {
                     const style = window.getComputedStyle(grid);
                     const gridTemplate = style.getPropertyValue('grid-template-columns');
                     if (gridTemplate) {
-                        header.style.gridTemplateColumns = gridTemplate;
-                        allDaySection.style.gridTemplateColumns = gridTemplate;
+                        header.setCssProps({ 'grid-template-columns': gridTemplate });
+                        allDaySection.setCssProps({ 'grid-template-columns': gridTemplate });
                     }
                 }
             };
@@ -5311,7 +5325,7 @@ class TodayModal extends Modal {
                         const todayStr = moment().format('YYYY-MM-DD');
                         if (dStr < todayStr) {
                             item.addClass('dayble-event-past-dim');
-                            item.style.opacity = dimOpacity.toString();
+                            item.setCssProps({ 'opacity': dimOpacity.toString() });
                         }
                         // All-day events for today aren't "past" in the same way, 
                         // so we only dim them if the day is completely in the past.
@@ -5344,7 +5358,7 @@ class TodayModal extends Modal {
 
         const scroller = c.createDiv({ cls: 'dayble-focus-scroll' });
         this.scroller = scroller;
-        scroller.style.setProperty('--event-border-radius', `${this.view?.plugin?.settings?.eventBorderRadius ?? 6}px`);
+        scroller.setCssProps({ '--event-border-radius': `${this.view?.plugin?.settings?.eventBorderRadius ?? 6}px` });
 
         if (allDaySection) {
             scroller.appendChild(allDaySection);
@@ -5657,10 +5671,12 @@ class TodayModal extends Modal {
                     const width = startCell.offsetWidth;
                     const height = Math.max(4, ((endN - startN) + 1) * pxPerStep);
                     
-                    segment.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
-                    segment.style.setProperty('--focus-item-top', `${Math.round(top)}px`);
-                    segment.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
-                    segment.style.setProperty('--focus-item-height', `${Math.round(height)}px`);
+                    segment.setCssProps({
+                        '--focus-item-left': `${Math.round(left)}px`,
+                        '--focus-item-top': `${Math.round(top)}px`,
+                        '--focus-item-width': `${Math.round(width)}px`,
+                        '--focus-item-height': `${Math.round(height)}px`
+                    });
                 };
 
                 const boundaryN = 12 * (60 / stepMin); 
@@ -5707,9 +5723,9 @@ class TodayModal extends Modal {
                         
                         // Dynamic font size and content based on height
                         if (h < 30) {
-                            inner.style.fontSize = '0.7em';
+                            inner.setCssProps({ 'font-size': '0.7em' });
                         } else if (h < 60) {
-                            inner.style.fontSize = '0.9em';
+                            inner.setCssProps({ 'font-size': '0.9em' });
                         }
                         
                         inner.createDiv().setText(`${formatHM(sh_m, sm_m)} - ${formatHM(eh_m, em_m)}`);
@@ -5766,7 +5782,6 @@ class TodayModal extends Modal {
 
         const enable5 = this.view?.plugin?.settings?.enableFiveMinIntervals;
         const stepsPerRow = enable5 ? 6 : 2;
-        const stepMin = enable5 ? 5 : 15;
 
         slots.forEach((slot, idx) => {
             const targetGrid = (!isMulti && split && slot.hour >= 12) ? afternoonGrid : morningGrid;
@@ -5891,13 +5906,13 @@ class TodayModal extends Modal {
                     const line = quarter.createDiv({ cls: 'dayble-quarter-line' });
                     line.setCssProps({
                         'left': `${gridRect.left - gRect.left}px`,
-                        'width': `${gridRect.width}px`
+                        'width': `${gridRect.width}px`,
+                        '--quarter-line-top': `${Math.round((gridRect.top - gRect.top) + i * pxPerStep)}px`
                     });
-                    line.style.setProperty('--quarter-line-top', `${Math.round((gridRect.top - gRect.top) + i * pxPerStep)}px`);
                     if (enable5) {
-                        if (i % stepsPerRow === 0) line.style.opacity = '0.3'; // 30-min marks
-                        else if (i % (stepsPerRow / 2) === 0) line.style.opacity = '0.15'; // 15-min marks
-                        else line.style.opacity = '0.05'; // 5-min marks
+                        if (i % stepsPerRow === 0) line.setCssProps({ 'opacity': '0.3' }); // 30-min marks
+                        else if (i % (stepsPerRow / 2) === 0) line.setCssProps({ 'opacity': '0.15' }); // 15-min marks
+                        else line.setCssProps({ 'opacity': '0.05' }); // 5-min marks
                     }
                 }
             });
@@ -5954,10 +5969,12 @@ class TodayModal extends Modal {
                 // Mouse Y relative to gridContainer top
                 const mouseY = (e.clientY - gRect.top) - (this.dragOffsetY || 0);
                 
-                this.dragEl.style.setProperty('--focus-item-top', `${Math.round(mouseY)}px`);
-                this.dragEl.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
-                this.dragEl.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
-                this.dragEl.style.setProperty('--focus-item-height', `${Math.round(heightLocal)}px`);
+                this.dragEl.setCssProps({
+                    '--focus-item-top': `${Math.round(mouseY)}px`,
+                    '--focus-item-left': `${Math.round(left)}px`,
+                    '--focus-item-width': `${Math.round(width)}px`,
+                    '--focus-item-height': `${Math.round(heightLocal)}px`
+                });
             }
 
             if (!dropIndicator) {
@@ -5965,10 +5982,12 @@ class TodayModal extends Modal {
                 dropIndicator.className = 'dayble-focus-drop';
                 overlay.appendChild(dropIndicator);
             }
-            dropIndicator.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
-            dropIndicator.style.setProperty('--focus-item-top', `${Math.round(topLocal)}px`);
-            dropIndicator.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
-            dropIndicator.style.setProperty('--focus-item-height', `${Math.round(heightLocal)}px`);
+            dropIndicator.setCssProps({
+                '--focus-item-left': `${Math.round(left)}px`,
+                '--focus-item-top': `${Math.round(topLocal)}px`,
+                '--focus-item-width': `${Math.round(width)}px`,
+                '--focus-item-height': `${Math.round(heightLocal)}px`
+            });
             
             gridContainer.querySelectorAll('.dayble-focus-cell').forEach(el => el.removeClass('drop-target'));
             info.targetCell.addClass('drop-target');
@@ -6000,15 +6019,16 @@ class TodayModal extends Modal {
                 
                 el.removeClass('dragging');
                 el.addClass('settling');
-                el.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
-                el.style.setProperty('--focus-item-top', `${Math.round(topLocal)}px`);
-                el.style.setProperty('--focus-item-width', `${Math.round(info.targetCell.offsetWidth)}px`);
+                el.setCssProps({
+                    '--focus-item-left': `${Math.round(left)}px`,
+                    '--focus-item-top': `${Math.round(topLocal)}px`,
+                    '--focus-item-width': `${Math.round(info.targetCell.offsetWidth)}px`
+                });
             }
 
             const dates = Array.isArray(this.date) ? (this.date as string[]) : [this.date as string];
             const targetDate = dates[info.dayIdx] || dates[0];
 
-            const startHour = 0;
             const startTotalMin = info.n * info.stepMin;
             
             const newH = Math.floor(startTotalMin / 60);
@@ -6118,11 +6138,11 @@ class TodayModal extends Modal {
         const top = (cellRect.top - containerRect.top) + (withinMin / stepMin) * pxPerStep;
         
         const line = gridContainer.createDiv({ cls: 'dayble-current-time-line' });
-        line.style.top = `${Math.round(top)}px`;
-        
-        // Position relative to the cell's horizontal position
-        line.style.left = `${cellRect.left - containerRect.left}px`;
-        line.style.width = `${cellRect.width}px`;
+        line.setCssProps({
+            'top': `${Math.round(top)}px`,
+            'left': `${cellRect.left - containerRect.left}px`,
+            'width': `${cellRect.width}px`
+        });
 
         const timeLabel = line.createDiv({ cls: 'dayble-current-time-label' });
         const fmt = this.view?.plugin?.getTimeFormat() ?? '24h';
@@ -6348,11 +6368,11 @@ class TodayModal extends Modal {
                                 const currentTotalMin = (now.getHours() * 60) + now.getMinutes();
                                 if (endTotal <= currentTotalMin) {
                                     item.addClass('dayble-event-past-dim');
-                                    item.style.opacity = dimOpacity.toString();
+                                    item.setCssProps({ 'opacity': dimOpacity.toString() });
                                 }
                             } else if (dStr < todayStr) {
                                 item.addClass('dayble-event-past-dim');
-                                item.style.opacity = dimOpacity.toString();
+                                item.setCssProps({ 'opacity': dimOpacity.toString() });
                             }
                         }
                         
@@ -6387,10 +6407,12 @@ class TodayModal extends Modal {
                             setTooltip(item, this.view.getEventTooltipText(ev));
                         }
 
-                        item.style.setProperty('--focus-item-left', `${Math.round(left)}px`);
-                        item.style.setProperty('--focus-item-top', `${Math.round(top)}px`);
-                        item.style.setProperty('--focus-item-width', `${Math.round(width)}px`);
-                        item.style.setProperty('--focus-item-height', `${Math.round(height)}px`);
+                        item.setCssProps({
+                            '--focus-item-left': `${Math.round(left)}px`,
+                            '--focus-item-top': `${Math.round(top)}px`,
+                            '--focus-item-width': `${Math.round(width)}px`,
+                            '--focus-item-height': `${Math.round(height)}px`
+                        });
 
                         // Edge hover cursor change & Resize handling
                         const EDGE_SIZE = 10;
@@ -6452,11 +6474,13 @@ class TodayModal extends Modal {
                                     const actualNewTop = snappedTop;
                                     const actualNewHeight = initialHeight - (snappedTop - initialTop);
                                     if (actualNewHeight >= pxPerStep) {
-                                        item.style.setProperty('--focus-item-top', `${Math.round(actualNewTop)}px`);
-                                        item.style.setProperty('--focus-item-height', `${Math.round(actualNewHeight)}px`);
+                                        item.setCssProps({
+                                            '--focus-item-top': `${Math.round(actualNewTop)}px`,
+                                            '--focus-item-height': `${Math.round(actualNewHeight)}px`
+                                        });
                                     }
                                 } else {
-                                    item.style.setProperty('--focus-item-height', `${Math.round(snappedHeight)}px`);
+                                    item.setCssProps({ '--focus-item-height': `${Math.round(snappedHeight)}px` });
                                 }
                             };
 
@@ -6806,7 +6830,7 @@ class DaybleSettingTab extends PluginSettingTab {
             .setName('Event styling shortcut')
             .setDesc('Quickly jump to styling settings.')
             .addButton(b => {
-                b.setButtonText('Scroll to Event Styling').onClick(() => {
+                b.setButtonText('Scroll to event styling').onClick(() => {
                     const el = containerEl.querySelector('.dayble-event-styles-heading');
                     if (el) el.scrollIntoView({ behavior: 'smooth' });
                 });
@@ -6880,7 +6904,7 @@ class DaybleSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Enable 5 minute intervals')
-            .setDesc('Use 5-minute intervals in the Day and 3-Day views instead of 15-minute intervals.')
+            .setDesc('Use 5-minute intervals in the day and 3-day views instead of 15-minute intervals.')
             .addToggle(t => {
                 t.setValue(this.plugin.settings.enableFiveMinIntervals ?? true)
                     .onChange(async v => {
@@ -7280,32 +7304,34 @@ class DaybleSettingTab extends PluginSettingTab {
                 const textColor = selectedSwatch.textColor || '#ffffff';
 
                 if (baseColor.startsWith('var')) {
-                    eventBox.style.backgroundColor = `rgba(from ${baseColor} r g b / ${opacity})`;
+                    eventBox.setCssProps({ 'background-color': `rgba(from ${baseColor} r g b / ${opacity})` });
                     // Use textColor for border if it's a variable, otherwise fallback
                     if (textColor.startsWith('var')) {
-                        eventBox.style.border = `${borderWidth}px solid rgba(from ${textColor} r g b / ${borderOpacity})`;
+                        eventBox.setCssProps({ 'border': `${borderWidth}px solid rgba(from ${textColor} r g b / ${borderOpacity})` });
                     } else {
-                        eventBox.style.border = `${borderWidth}px solid ${textColor}`;
-                        eventBox.style.borderColor = textColor; // Ensure explicit color
+                        eventBox.setCssProps({
+                            'border': `${borderWidth}px solid ${textColor}`,
+                            'border-color': textColor
+                        });
                         // Apply opacity to border if it's a hex/color
                         if (textColor.startsWith('#')) {
                             const r = parseInt(textColor.slice(1, 3), 16);
                             const g = parseInt(textColor.slice(3, 5), 16);
                             const b = parseInt(textColor.slice(5, 7), 16);
-                            eventBox.style.borderColor = `rgba(${r}, ${g}, ${b}, ${borderOpacity})`;
+                            eventBox.setCssProps({ 'border-color': `rgba(${r}, ${g}, ${b}, ${borderOpacity})` });
                         }
                     }
                 } else {
-                    eventBox.style.backgroundColor = baseColor;
-                    eventBox.setCssStyles({ opacity: String(opacity) });
+                    eventBox.setCssProps({ 'background-color': baseColor });
+                    eventBox.setCssProps({ 'opacity': String(opacity) });
                     // Use textColor for border
                     if (textColor.startsWith('#')) {
                         const r = parseInt(textColor.slice(1, 3), 16);
                         const g = parseInt(textColor.slice(3, 5), 16);
                         const b = parseInt(textColor.slice(5, 7), 16);
-                        eventBox.setCssStyles({ border: `${borderWidth}px solid rgba(${r}, ${g}, ${b}, ${borderOpacity})` });
+                        eventBox.setCssProps({ 'border': `${borderWidth}px solid rgba(${r}, ${g}, ${b}, ${borderOpacity})` });
                     } else {
-                        eventBox.setCssStyles({ border: `${borderWidth}px solid ${textColor}` });
+                        eventBox.setCssProps({ 'border': `${borderWidth}px solid ${textColor}` });
                     }
                 }
                 eventBox.setCssStyles({ color: textColor });
@@ -7327,12 +7353,16 @@ class DaybleSettingTab extends PluginSettingTab {
             
             // Align title and desc
             eventTitle.setCssStyles({ fontSize: '0.85em', fontWeight: '600' });
-            eventTitle.style.setProperty('text-align', (titleAlign === 'center-left' ? 'left' : titleAlign), 'important');
-            eventTitle.style.setProperty('width', '100%', 'important');
+            eventTitle.setCssProps({
+                'text-align': `${titleAlign === 'center-left' ? 'left' : titleAlign} !important`,
+                'width': '100% !important'
+            });
 
             eventDesc.setCssStyles({ fontSize: '0.75em', opacity: '0.8' });
-            eventDesc.style.setProperty('text-align', (finalDescAlign === 'center-left' ? 'left' : finalDescAlign), 'important');
-            eventDesc.style.setProperty('width', '100%', 'important');
+            eventDesc.setCssProps({
+                'text-align': `${finalDescAlign === 'center-left' ? 'left' : finalDescAlign} !important`,
+                'width': '100% !important'
+            });
             
             // Handle overall flex alignment based on title alignment
             if (titleAlign === 'center' || titleAlign === 'center-left') {
@@ -7437,8 +7467,10 @@ class DaybleSettingTab extends PluginSettingTab {
                     const selectedSwatch = swatches.find(sw => sw.name === currentValue);
                     
                     if (selectedSwatch) {
-                        (d.selectEl).style.setProperty('background-color', selectedSwatch.color, 'important');
-                        (d.selectEl).style.setProperty('color', selectedSwatch.textColor || chooseTextColor(selectedSwatch.color), 'important');
+                        (d.selectEl).setCssProps({
+                            'background-color': `${selectedSwatch.color} !important`,
+                            'color': `${selectedSwatch.textColor || chooseTextColor(selectedSwatch.color)} !important`
+                        });
                     } else {
                         (d.selectEl).style.removeProperty('background-color');
                         (d.selectEl).style.removeProperty('color');
@@ -7446,14 +7478,18 @@ class DaybleSettingTab extends PluginSettingTab {
                     
                     Array.from(d.selectEl.options).forEach(opt => {
                         if (!opt.value) {
-                            opt.style.setProperty('background-color', 'var(--background-primary)');
-                            opt.style.setProperty('color', 'var(--text-normal)');
+                            opt.setCssProps({
+                                'background-color': 'var(--background-primary)',
+                                'color': 'var(--text-normal)'
+                            });
                             return;
                         }
                         const s = swatches.find(sw => sw.name === opt.value);
                         if (s) {
-                            opt.style.setProperty('background-color', s.color);
-                            opt.style.setProperty('color', s.textColor || chooseTextColor(s.color));
+                            opt.setCssProps({
+                                'background-color': s.color,
+                                'color': s.textColor || chooseTextColor(s.color)
+                            });
                         }
                     });
                 };
@@ -7715,8 +7751,10 @@ class DaybleSettingTab extends PluginSettingTab {
                             const selectedSwatch = swatches.find(sw => sw.name === currentValue);
                             
                             if (selectedSwatch) {
-                                (d.selectEl).style.setProperty('background-color', selectedSwatch.color, 'important');
-                                (d.selectEl).style.setProperty('color', selectedSwatch.textColor || chooseTextColor(selectedSwatch.color), 'important');
+                                (d.selectEl).setCssProps({
+                                    'background-color': `${selectedSwatch.color} !important`,
+                                    'color': `${selectedSwatch.textColor || chooseTextColor(selectedSwatch.color)} !important`
+                                });
                             } else {
                                 (d.selectEl).style.removeProperty('background-color');
                                 (d.selectEl).style.removeProperty('color');
@@ -7726,8 +7764,10 @@ class DaybleSettingTab extends PluginSettingTab {
                                 if (!opt.value) return;
                                 const s = swatches.find(sw => sw.name === opt.value);
                                 if (s) {
-                                    opt.style.setProperty('background-color', s.color);
-                                    opt.style.setProperty('color', s.textColor || chooseTextColor(s.color));
+                                    opt.setCssProps({
+                                        'background-color': s.color,
+                                        'color': s.textColor || chooseTextColor(s.color)
+                                    });
                                 }
                             });
                         };
@@ -8492,14 +8532,18 @@ class DaybleSettingTab extends PluginSettingTab {
                         
                         Array.from(d.selectEl.options).forEach(opt => {
                             if (!opt.value) {
-                                opt.style.setProperty('background-color', 'var(--background-primary)');
-                                opt.style.setProperty('color', 'var(--text-normal)');
+                                opt.setCssProps({
+                                    'background-color': 'var(--background-primary)',
+                                    'color': 'var(--text-normal)'
+                                });
                                 return;
                             }
                             const swatch = swatches.find(sw => sw.name === opt.value);
                             if (swatch) {
-                                opt.style.setProperty('background-color', swatch.color);
-                                opt.style.setProperty('color', swatch.textColor || chooseTextColor(swatch.color));
+                                opt.setCssProps({
+                                    'background-color': swatch.color,
+                                    'color': swatch.textColor || chooseTextColor(swatch.color)
+                                });
                             }
                         });
                     };
@@ -8781,7 +8825,7 @@ class EventStyleSettingsModal extends Modal {
             padding: '20px'
         });
 
-        contentEl.createEl('h2', { text: 'Event Style Settings', cls: 'dayble-centered-heading' });
+        contentEl.createEl('h2', { text: 'Event style settings', cls: 'dayble-centered-heading' });
 
         // Preview Box
         const previewContainer = contentEl.createDiv({ cls: 'dayble-event-preview-container' });
@@ -8821,7 +8865,7 @@ class EventStyleSettingsModal extends Modal {
             eventTitle.setText(this.category.name || 'todo');
             
             // Always stay as "description"
-            eventDesc.setText('description');
+            eventDesc.setText('Description');
             
             const opacity = settings.eventBgOpacity ?? 1;
             const borderOpacity = settings.eventBorderOpacity ?? 1;
@@ -8841,28 +8885,28 @@ class EventStyleSettingsModal extends Modal {
             let textColor = this.category.textColor;
             
             if (bgColor.startsWith('var')) {
-                eventBox.style.backgroundColor = `rgba(from ${bgColor} r g b / ${opacity})`;
+                eventBox.setCssProps({ 'background-color': `rgba(from ${bgColor} r g b / ${opacity})` });
                 if (textColor.startsWith('var')) {
-                    eventBox.style.border = `${borderWidth}px solid rgba(from ${textColor} r g b / ${borderOpacity})`;
+                    eventBox.setCssProps({ 'border': `${borderWidth}px solid rgba(from ${textColor} r g b / ${borderOpacity})` });
                 } else {
-                    eventBox.style.border = `${borderWidth}px solid ${textColor}`;
+                    eventBox.setCssProps({ 'border': `${borderWidth}px solid ${textColor}` });
                     if (textColor.startsWith('#')) {
                         const r = parseInt(textColor.slice(1, 3), 16);
                         const g = parseInt(textColor.slice(3, 5), 16);
                         const b = parseInt(textColor.slice(5, 7), 16);
-                        eventBox.style.borderColor = `rgba(${r}, ${g}, ${b}, ${borderOpacity})`;
+                        eventBox.setCssProps({ 'border-color': `rgba(${r}, ${g}, ${b}, ${borderOpacity})` });
                     }
                 }
             } else {
-                eventBox.style.backgroundColor = bgColor;
-                eventBox.setCssStyles({ opacity: String(opacity) });
+                eventBox.setCssProps({ 'background-color': bgColor });
+                eventBox.setCssProps({ 'opacity': String(opacity) });
                 if (textColor.startsWith('#')) {
                     const r = parseInt(textColor.slice(1, 3), 16);
                     const g = parseInt(textColor.slice(3, 5), 16);
                     const b = parseInt(textColor.slice(5, 7), 16);
-                    eventBox.setCssStyles({ border: `${borderWidth}px solid rgba(${r}, ${g}, ${b}, ${borderOpacity})` });
+                    eventBox.setCssProps({ 'border': `${borderWidth}px solid rgba(${r}, ${g}, ${b}, ${borderOpacity})` });
                 } else {
-                    eventBox.setCssStyles({ border: `${borderWidth}px solid ${textColor}` });
+                    eventBox.setCssProps({ 'border': `${borderWidth}px solid ${textColor}` });
                 }
             }
             eventBox.setCssStyles({ 
@@ -8895,15 +8939,19 @@ class EventStyleSettingsModal extends Modal {
                 fontSize: '0.85em',
                 fontWeight: '600'
             });
-            eventTitle.style.setProperty('text-align', (titleAlign === 'center-left' ? 'left' : titleAlign), 'important');
-            eventTitle.style.setProperty('width', '100%', 'important');
+            eventTitle.setCssProps({
+                'text-align': `${titleAlign === 'center-left' ? 'left' : titleAlign} !important`,
+                'width': '100% !important'
+            });
 
             eventDesc.setCssStyles({ 
                 fontSize: '0.75em',
                 opacity: '0.8'
             });
-            eventDesc.style.setProperty('text-align', (finalDescAlign === 'center-left' ? 'left' : finalDescAlign), 'important');
-            eventDesc.style.setProperty('width', '100%', 'important');
+            eventDesc.setCssProps({
+                'text-align': `${finalDescAlign === 'center-left' ? 'left' : finalDescAlign} !important`,
+                'width': '100% !important'
+            });
             
             // Handle overall flex alignment based on title alignment
             if (titleAlign === 'center' || titleAlign === 'center-left') {
@@ -9018,8 +9066,10 @@ class EventStyleSettingsModal extends Modal {
             colorSelect.add(new Option('No color', ''));
             swatches.forEach(s => {
                 const opt = new Option(s.name, s.name);
-                opt.style.backgroundColor = s.color;
-                opt.style.color = s.textColor || chooseTextColor(s.color);
+                opt.setCssProps({
+                    'background-color': s.color,
+                    'color': s.textColor || chooseTextColor(s.color)
+                });
                 colorSelect.add(opt);
             });
             colorSelect.value = this.category.colorName || '';
@@ -9046,14 +9096,18 @@ class EventStyleSettingsModal extends Modal {
             // Color options styling
             Array.from(colorSelect.options).forEach(opt => {
                 if (!opt.value) {
-                    opt.style.setProperty('background-color', 'var(--background-primary)');
-                    opt.style.setProperty('color', 'var(--text-normal)');
+                    opt.setCssProps({
+                        'background-color': 'var(--background-primary)',
+                        'color': 'var(--text-normal)'
+                    });
                     return;
                 }
                 const swatch = swatches.find(sw => sw.name === opt.value);
                 if (swatch) {
-                    opt.style.setProperty('background-color', swatch.color);
-                    opt.style.setProperty('color', swatch.textColor || chooseTextColor(swatch.color));
+                    opt.setCssProps({
+                        'background-color': swatch.color,
+                        'color': swatch.textColor || chooseTextColor(swatch.color)
+                    });
                 }
             });
 
@@ -9162,8 +9216,10 @@ class EventStyleSettingsModal extends Modal {
                     trColorSelect.add(new Option('Default', ''));
                     swatches.forEach(s => {
                         const opt = new Option(s.name, s.name);
-                        opt.style.backgroundColor = s.color;
-                        opt.style.color = s.textColor || chooseTextColor(s.color);
+                        opt.setCssProps({
+                            'background-color': s.color,
+                            'color': s.textColor || chooseTextColor(s.color)
+                        });
                         trColorSelect.add(opt);
                     });
                     trColorSelect.value = tr.colorName || '';
@@ -9185,14 +9241,18 @@ class EventStyleSettingsModal extends Modal {
                     // Color options styling
                     Array.from(trColorSelect.options).forEach(opt => {
                         if (!opt.value) {
-                            opt.style.setProperty('background-color', 'var(--background-primary)');
-                            opt.style.setProperty('color', 'var(--text-normal)');
+                            opt.setCssProps({
+                                'background-color': 'var(--background-primary)',
+                                'color': 'var(--text-normal)'
+                            });
                             return;
                         }
                         const swatch = swatches.find(sw => sw.name === opt.value);
                         if (swatch) {
-                            opt.style.setProperty('background-color', swatch.color);
-                            opt.style.setProperty('color', swatch.textColor || chooseTextColor(swatch.color));
+                            opt.setCssProps({
+                                'background-color': swatch.color,
+                                'color': swatch.textColor || chooseTextColor(swatch.color)
+                            });
                         }
                     });
 
@@ -9206,7 +9266,7 @@ class EventStyleSettingsModal extends Modal {
             };
             renderTriggers();
 
-            const addTrBtn = body.createEl('button', { text: '+ Add trigger', cls: 'mod-cta' });
+            const addTrBtn = body.createEl('button', { text: '+ add trigger', cls: 'mod-cta' });
             addTrBtn.setCssStyles({ marginTop: '8px', width: '100%' });
             addTrBtn.onclick = () => {
                 this.tempTriggers.push({ id: randomId(), pattern: '', categoryId: this.category.id });
@@ -9250,8 +9310,10 @@ class EventStyleSettingsModal extends Modal {
                     stColorSelect.add(new Option('Default', ''));
                     swatches.forEach(s => {
                         const opt = new Option(s.name, s.name);
-                        opt.style.backgroundColor = s.color;
-                        opt.style.color = s.textColor || chooseTextColor(s.color);
+                        opt.setCssProps({
+                            'background-color': s.color,
+                            'color': s.textColor || chooseTextColor(s.color)
+                        });
                         stColorSelect.add(opt);
                     });
                     stColorSelect.value = st.colorName || '';
@@ -9272,14 +9334,18 @@ class EventStyleSettingsModal extends Modal {
                     // Color options styling
                     Array.from(stColorSelect.options).forEach(opt => {
                         if (!opt.value) {
-                            opt.style.setProperty('background-color', 'var(--background-primary)');
-                            opt.style.setProperty('color', 'var(--text-normal)');
+                            opt.setCssProps({
+                                'background-color': 'var(--background-primary)',
+                                'color': 'var(--text-normal)'
+                            });
                             return;
                         }
                         const swatch = swatches.find(sw => sw.name === opt.value);
                         if (swatch) {
-                            opt.style.setProperty('background-color', swatch.color);
-                            opt.style.setProperty('color', swatch.textColor || chooseTextColor(swatch.color));
+                            opt.setCssProps({
+                                'background-color': swatch.color,
+                                'color': swatch.textColor || chooseTextColor(swatch.color)
+                            });
                         }
                     });
 
@@ -9293,7 +9359,7 @@ class EventStyleSettingsModal extends Modal {
             };
             renderStates();
 
-            const addStBtn = body.createEl('button', { text: '+ Add state', cls: 'mod-cta' });
+            const addStBtn = body.createEl('button', { text: '+ add state', cls: 'mod-cta' });
             addStBtn.setCssStyles({ marginTop: '8px', width: '100%' });
             addStBtn.onclick = () => {
                 this.tempStates.push({ 
@@ -9313,7 +9379,7 @@ class EventStyleSettingsModal extends Modal {
         // Footer Buttons
         const footer = contentEl.createDiv({ cls: 'dayble-modal-footer' });
 
-        const deleteBtn = footer.createEl('button', { text: 'Delete Style', cls: 'mod-warning' });
+        const deleteBtn = footer.createEl('button', { text: 'Delete style', cls: 'mod-warning' });
         deleteBtn.onclick = () => {
             new ConfirmModal(this.app, 'Are you sure you want to delete this style? All events using this style will be left unstyled.', async () => {
                 this.isDeleted = true;
@@ -9326,7 +9392,7 @@ class EventStyleSettingsModal extends Modal {
             }).open();
         };
 
-        const saveBtn = footer.createEl('button', { text: 'Save Style', cls: 'mod-cta' });
+        const saveBtn = footer.createEl('button', { text: 'Save style', cls: 'mod-cta' });
         saveBtn.onclick = async () => {
             await this.save();
             this.close();
@@ -9398,7 +9464,7 @@ class EventStyleSettingsModal extends Modal {
         let open = true;
         header.onclick = () => {
             open = !open;
-            body.style.display = open ? 'block' : 'none';
+            body.setCssProps({ 'display': open ? 'block' : 'none' });
             setIcon(arrow, open ? 'chevron-down' : 'chevron-right');
         };
     }
