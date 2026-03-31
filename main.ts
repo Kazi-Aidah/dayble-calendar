@@ -1780,7 +1780,7 @@ class DaybleCalendarView extends ItemView {
             cell.onclick = async (ev) => {
                 const target = ev.target as HTMLElement;
                 if (!target.closest('.dayble-event') && target.closest('.dayble-event-container') === container) {
-                    await this.openEventModal(undefined, fullDate);
+                    await this.openEventModal(undefined, fullDate, undefined, undefined, undefined, this.plugin.settings.onlyShowPinnedEventsWeek);
                 }
             };
             
@@ -2105,7 +2105,7 @@ class DaybleCalendarView extends ItemView {
                         const target = ev.target as HTMLElement;
                         // Only open modal if clicking on the cell itself or container, not on an event
                         if (!target.closest('.dayble-event') && target.closest('.dayble-event-container') === container) {
-                            await this.openEventModal(undefined, fullDate);
+                            await this.openEventModal(undefined, fullDate, undefined, undefined, undefined, this.plugin.settings.onlyShowPinnedEventsMonth);
                         }
                     };
             cell.onmousedown = (ev) => {
@@ -3001,6 +3001,12 @@ class DaybleCalendarView extends ItemView {
         });
         modal.categories = this.plugin.settings.eventCategories || [];
         // plugin is passed in constructor
+        const view = this.plugin.settings.calendarView;
+        const isMonth = view === 'Month' || (!view && !this.plugin.settings.calendarWeekActive);
+        const isWeek = view === 'Week' || (!view && this.plugin.settings.calendarWeekActive);
+        if ((isMonth && this.plugin.settings.onlyShowPinnedEventsMonth) || (isWeek && this.plugin.settings.onlyShowPinnedEventsWeek)) {
+            modal.isPinned = true;
+        }
         void modal.open();
     }
 
@@ -4008,7 +4014,7 @@ class DaybleCalendarView extends ItemView {
         };
     }
 
-    async openEventModal(id?: string, date?: string, endDate?: string, startTime?: string, endTime?: string): Promise<void> {
+    async openEventModal(id?: string, date?: string, endDate?: string, startTime?: string, endTime?: string, defaultPinned?: boolean): Promise<void> {
         const folder = this.plugin.settings.entriesFolder?.trim();
         if (!folder) { new StorageFolderNotSetModal(this.app).open(); return; }
         try { await this.app.vault.adapter.stat(folder); }
@@ -4030,6 +4036,7 @@ class DaybleCalendarView extends ItemView {
             const isSingle = !!result.date || (!!result.startDate && !result.endDate);
             if (existing) {
                 Object.assign(existing, result);
+
             } else {
                 const ev: DaybleEvent = { id: randomId(), ...result } as DaybleEvent;
                 if (isMulti || isSingle) {
@@ -4070,6 +4077,7 @@ class DaybleCalendarView extends ItemView {
         });
         modal.categories = this.plugin.settings.eventCategories || [];
         modal.plugin = this.plugin;
+        if (!existing && defaultPinned) modal.isPinned = true;
         void modal.open();
     }
 
