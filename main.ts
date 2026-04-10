@@ -71,6 +71,7 @@ interface DaybleSettings {
     soundMarkCompleteName?: string;
     soundNextEventName?: string;
     enableFiveMinIntervals?: boolean;
+    replaceHomepageWithSidecards?: boolean;
 } 
 
 const DEFAULT_SETTINGS: DaybleSettings = {
@@ -128,6 +129,7 @@ const DEFAULT_SETTINGS: DaybleSettings = {
     soundMarkCompleteName: '',
     soundNextEventName: '',
     enableFiveMinIntervals: true,
+    replaceHomepageWithSidecards: false,
     swatches: [
         // { name: 'Red', color: '#eb3b5a', textColor: '#f9c6d0' },
         // { name: 'Orange', color: '#fa8231', textColor: '#fed8be' },
@@ -551,6 +553,23 @@ export default class DaybleCalendarPlugin extends Plugin {
             }
         });
 this.addSettingTab(new DaybleSettingTab(this.app, this));
+
+        // Replace new tab with homepage when enabled
+        this.registerEvent(
+            this.app.workspace.on('active-leaf-change', (leaf: WorkspaceLeaf | null) => {
+                if (!this.settings.replaceHomepageWithSidecards) return;
+                if (!leaf) return;
+                try {
+                    const viewType = leaf.view?.getViewType?.();
+                    if (viewType === VIEW_TYPE) return;
+                    const state = leaf.getViewState?.();
+                    if (state?.type === 'empty' && !state?.state?.file) {
+                        void this.replaceWithHomepage(leaf);
+                    }
+                } catch { /* leaf state may not be accessible */ }
+            })
+        );
+
 try { await this.ensureEntriesFolder(); } catch { }
     void this.openDayble();
     }
@@ -690,6 +709,12 @@ try { await this.ensureEntriesFolder(); } catch { }
                 // Ignore folder exists error
             }
         }
+    }
+
+    private async replaceWithHomepage(leaf: WorkspaceLeaf) {
+        try {
+            await leaf.setViewState({ type: VIEW_TYPE, active: true });
+        } catch { /* leaf may have been detached */ }
     }
 }
 
@@ -6924,6 +6949,17 @@ class DaybleSettingTab extends PluginSettingTab {
             });
 
         
+
+        new Setting(containerEl)
+            .setName('Replace new tab with calendar')
+            .setDesc('Automatically open the Dayble calendar instead of the default empty new tab.')
+            .addToggle(t => {
+                t.setValue(!!this.plugin.settings.replaceHomepageWithSidecards)
+                    .onChange(async v => {
+                        this.plugin.settings.replaceHomepageWithSidecards = v;
+                        await this.plugin.saveSettings();
+                    });
+            });
 
         const dateFormatHeading = new Setting(containerEl).setName('Date formats').setHeading();
         dateFormatHeading.descEl.createSpan({ text: 'Customize how dates appear in different views. ' });
