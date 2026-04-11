@@ -21,5 +21,10 @@
   },
   "include": [
     "**/*.ts"
+  ],
+  "exclude": [
+    "src/CalendarView_raw.ts",
+    "src/CalendarView_class.ts",
+    "node_modules"
   ]
 }
