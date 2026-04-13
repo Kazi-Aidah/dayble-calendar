@@ -3222,8 +3222,8 @@ export default class DaybleCalendarView extends ItemView {
             touchGhost.setCssProps({ 'pointer-events': 'none' });
             const target = document.elementFromPoint(t.clientX, t.clientY);
             this.gridEl.querySelectorAll('.dayble-drag-over').forEach(el => el.removeClass('dayble-drag-over'));
-            const cell = target?.closest('[data-date]') as HTMLElement | null;
-            if (cell) cell.addClass('dayble-drag-over');
+            const cell = target?.closest('[data-date]');
+            if (cell) (cell as HTMLElement).addClass('dayble-drag-over');
         }, { passive: false });
 
         item.addEventListener('touchend', (e: TouchEvent) => {
@@ -3239,9 +3239,9 @@ export default class DaybleCalendarView extends ItemView {
             const t = e.changedTouches[0];
             if (!t) return;
             const target = document.elementFromPoint(t.clientX, t.clientY);
-            const cell = target?.closest('[data-date]') as HTMLElement | null;
+            const cell = target?.closest('[data-date]');
             if (!cell) return;
-            const newDate = cell.dataset.date;
+            const newDate = (cell as HTMLElement).dataset.date;
             if (!newDate) return;
 
             void (async () => {

@@ -1373,7 +1373,6 @@ export default class DaybleSettingTab extends PluginSettingTab {
 
                     const ghost = document.body.createDiv({ cls: 'drag-reorder-ghost' });
                     const clone = wrap.cloneNode(true) as HTMLElement;
-                    clone.setCssProps({ 'background-color': 'transparent', 'border': 'none', 'box-shadow': 'none' });
 
                     const originalInputs = wrap.querySelectorAll('input');
                     const clonedInputs = clone.querySelectorAll('input');
@@ -1392,7 +1391,6 @@ export default class DaybleSettingTab extends PluginSettingTab {
                         'pointer-events': 'none',
                         'opacity': '0.8',
                         'box-shadow': '0 4px 12px rgba(0, 0, 0, 0.2)',
-                        'background-color': 'transparent',
                         'border-radius': '4px'
                     });
 
