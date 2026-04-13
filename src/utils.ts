@@ -112,3 +112,36 @@ export function randomId(): string {
     if (anyCrypto?.randomUUID) return anyCrypto.randomUUID();
     return 'ev-' + Math.random().toString(36).slice(2) + '-' + Date.now();
 }
+
+/**
+ * Adds touch event support to an element that already has mousedown-based drag logic.
+ * Translates touchstart/touchmove/touchend into synthetic MouseEvent-like objects
+ * so the same handler can be reused for both mouse and touch.
+ *
+ * @param el        The element to attach touch listeners to
+ * @param onStart   Called on touchstart with a touch-derived clientX/Y
+ * @param onMove    Called on touchmove with a touch-derived clientX/Y
+ * @param onEnd     Called on touchend
+ */
+export function addTouchDragListeners(
+    el: HTMLElement,
+    onStart: (clientX: number, clientY: number, e: TouchEvent) => void,
+    onMove: (clientX: number, clientY: number, e: TouchEvent) => void,
+    onEnd: (e: TouchEvent) => void
+): void {
+    el.addEventListener('touchstart', (e: TouchEvent) => {
+        const t = e.touches[0];
+        if (!t) return;
+        onStart(t.clientX, t.clientY, e);
+    }, { passive: false });
+
+    el.addEventListener('touchmove', (e: TouchEvent) => {
+        const t = e.touches[0];
+        if (!t) return;
+        onMove(t.clientX, t.clientY, e);
+    }, { passive: false });
+
+    el.addEventListener('touchend', (e: TouchEvent) => {
+        onEnd(e);
+    }, { passive: false });
+}

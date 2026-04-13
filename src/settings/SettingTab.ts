@@ -1,7 +1,7 @@
 import { App, PluginSettingTab, Setting, Notice, setIcon, TFolder, Vault, DataAdapter, moment } from 'obsidian';
 import type { DaybleSettings, EventCategory } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
-import { chooseTextColor, randomId } from '../utils';
+import { chooseTextColor, randomId, addTouchDragListeners } from '../utils';
 import { VIEW_TYPE } from '../constants';
 import ChangelogModal from '../modals/ChangelogModal';
 import ConfirmModal from '../modals/ConfirmModal';
@@ -1364,17 +1364,12 @@ export default class DaybleSettingTab extends PluginSettingTab {
                     await updateAll();
                 };
 
-                dragBtn.addEventListener('mousedown', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    const startX = e.clientX;
-                    const startY = e.clientY;
+                const startColorDrag = (startX: number, startY: number) => {
                     const rect = wrap.getBoundingClientRect();
                     const offsetX = startX - rect.left;
                     const offsetY = startY - rect.top;
 
-                    if (navigator.vibrate) navigator.vibrate(100);
+                    if (navigator.vibrate) navigator.vibrate(50);
 
                     const ghost = document.body.createDiv({ cls: 'drag-reorder-ghost' });
                     const clone = wrap.cloneNode(true) as HTMLElement;
@@ -1404,11 +1399,7 @@ export default class DaybleSettingTab extends PluginSettingTab {
                     wrap.classList.add('drag-ghost-hidden');
                     ghost.addClass('dayble-drag-ghost');
 
-                    const onMove = (moveEvent: MouseEvent) => {
-                        moveEvent.preventDefault();
-                        const currentX = moveEvent.clientX;
-                        const currentY = moveEvent.clientY;
-
+                    const moveGhost = (currentX: number, currentY: number) => {
                         ghost.setCssProps({
                             'left': `${currentX - offsetX}px`,
                             'top': `${currentY - offsetY}px`
@@ -1420,31 +1411,45 @@ export default class DaybleSettingTab extends PluginSettingTab {
                         if (targetRow && targetRow !== wrap && targetRow.parentNode === row) {
                             const targetRect = targetRow.getBoundingClientRect();
                             const next = (currentX - targetRect.left) > (targetRect.width * 0.2);
-
                             if (next) {
-                                if (targetRow.nextSibling !== wrap) {
-                                    targetRow.parentNode?.insertBefore(wrap, targetRow.nextSibling);
-                                }
+                                if (targetRow.nextSibling !== wrap) targetRow.parentNode?.insertBefore(wrap, targetRow.nextSibling);
                             } else {
-                                if (targetRow !== wrap) {
-                                    targetRow.parentNode?.insertBefore(wrap, targetRow);
-                                }
+                                if (targetRow !== wrap) targetRow.parentNode?.insertBefore(wrap, targetRow);
                             }
                         }
                     };
 
-                    const onEndAsync = async () => {
-                        document.removeEventListener('mousemove', onMove);
-                        document.removeEventListener('mouseup', onEnd);
+                    const endDrag = async () => {
+                        document.removeEventListener('mousemove', onMouseMove);
+                        document.removeEventListener('mouseup', onMouseUp);
                         ghost.remove();
                         wrap.classList.remove('drag-ghost-hidden');
                         await updateAll();
                     };
-                    const onEnd = () => { void onEndAsync(); };
 
-                    document.addEventListener('mousemove', onMove);
-                    document.addEventListener('mouseup', onEnd);
+                    const onMouseMove = (moveEvent: MouseEvent) => { moveEvent.preventDefault(); moveGhost(moveEvent.clientX, moveEvent.clientY); };
+                    const onMouseUp = () => { void endDrag(); };
+
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
+
+                    return { moveGhost, endDrag };
+                };
+
+                let colorDragState: ReturnType<typeof startColorDrag> | null = null;
+
+                dragBtn.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    colorDragState = startColorDrag(e.clientX, e.clientY);
                 });
+
+                addTouchDragListeners(
+                    dragBtn,
+                    (cx, cy, e) => { e.preventDefault(); e.stopPropagation(); colorDragState = startColorDrag(cx, cy); },
+                    (cx, cy, e) => { e.preventDefault(); colorDragState?.moveGhost(cx, cy); },
+                    (e) => { e.preventDefault(); void colorDragState?.endDrag(); colorDragState = null; }
+                );
             };
             combined.forEach((entry, idx) => { makeItem(entry, idx); });
             const controlsBottom = new Setting(colorsListTop);
@@ -1517,18 +1522,13 @@ export default class DaybleSettingTab extends PluginSettingTab {
                 });
                 setIcon(dragBtn, 'menu');
 
-                dragBtn.addEventListener('mousedown', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-
+                const startCategoryDrag = (startX: number, startY: number) => {
                     const wrap = row.settingEl;
-                    const startX = e.clientX;
-                    const startY = e.clientY;
                     const rect = wrap.getBoundingClientRect();
                     const offsetX = startX - rect.left;
                     const offsetY = startY - rect.top;
 
-                    if (navigator.vibrate) navigator.vibrate(100);
+                    if (navigator.vibrate) navigator.vibrate(50);
 
                     const ghost = document.body.createDiv({ cls: 'drag-reorder-ghost' });
                     const clone = wrap.cloneNode(true) as HTMLElement;
@@ -1559,11 +1559,7 @@ export default class DaybleSettingTab extends PluginSettingTab {
                     wrap.classList.add('drag-ghost-hidden');
                     ghost.addClass('dayble-drag-ghost');
 
-                    const onMove = (moveEvent: MouseEvent) => {
-                        moveEvent.preventDefault();
-                        const currentX = moveEvent.clientX;
-                        const currentY = moveEvent.clientY;
-
+                    const moveGhost = (currentX: number, currentY: number) => {
                         ghost.setCssProps({
                             'left': `${currentX - offsetX}px`,
                             'top': `${currentY - offsetY}px`
@@ -1575,22 +1571,17 @@ export default class DaybleSettingTab extends PluginSettingTab {
                         if (targetRow && targetRow !== wrap && targetRow.parentNode === stylesWrap) {
                             const targetRect = targetRow.getBoundingClientRect();
                             const isAfter = (currentY - targetRect.top) > (targetRect.height / 2);
-
                             if (isAfter) {
-                                if (targetRow.nextSibling !== wrap) {
-                                    targetRow.parentNode?.insertBefore(wrap, targetRow.nextSibling);
-                                }
+                                if (targetRow.nextSibling !== wrap) targetRow.parentNode?.insertBefore(wrap, targetRow.nextSibling);
                             } else {
-                                if (targetRow !== wrap) {
-                                    targetRow.parentNode?.insertBefore(wrap, targetRow);
-                                }
+                                if (targetRow !== wrap) targetRow.parentNode?.insertBefore(wrap, targetRow);
                             }
                         }
                     };
 
-                    const onEndAsync2 = async () => {
-                        document.removeEventListener('mousemove', onMove);
-                        document.removeEventListener('mouseup', onEnd);
+                    const endDrag = async () => {
+                        document.removeEventListener('mousemove', onMouseMove);
+                        document.removeEventListener('mouseup', onMouseUp);
                         ghost.remove();
                         wrap.classList.remove('drag-ghost-hidden');
 
@@ -1606,16 +1597,34 @@ export default class DaybleSettingTab extends PluginSettingTab {
                             this.plugin.reorderTriggersGlobally();
                             await this.plugin.saveSettings();
                             renderStyles();
-
                             const view = this.plugin.getCalendarView();
                             if (view) await view.render();
                         }
                     };
-                    const onEnd = () => { void onEndAsync2(); };
 
-                    document.addEventListener('mousemove', onMove);
-                    document.addEventListener('mouseup', onEnd);
+                    const onMouseMove = (moveEvent: MouseEvent) => { moveEvent.preventDefault(); moveGhost(moveEvent.clientX, moveEvent.clientY); };
+                    const onMouseUp = () => { void endDrag(); };
+
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
+
+                    return { moveGhost, endDrag };
+                };
+
+                let catDragState: ReturnType<typeof startCategoryDrag> | null = null;
+
+                dragBtn.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    startCategoryDrag(e.clientX, e.clientY);
                 });
+
+                addTouchDragListeners(
+                    dragBtn,
+                    (cx, cy, e) => { e.preventDefault(); e.stopPropagation(); catDragState = startCategoryDrag(cx, cy); },
+                    (cx, cy, e) => { e.preventDefault(); catDragState?.moveGhost(cx, cy); },
+                    (e) => { e.preventDefault(); void catDragState?.endDrag(); catDragState = null; }
+                );
 
                 // Clickable icon to set icon
                 row.addExtraButton(btn => {
