@@ -1163,7 +1163,7 @@ export default class DaybleCalendarView extends ItemView {
             this.gridEl.appendChild(this._longOverlayEl);
         }
         
-        requestAnimationFrame(() => { this.renderLongEvents(); });
+        requestAnimationFrame(() => { requestAnimationFrame(() => { this.renderLongEvents(); }); });
         
         if (!this._longRO && 'ResizeObserver' in window) {
             this._longRO = new ResizeObserver(() => {
@@ -1561,7 +1561,9 @@ export default class DaybleCalendarView extends ItemView {
             this.gridEl.appendChild(this._longOverlayEl);
         }
         requestAnimationFrame(() => {
-            this.renderLongEvents();
+            requestAnimationFrame(() => {
+                this.renderLongEvents();
+            });
         });
         this.renderHolder();
 
@@ -2392,6 +2394,15 @@ export default class DaybleCalendarView extends ItemView {
             this._longOverlayEl.addClass('dayble-long-overlay-box');
         }
         const cells = Array.from(this.gridEl.children).filter(el => (el as HTMLElement).hasClass?.('dayble-day')) as HTMLElement[];
+
+        // Guard: if cells have no layout yet, retry next frame
+        if (cells.length > 0) {
+            const firstActive = cells.find(c => c.getAttr('data-date'));
+            if (firstActive && firstActive.getBoundingClientRect().height === 0) {
+                requestAnimationFrame(() => { this.renderLongEvents(); });
+                return;
+            }
+        }
         
         // Fixed buffer from the top of the day cell to the first long event
         const HEADER_BUFFER = 38; // LN
@@ -2423,7 +2434,6 @@ export default class DaybleCalendarView extends ItemView {
         if ((isMonth && this.plugin.settings.onlyShowPinnedEventsMonth) || (isWeek && this.plugin.settings.onlyShowPinnedEventsWeek)) {
             longEvents = longEvents.filter(ev => ev.pinned);
         }
-
         const { eventLanes, maxLanesByDate } = this.calculateLongEventLanes(longEvents, { lanesPerEvent, lanesPerGap, lanesPerDesc, lanesPerIcon, liBottomGapReduceUnits: LI_BOTTOM_GAP_REDUCE_UNITS });
         const countsByDate = maxLanesByDate;
 
@@ -2555,9 +2565,12 @@ export default class DaybleCalendarView extends ItemView {
 
         // Function to position a single event segment using fixed calculations
         const positionEventSegment = (item: HTMLElement, first: HTMLElement, last: HTMLElement, stackIndex: number, evId?: string) => {
-            const frLeft = first.offsetLeft;
-            const frTop = first.offsetTop;
-            const lrRight = last.offsetLeft + last.offsetWidth;
+            const gridRect = this.gridEl.getBoundingClientRect();
+            const frRect = first.getBoundingClientRect();
+            const lrRect = last.getBoundingClientRect();
+            const frLeft = frRect.left - gridRect.left;
+            const frTop = frRect.top - gridRect.top;
+            const lrRight = (lrRect.left - gridRect.left) + lrRect.width;
             
             // Fixed top offset calculation based on lane unit index
             const baseTopOffset = HEADER_BUFFER + (stackIndex * LANE_UNIT_HEIGHT); // LN
@@ -2596,9 +2609,9 @@ export default class DaybleCalendarView extends ItemView {
         };
 
         sortedLongEvents.forEach(ev => {
-            // Determine the visible date range in the current grid
-            const gridStartStr = cells[0]?.getAttr('data-date');
-            const gridEndStr = cells[cells.length - 1]?.getAttr('data-date');
+            // Determine the visible date range in the current grid (skip inactive cells)
+            const gridStartStr = cells.find(c => c.getAttr('data-date'))?.getAttr('data-date') ?? null;
+            const gridEndStr = [...cells].reverse().find(c => c.getAttr('data-date'))?.getAttr('data-date') ?? null;
             if (!gridStartStr || !gridEndStr) return;
 
             const evStartFull = new Date(ev.startDate);
@@ -2627,7 +2640,7 @@ export default class DaybleCalendarView extends ItemView {
             const endIdx = startIdx + span - 1;
             const endRow = Math.floor(endIdx / cellsPerRow);
             const category = this.plugin.settings.eventCategories?.find(c => c.id === ev.categoryId);
-            const styleSig = `${ev.categoryId || ''}|${ev.color || ''}|${ev.textColor || ''}|${ev.colorName || ''}|${category?.bgColor || ''}|${category?.textColor || ''}|${this.plugin.settings.eventBgOpacity}|${this.plugin.settings.iconPlacement}|${this.plugin.settings.onlyAnimateToday}|${this.plugin.settings.eventBorderWidth}|${this.plugin.settings.eventBorderRadius}|${this.plugin.settings.eventBorderOpacity}`;
+            const styleSig = `${ev.categoryId || ''}|${ev.color || ''}|${ev.textColor || ''}|${ev.colorName || ''}|${category?.bgColor || ''}|${category?.textColor || ''}|${this.plugin.settings.eventBgOpacity}|${this.plugin.settings.iconPlacement}|${this.plugin.settings.onlyAnimateToday}|${this.plugin.settings.eventBorderWidth}|${this.plugin.settings.eventBorderRadius}|${this.plugin.settings.eventBorderOpacity}|${ev.pinned ? '1' : '0'}|${ev.completed ? '1' : '0'}|${ev.stateId || ''}`;
             const contentSig = `${ev.title || ''}|${ev.description || ''}|${ev.icon || ''}|${ev.time || ''}`;
             
             if (startRow === endRow) {
@@ -2718,7 +2731,12 @@ export default class DaybleCalendarView extends ItemView {
 
         // Initial update
         updateNormalEventMargins();
-    }
+
+        // If any long event items have zero width, layout wasn't ready yet — retry once more
+        const hasZeroWidth = Array.from(this._longEls.values()).some(el => el.isConnected && el.offsetWidth === 0);
+        if (hasZeroWidth) {
+            requestAnimationFrame(() => { this.renderLongEvents(); });
+        }    }
 
     getEventTooltipText(ev: DaybleEvent): string {
         const title = (ev.title || 'Untitled').replace(/[#*`]/g, '');

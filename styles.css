@@ -1397,7 +1397,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .dayble-textarea {
     width: 100%;
     min-height: 100px;
-    background: var(--background-primary);
+    background: var(--background-modifier-form-field) !important;
     color: var(--text-normal);
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--input-radius);
@@ -2470,12 +2470,10 @@ input[type="time"]::-webkit-calendar-picker-indicator {
         flex-wrap: nowrap !important;
         overflow: visible;
     }
-    .db-category-row .setting-item-control > button[aria-label="Drag to reorder"] {
+    .db-category-row .setting-item-control > .clickable-icon[aria-label="Drag to reorder"] {
         flex: 0 0 auto !important;
         width: auto !important;
         min-width: 0 !important;
-        border: none !important;
-        box-shadow: none !important;
         padding: 0 !important;
     }
 }

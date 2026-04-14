@@ -1502,14 +1502,11 @@ export default class DaybleSettingTab extends PluginSettingTab {
                 (row.controlEl).addClass('dayble-flex-gap-8');
 
                 // Drag Handle
-                const dragBtn = row.controlEl.createEl('button', {
+                const dragBtn = row.controlEl.createDiv({
+                    cls: 'clickable-icon',
                     attr: { 'aria-label': 'Drag to reorder' }
                 });
                 dragBtn.setCssProps({
-                    'padding': '0px',
-                    'border': 'none',
-                    'background': 'transparent',
-                    'box-shadow': 'none',
                     'cursor': 'grab',
                     'color': 'var(--text-muted)',
                     'flex-shrink': '0',

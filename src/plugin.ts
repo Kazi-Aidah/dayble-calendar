@@ -465,14 +465,22 @@ export default class DaybleCalendarPlugin extends Plugin {
 
     getCalendarView(): DaybleCalendarView | null {
         const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
-        if (leaves.length > 0) return leaves[0].view as DaybleCalendarView;
+        for (const leaf of leaves) {
+            if (leaf.view instanceof DaybleCalendarView) return leaf.view;
+        }
         return null;
     }
 
     getOrCreateLeaf(): WorkspaceLeaf {
         const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
         if (leaves.length) return leaves[0];
-        return this.app.workspace.getLeaf(true) ?? (this.app.workspace as unknown).getRightLeaf(false);
+        try {
+            const leaf = this.app.workspace.getLeaf(true);
+            if (leaf) return leaf;
+        } catch { /* no tab group available */ }
+        // Fallback: use the most-recently-active leaf or create one in the right sidebar
+        return this.app.workspace.getLeaf(false)
+            ?? (this.app.workspace as unknown as { getRightLeaf: (split: boolean) => WorkspaceLeaf }).getRightLeaf(false);
     }
 
     async ensureEntriesFolder() {
