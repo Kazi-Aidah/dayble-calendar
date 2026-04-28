@@ -2918,6 +2918,12 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     color: var(--interactive-accent);
 }
 
+/* Long-press pending feedback on touch — shown while waiting for the 400ms hold */
+.dayble-long-press-pending {
+    background-color: var(--interactive-accent) !important;
+    opacity: 0.25;
+    transition: opacity 0.4s ease;
+}
 
 
 /* day mode selection styling */

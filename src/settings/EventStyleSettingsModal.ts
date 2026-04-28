@@ -1,19 +1,23 @@
 import { App, Modal, Menu, setIcon, setTooltip } from 'obsidian';
-import type { EventCategory, EventState } from '../types';
+import type { EventCategory, EventState, DaybleSettings } from '../types';
 import { chooseTextColor, randomId } from '../utils';
 import IconPickerModal from '../modals/IconPickerModal';
 import ConfirmModal from '../modals/ConfirmModal';
+import type DaybleCalendarPlugin from '../plugin';
+
+type Trigger = NonNullable<DaybleSettings['triggers']>[number];
+type Swatch = NonNullable<DaybleSettings['swatches']>[number];
 
 export default class EventStyleSettingsModal extends Modal {
-    plugin: unknown;
+    plugin: DaybleCalendarPlugin;
     category: EventCategory;
     onSave: () => void;
-    tempTriggers: unknown[];
+    tempTriggers: Trigger[];
     tempStates: EventState[];
     isDeleted = false;
     isSaved = false;
 
-    constructor(app: App, plugin: unknown, category: EventCategory, onSave: () => void) {
+    constructor(app: App, plugin: DaybleCalendarPlugin, category: EventCategory, onSave: () => void) {
         super(app);
         this.plugin = plugin;
         this.category = { ...category }; // Work on a copy
@@ -21,8 +25,8 @@ export default class EventStyleSettingsModal extends Modal {
 
         // Filter triggers and states for this category
         this.tempTriggers = (this.plugin.settings.triggers || [])
-            .filter((t: unknown) => t.categoryId === category.id)
-            .map((t: unknown) => ({ ...t }));
+            .filter((t: Trigger) => t.categoryId === category.id)
+            .map((t: Trigger) => ({ ...t }));
 
         this.tempStates = (this.plugin.settings.eventStates || [])
             .filter((s: EventState) => s.categoryId === category.id)
@@ -41,7 +45,7 @@ export default class EventStyleSettingsModal extends Modal {
 
         // Update triggers
         // 1. Remove old triggers for this category
-        this.plugin.settings.triggers = (this.plugin.settings.triggers || []).filter((t: unknown) => t.categoryId !== this.category.id);
+        this.plugin.settings.triggers = (this.plugin.settings.triggers || []).filter((t: Trigger) => t.categoryId !== this.category.id);
         // 2. Add new/updated triggers
         this.plugin.settings.triggers.push(...this.tempTriggers);
 
@@ -69,7 +73,7 @@ export default class EventStyleSettingsModal extends Modal {
         this.contentEl.empty();
     }
 
-    addContextMenu(inputEl: HTMLInputElement, list: unknown[], index: number, renderFn: () => void) {
+    addContextMenu<T>(inputEl: HTMLInputElement, list: T[], index: number, renderFn: () => void) {
         inputEl.addEventListener('contextmenu', (e: MouseEvent) => {
             e.preventDefault();
             const menu = new Menu();
@@ -356,14 +360,14 @@ export default class EventStyleSettingsModal extends Modal {
             };
 
             // Color Dropdown
-            const swatches = [
+            const swatches: Swatch[] = [
                 ...(this.plugin.settings.swatches || []),
-                ...(this.plugin.settings.userCustomSwatches || []).map((s: unknown, idx: number) => ({ ...s, name: s.name || `custom-${idx}` }))
+                ...(this.plugin.settings.userCustomSwatches || []).map((s: Swatch, idx: number) => ({ ...s, name: s.name || `custom-${idx}` }))
             ];
             const colorSelect = row1.createEl('select', { cls: 'db-select' });
             colorSelect.setCssStyles({ flex: '1' });
             colorSelect.add(new Option('No color', ''));
-            swatches.forEach((s: unknown) => {
+            swatches.forEach((s: Swatch) => {
                 const opt = new Option(s.name, s.name);
                 opt.setCssProps({
                     'background-color': s.color,
@@ -373,7 +377,7 @@ export default class EventStyleSettingsModal extends Modal {
             });
             colorSelect.value = this.category.colorName || '';
             const updateColorSelectStyle = () => {
-                const s = swatches.find((sw: unknown) => sw.name === colorSelect.value);
+                const s = swatches.find((sw: Swatch) => sw.name === colorSelect.value);
                 if (s) {
                     colorSelect.setCssStyles({ backgroundColor: s.color, color: s.textColor || chooseTextColor(s.color) });
                 } else {
@@ -383,7 +387,7 @@ export default class EventStyleSettingsModal extends Modal {
             updateColorSelectStyle();
             colorSelect.onchange = () => {
                 this.category.colorName = colorSelect.value || undefined;
-                const s = swatches.find((sw: unknown) => sw.name === colorSelect.value);
+                const s = swatches.find((sw: Swatch) => sw.name === colorSelect.value);
                 if (s) {
                     this.category.bgColor = s.color;
                     this.category.textColor = s.textColor || chooseTextColor(s.color);
@@ -401,7 +405,7 @@ export default class EventStyleSettingsModal extends Modal {
                     });
                     return;
                 }
-                const swatch = swatches.find((sw: unknown) => sw.name === opt.value);
+                const swatch = swatches.find((sw: Swatch) => sw.name === opt.value);
                 if (swatch) {
                     opt.setCssProps({
                         'background-color': swatch.color,
@@ -507,13 +511,13 @@ export default class EventStyleSettingsModal extends Modal {
                     this.addContextMenu(trInput, this.tempTriggers, idx, renderTriggers);
 
                     // Color Dropdown for Trigger
-                    const swatches = [
+                    const swatches: Swatch[] = [
                         ...(this.plugin.settings.swatches || []),
-                        ...(this.plugin.settings.userCustomSwatches || []).map((s: unknown, idx: number) => ({ ...s, name: s.name || `custom-${idx}` }))
+                        ...(this.plugin.settings.userCustomSwatches || []).map((s: Swatch, idx: number) => ({ ...s, name: s.name || `custom-${idx}` }))
                     ];
                     const trColorSelect = trRow.createEl('select', { cls: 'db-select' });
                     trColorSelect.add(new Option('Default', ''));
-                    swatches.forEach((s: unknown) => {
+                    swatches.forEach((s: Swatch) => {
                         const opt = new Option(s.name, s.name);
                         opt.setCssProps({
                             'background-color': s.color,
@@ -523,7 +527,7 @@ export default class EventStyleSettingsModal extends Modal {
                     });
                     trColorSelect.value = tr.colorName || '';
                     const updateTrColorStyle = () => {
-                        const s = swatches.find((sw: unknown) => sw.name === trColorSelect.value);
+                        const s = swatches.find((sw: Swatch) => sw.name === trColorSelect.value);
                         if (s) {
                             trColorSelect.setCssStyles({ backgroundColor: s.color, color: s.textColor || chooseTextColor(s.color) });
                         } else {
@@ -546,7 +550,7 @@ export default class EventStyleSettingsModal extends Modal {
                             });
                             return;
                         }
-                        const swatch = swatches.find((sw: unknown) => sw.name === opt.value);
+                        const swatch = swatches.find((sw: Swatch) => sw.name === opt.value);
                         if (swatch) {
                             opt.setCssProps({
                                 'background-color': swatch.color,
@@ -601,13 +605,13 @@ export default class EventStyleSettingsModal extends Modal {
                     this.addContextMenu(stInput, this.tempStates, idx, renderStates);
 
                     // Color Dropdown for State
-                    const swatches = [
+                    const swatches: Swatch[] = [
                         ...(this.plugin.settings.swatches || []),
-                        ...(this.plugin.settings.userCustomSwatches || []).map((s: unknown, idx: number) => ({ ...s, name: s.name || `custom-${idx}` }))
+                        ...(this.plugin.settings.userCustomSwatches || []).map((s: Swatch, idx: number) => ({ ...s, name: s.name || `custom-${idx}` }))
                     ];
                     const stColorSelect = stRow.createEl('select', { cls: 'db-select' });
                     stColorSelect.add(new Option('Default', ''));
-                    swatches.forEach((s: unknown) => {
+                    swatches.forEach((s: Swatch) => {
                         const opt = new Option(s.name, s.name);
                         opt.setCssProps({
                             'background-color': s.color,
@@ -617,7 +621,7 @@ export default class EventStyleSettingsModal extends Modal {
                     });
                     stColorSelect.value = st.colorName || '';
                     const updateStColorStyle = () => {
-                        const s = swatches.find((sw: unknown) => sw.name === stColorSelect.value);
+                        const s = swatches.find((sw: Swatch) => sw.name === stColorSelect.value);
                         if (s) {
                             stColorSelect.setCssStyles({ backgroundColor: s.color, color: s.textColor || chooseTextColor(s.color) });
                         } else {
@@ -639,7 +643,7 @@ export default class EventStyleSettingsModal extends Modal {
                             });
                             return;
                         }
-                        const swatch = swatches.find((sw: unknown) => sw.name === opt.value);
+                        const swatch = swatches.find((sw: Swatch) => sw.name === opt.value);
                         if (swatch) {
                             opt.setCssProps({
                                 'background-color': swatch.color,

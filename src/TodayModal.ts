@@ -769,22 +769,53 @@ export default class TodayModal extends Modal {
             time.addEventListener('touchstart', (e: TouchEvent) => {
                 const t = e.touches[0];
                 if (!t) return;
-                e.preventDefault();
-                e.stopPropagation();
-                sel.active = true;
-                gridContainer.addClass('dayble-selecting');
-                const rect = time.getBoundingClientRect();
-                const relY = t.clientY - rect.top;
-                const step = Math.floor(relY / (rect.height / stepsPerRow));
-                sel.start15 = idx * stepsPerRow + step;
-                sel.end15 = sel.start15;
-                sel.startDayIdx = 0;
-                sel.endDayIdx = 0;
-                clearSelection(false);
-                applySelection();
-                window.addEventListener('touchend', onGlobalTouchEnd);
-                window.addEventListener('mouseup', onGlobalMouseUp);
-            }, { passive: false });
+                const startX = t.clientX;
+                const startY = t.clientY;
+                let longPressTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+                    longPressTimer = null;
+                    // Long press confirmed — activate selection
+                    sel.active = true;
+                    gridContainer.addClass('dayble-selecting');
+                    time.removeClass('dayble-long-press-pending');
+                    const rect = time.getBoundingClientRect();
+                    const relY = startY - rect.top;
+                    const step = Math.floor(relY / (rect.height / stepsPerRow));
+                    sel.start15 = idx * stepsPerRow + step;
+                    sel.end15 = sel.start15;
+                    sel.startDayIdx = 0;
+                    sel.endDayIdx = 0;
+                    clearSelection(false);
+                    applySelection();
+                    window.addEventListener('touchend', onGlobalTouchEnd);
+                    window.addEventListener('mouseup', onGlobalMouseUp);
+                    if (navigator.vibrate) navigator.vibrate(30);
+                }, 400);
+                time.addClass('dayble-long-press-pending');
+
+                const cancelTimer = () => {
+                    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+                    time.removeClass('dayble-long-press-pending');
+                };
+
+                const onMove = (me: TouchEvent) => {
+                    const mt = me.touches[0];
+                    if (!mt) return;
+                    const dx = mt.clientX - startX;
+                    const dy = mt.clientY - startY;
+                    if (Math.sqrt(dx * dx + dy * dy) > 8) {
+                        cancelTimer();
+                        time.removeEventListener('touchmove', onMove);
+                        time.removeEventListener('touchend', onEnd);
+                    }
+                };
+                const onEnd = () => {
+                    cancelTimer();
+                    time.removeEventListener('touchmove', onMove);
+                    time.removeEventListener('touchend', onEnd);
+                };
+                time.addEventListener('touchmove', onMove, { passive: true });
+                time.addEventListener('touchend', onEnd, { passive: true });
+            }, { passive: true });
 
             dates.forEach((dStr, dIdx) => {
                 const cell = row.createDiv({ cls: 'dayble-focus-cell' });
@@ -823,21 +854,53 @@ export default class TodayModal extends Modal {
                     if (!t) return;
                     // Don't start selection if touching an event
                     if ((e.target as HTMLElement).closest('.dayble-focus-event-abs')) return;
-                    e.preventDefault();
-                    const info = getSlotInfo(t.clientX, t.clientY);
-                    if (!info) return;
-                    sel.active = true;
-                    gridContainer.addClass('dayble-selecting');
-                    const boundaryIdx = 24;
-                    sel.start15 = info.isAfternoon ? (boundaryIdx * stepsPerRow + (info.n % (boundaryIdx * stepsPerRow))) : info.n;
-                    sel.end15 = sel.start15;
-                    sel.startDayIdx = info.dayIdx;
-                    sel.endDayIdx = info.dayIdx;
-                    clearSelection(false);
-                    applySelection();
-                    window.addEventListener('touchend', onGlobalTouchEnd);
-                    window.addEventListener('mouseup', onGlobalMouseUp);
-                }, { passive: false });
+                    const startX = t.clientX;
+                    const startY = t.clientY;
+                    let longPressTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+                        longPressTimer = null;
+                        const info = getSlotInfo(startX, startY);
+                        if (!info) return;
+                        // Long press confirmed — activate selection
+                        sel.active = true;
+                        gridContainer.addClass('dayble-selecting');
+                        cell.removeClass('dayble-long-press-pending');
+                        const boundaryIdx = 24;
+                        sel.start15 = info.isAfternoon ? (boundaryIdx * stepsPerRow + (info.n % (boundaryIdx * stepsPerRow))) : info.n;
+                        sel.end15 = sel.start15;
+                        sel.startDayIdx = info.dayIdx;
+                        sel.endDayIdx = info.dayIdx;
+                        clearSelection(false);
+                        applySelection();
+                        window.addEventListener('touchend', onGlobalTouchEnd);
+                        window.addEventListener('mouseup', onGlobalMouseUp);
+                        if (navigator.vibrate) navigator.vibrate(30);
+                    }, 400);
+                    cell.addClass('dayble-long-press-pending');
+
+                    const cancelTimer = () => {
+                        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+                        cell.removeClass('dayble-long-press-pending');
+                    };
+
+                    const onMove = (me: TouchEvent) => {
+                        const mt = me.touches[0];
+                        if (!mt) return;
+                        const dx = mt.clientX - startX;
+                        const dy = mt.clientY - startY;
+                        if (Math.sqrt(dx * dx + dy * dy) > 8) {
+                            cancelTimer();
+                            cell.removeEventListener('touchmove', onMove);
+                            cell.removeEventListener('touchend', onEnd);
+                        }
+                    };
+                    const onEnd = () => {
+                        cancelTimer();
+                        cell.removeEventListener('touchmove', onMove);
+                        cell.removeEventListener('touchend', onEnd);
+                    };
+                    cell.addEventListener('touchmove', onMove, { passive: true });
+                    cell.addEventListener('touchend', onEnd, { passive: true });
+                }, { passive: true });
             });
         });
         scroller.onmouseleave = () => { if (sel.active) { sel.active = false; clearSelection(); } };

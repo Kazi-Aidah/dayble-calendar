@@ -7,15 +7,13 @@ import ChangelogModal from '../modals/ChangelogModal';
 import ConfirmModal from '../modals/ConfirmModal';
 import FolderSuggestModal from '../modals/FolderSuggestModal';
 import IconPickerModal from '../modals/IconPickerModal';
+import type DaybleCalendarPlugin from '../plugin';
+import type EventStyleSettingsModal from './EventStyleSettingsModal';
 
-// DaybleCalendarPlugin and EventStyleSettingsModal are still in main.ts (not yet extracted).
-// They are typed as `any` to avoid circular dependencies until tasks 8, 10, and 11 are complete.
-type DaybleCalendarPlugin = unknown;
-type EventStyleSettingsModalCtor = new (app: App, plugin: DaybleCalendarPlugin, category: unknown, onSave: () => void) => unknown;
+type EventStyleSettingsModalCtor = typeof EventStyleSettingsModal;
 
 export default class DaybleSettingTab extends PluginSettingTab {
     plugin: DaybleCalendarPlugin;
-    // EventStyleSettingsModal is injected to avoid circular dependency with main.ts until task 8 is complete
     EventStyleSettingsModal?: EventStyleSettingsModalCtor;
 
     constructor(app: App, plugin: DaybleCalendarPlugin, EventStyleSettingsModal?: EventStyleSettingsModalCtor) {
@@ -123,8 +121,7 @@ export default class DaybleSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Replace new tab with calendar')
-            // eslint-disable-next-line obsidianmd/ui/sentence-case
-            .setDesc('Automatically open the Dayble calendar instead of the default empty new tab.')
+            .setDesc('Automatically open the dayble calendar instead of the default empty new tab.')
             .addToggle(t => {
                 t.setValue(!!this.plugin.settings.replaceHomepageWithSidecards)
                     .onChange(async v => {
@@ -161,7 +158,7 @@ export default class DaybleSettingTab extends PluginSettingTab {
                     .addOption('d_mmm_range', `${startOfWeek.format('D MMM')} - ${endOfWeek.format('D MMM')}`)
                     .setValue(this.plugin.settings.weekTitleFormat || 'month_year')
                     .onChange(async v => {
-                        this.plugin.settings.weekTitleFormat = v as unknown;
+                        this.plugin.settings.weekTitleFormat = v as DaybleSettings['weekTitleFormat'];
                         await this.plugin.saveSettings();
                         const view = this.plugin.getCalendarView();
                         await view?.render();
@@ -219,7 +216,7 @@ export default class DaybleSettingTab extends PluginSettingTab {
              .addOption('d_mmm_range', `${d1.format('D MMM')} - ${d2.format('D MMM')}`)
              .setValue(this.plugin.settings.threeDayTitleFormat || 'full_range')
              .onChange(async v => {
-                 this.plugin.settings.threeDayTitleFormat = v as unknown;
+                 this.plugin.settings.threeDayTitleFormat = v as DaybleSettings['threeDayTitleFormat'];
                  await this.plugin.saveSettings();
                  update3DayTitleDesc(v);
                  const view = this.plugin.getCalendarView();
@@ -695,7 +692,7 @@ export default class DaybleSettingTab extends PluginSettingTab {
                     .addOption('bottom-right', 'Bottom right')
                     .setValue(this.plugin.settings.iconPlacement ?? 'left')
                     .onChange(v => {
-                        this.plugin.settings.iconPlacement = v as unknown;
+                        this.plugin.settings.iconPlacement = v as DaybleSettings['iconPlacement'];
                         void this.plugin.saveSettings().then(async () => {
                             updateEventPreview();
                             const view = this.plugin.getCalendarView();
@@ -714,7 +711,7 @@ export default class DaybleSettingTab extends PluginSettingTab {
                     .addOption('center-left', 'Center-left')
                     .setValue(this.plugin.settings.eventTitleAlign ?? 'left')
                     .onChange(v => {
-                        this.plugin.settings.eventTitleAlign = v as unknown;
+                        this.plugin.settings.eventTitleAlign = v as DaybleSettings['eventTitleAlign'];
                         void this.plugin.saveSettings().then(async () => {
                             updateEventPreview();
                             const view = this.plugin.getCalendarView();
@@ -732,7 +729,7 @@ export default class DaybleSettingTab extends PluginSettingTab {
                     .addOption('center-left', 'Center-left')
                     .setValue(this.plugin.settings.eventDescAlign ?? 'left')
                     .onChange(v => {
-                        this.plugin.settings.eventDescAlign = v as unknown;
+                        this.plugin.settings.eventDescAlign = v as DaybleSettings['eventDescAlign'];
                         void this.plugin.saveSettings().then(() => {
                             updateEventPreview();
                             const view = this.plugin.getCalendarView();
@@ -1188,8 +1185,9 @@ export default class DaybleSettingTab extends PluginSettingTab {
 
                         const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE);
                         for (const leaf of leaves) {
-                            if ((leaf.view as unknown).updateCopyCalendarButtonVisibility) {
-                                (leaf.view as unknown).updateCopyCalendarButtonVisibility();
+                            const view = leaf.view as { updateCopyCalendarButtonVisibility?: () => void };
+                            if (view.updateCopyCalendarButtonVisibility) {
+                                view.updateCopyCalendarButtonVisibility();
                             }
                         }
                     });
@@ -1292,7 +1290,7 @@ export default class DaybleSettingTab extends PluginSettingTab {
                         const src = el.dataset.source;
                         const bg = (el.querySelectorAll('input[type="color"]')[1] as HTMLInputElement).value;
                         const tx = (el.querySelectorAll('input[type="color"]')[0] as HTMLInputElement).value;
-                        const nInput = el.querySelector('input[type="text"]');
+                        const nInput = el.querySelector<HTMLInputElement>('input[type="text"]');
                         const finalName = nInput?.value || '';
                         if (src === 'built') {
                             newBuilt.push({ name: finalName, color: bg, textColor: tx });
