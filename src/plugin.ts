@@ -44,6 +44,8 @@ export default class DaybleCalendarPlugin extends Plugin {
         try { const a = new Audio(url); void a.play(); } catch { /* intentional */ }
     }
 
+    // Fetches release info from GitHub - only called when user manually opens ChangelogModal
+    // No periodic/background network activity - this is a user-initiated one-time request
     async fetchAllReleases() {
         const allReleases = [];
         let page = 1;

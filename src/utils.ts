@@ -1,4 +1,37 @@
-import { App, TFile, getIconIds } from 'obsidian';
+import { App, TFile, getIconIds, createEl } from 'obsidian';
+
+declare const globalThis: { activeWindow?: Window; activeDocument?: Document };
+
+export function activeDocument(): Document {
+    return globalThis.activeDocument ?? document;
+}
+
+export function activeWindow(): Window & typeof globalThis {
+    return globalThis.activeWindow ?? window;
+}
+
+export function activeSetTimeout(callback: () => void, delay: number): number {
+    const targetWindow = globalThis.activeWindow ?? window;
+    return targetWindow.setTimeout(callback, delay);
+}
+
+export function activeClearTimeout(id: number | undefined): void {
+    if (id === undefined) return;
+    const targetWindow = globalThis.activeWindow ?? window;
+    targetWindow.clearTimeout(id);
+}
+
+// NOTE: This is used for UI updates only (e.g., current time line). No network activity.
+export function activeSetInterval(callback: () => void, delay: number): number | undefined {
+    const targetWindow = globalThis.activeWindow ?? window;
+    return targetWindow.setInterval(callback, delay);
+}
+
+export function activeClearInterval(id: number | undefined): void {
+    if (id === undefined) return;
+    const targetWindow = globalThis.activeWindow ?? window;
+    targetWindow.clearInterval(id);
+}
 
 export function getIconIdsSafe(): string[] {
     try {
@@ -24,6 +57,28 @@ export function hexToRgba(hex: string, alpha: number): string {
     const rgb = hexToRgb(hex);
     if (!rgb) return hex;
     return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+}
+
+function sanitizeHtml(html: string): string {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const elements = doc.querySelectorAll('*');
+    const allowedTags = new Set(['p','br','strong','b','em','i','u','s','del','strike','mark','code','pre','blockquote','h1','h2','h3','h4','h5','h6','ul','ol','li','a','img','table','thead','tbody','tr','th','td','hr','span','div','section','article']);
+    elements.forEach(el => {
+        const tag = el.tagName.toLowerCase();
+        if (!allowedTags.has(tag)) {
+            el.remove();
+            return;
+        }
+        const attrs = Array.from(el.attributes);
+        attrs.forEach(attr => {
+            const name = attr.name.toLowerCase();
+            if (name.startsWith('on') || name === 'javascript' || attr.value.toLowerCase().startsWith('javascript:') || attr.value.toLowerCase().startsWith('data:text/html')) {
+                el.removeAttribute(attr.name);
+            }
+        });
+    });
+    return doc.body.innerHTML;
 }
 
 export function renderMarkdown(text: string, element: HTMLElement, app?: App): void {
@@ -72,10 +127,9 @@ export function renderMarkdown(text: string, element: HTMLElement, app?: App): v
         .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="dayble-external-link">$1</a>')
         // Line breaks
         .replace(/\n/g, '<br>');
-    
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    element.replaceChildren(range.createContextualFragment(html));
+
+    const safeHtml = sanitizeHtml(html);
+    element.replaceChildren(document.createRange().createContextualFragment(safeHtml));
 }
 
 export function resolveImagePath(imagePath: string, app: App): string {

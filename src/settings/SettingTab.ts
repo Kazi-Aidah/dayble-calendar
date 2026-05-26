@@ -1850,9 +1850,9 @@ export default class DaybleSettingTab extends PluginSettingTab {
                             new Notice('Import failed');
                         }
                     };
-                    input.click();
+input.click();
                  });
-            });
+             });
 
         // Restore scroll position
         containerEl.scrollTop = scrollPos;

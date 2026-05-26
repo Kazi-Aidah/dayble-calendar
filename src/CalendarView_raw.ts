@@ -56,8 +56,8 @@
     }
 
     debouncedSave() {
-        if (this.saveTimeout) clearTimeout(this.saveTimeout);
-        this.saveTimeout = setTimeout(() => void this.saveAllEntries(), 1000);
+        if (this.saveTimeout) activeClearTimeout(this.saveTimeout);
+        this.saveTimeout = activeSetTimeout(() => void this.saveAllEntries(), 1000);
     }
 
     matchesRecurrence(rec: EventRecurrence, date: moment.Moment, start: moment.Moment): boolean {
@@ -1779,7 +1779,7 @@
             const captureHeight = container.scrollHeight;
 
             // Wait for layout to update and styles to apply
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise(resolve => activeSetTimeout(resolve, 200));
 
             // Use htmlToImage to convert to Blob
             const blob = await htmlToImage.toBlob(container, {
@@ -2814,7 +2814,7 @@
             // Initial check
             checkAlignment();
             // Use a slightly longer timeout and a more robust measurement
-            setTimeout(() => {
+            activeSetTimeout(() => {
                 checkAlignment();
                 // Observe for size changes (e.g., window resize)
                 const observer = new ResizeObserver(() => checkAlignment());
@@ -3420,7 +3420,7 @@ class EventRepeatModal extends Modal {
         contentEl.empty();
         contentEl.addClass('db-modal');
         const heading = contentEl.createEl('h3', { text: 'Event repeat', cls: 'db-modal-title' });
-        heading.setCssProps({ 'margin-bottom': '0px' });
+        heading.addClass('dayble-margin-bottom-0');
 
         const container = contentEl.createDiv({ cls: 'dayble-repeat-modal-container' });
 
@@ -3798,7 +3798,7 @@ class EventModal extends Modal {
         const focusTitle = () => { try { titleInput.focus({ preventScroll: true }); } catch { } };
         focusTitle();
         requestAnimationFrame(focusTitle);
-        setTimeout(focusTitle, 0);
+        activeSetTimeout(focusTitle, 0);
         
         // [[link]] suggestions shared for title and description
         let suggestionContainer: HTMLElement | null = null;
@@ -3948,8 +3948,7 @@ class EventModal extends Modal {
         
         rowDate.createSpan({ text: 'Start:', cls: 'dayble-modal-label' });
         const startDate = rowDate.createEl('input', { type: 'date', cls: 'dayble-input' });
-        startDate.addClass('db-input');
-        (startDate as any).setCssProps({ 'margin-right': '6px !important' });
+        startDate.addClass('db-input', 'dayble-margin-right-6');
         startDate.value = this.ev?.date ?? this.ev?.startDate ?? this.date ?? '';
         
         rowDate.createSpan({ text: 'End:', cls: 'dayble-modal-label' });
@@ -4340,8 +4339,8 @@ class PromptSearchModal extends Modal {
             else if (e.key === 'Escape') { this.close(); e.preventDefault(); }
         };
         input.oninput = async () => {
-            if (this.debounceTimer) window.clearTimeout(this.debounceTimer);
-            this.debounceTimer = window.setTimeout(async () => { await update(); }, 150);
+            if (this.debounceTimer) activeClearTimeout(this.debounceTimer);
+            this.debounceTimer = activeSetTimeout(async () => { await update(); }, 150);
         };
         input.onkeydown = onKey;
         input.focus();
@@ -4396,11 +4395,11 @@ class PromptSearchModal extends Modal {
             this.view.currentDate = new Date(y, (m || 1) - 1, d || 1);
             await this.view.loadAllEntries();
             this.view.render();
-            setTimeout(() => {
+            activeSetTimeout(() => {
                 const nodes = Array.from(this.view.containerEl.querySelectorAll(`.dayble-event[data-id="${ev.id}"]`));
                 nodes.forEach(n => n.classList.add('dayble-event-highlight'));
                 this.view.scrollEventIntoView(ev.id);
-                setTimeout(() => { nodes.forEach(n => n.classList.remove('dayble-event-highlight')); }, 2000);
+                activeSetTimeout(() => { nodes.forEach(n => n.classList.remove('dayble-event-highlight')); }, 2000);
             }, 0);
         }
         this.close();
@@ -4509,8 +4508,7 @@ class TodayModal extends Modal {
                 const [y, m, d] = dStr.split('-').map(Number);
                 const dateObj = new Date(y, m - 1, d);
                 const label = moment(dateObj).format(this.view?.plugin?.settings?.threeDayDateFormat || 'ddd D');
-                const headerDay = header.createDiv({ cls: 'dayble-3day-header-day', text: label });
-                headerDay.setCssProps({ cursor: 'pointer' });
+                const headerDay = header.createDiv({ cls: 'dayble-3day-header-day dayble-cursor-pointer', text: label });
                 headerDay.onclick = () => {
                     this.view?.openEventModal(undefined, dStr, dStr);
                 };
@@ -4648,13 +4646,13 @@ class TodayModal extends Modal {
 
             if (maxAllDayEvents > 0) {
                 allDaySpacer.setText('All day');
-                allDaySpacer.setCssProps({ fontWeight: 'bold' });
+                allDaySpacer.addClass('dayble-font-bold');
                 if (maxAllDayEvents === 1) {
-                    allDaySpacer.setCssProps({ fontSize: '0.5em', transform: 'rotate(0deg)' });
+                    allDaySpacer.addClass('dayble-font-05-transform-0');
                 } else if (maxAllDayEvents === 2) {
-                    allDaySpacer.setCssProps({ fontSize: '0.7em', transform: 'rotate(270deg)' });
+                    allDaySpacer.addClass('dayble-font-07-transform-270');
                 } else {
-                    allDaySpacer.setCssProps({ fontSize: '1em', transform: 'rotate(270deg)' });
+                    allDaySpacer.addClass('dayble-font-1-transform-270');
                 }
             } else {
                 allDaySpacer.setText('');
@@ -4818,8 +4816,9 @@ class TodayModal extends Modal {
         }
 
         if (this.view?.plugin.settings.showCurrentTimeLine ?? true) {
-            if (this.currentTimeInterval) clearInterval(this.currentTimeInterval);
-            this.currentTimeInterval = setInterval(() => this.renderCurrentTimeLine(), 60000);
+            // UI-only: updates current time line every 60 seconds - no network activity
+            if (this.currentTimeInterval) activeClearInterval(this.currentTimeInterval);
+            this.currentTimeInterval = activeSetInterval(() => this.renderCurrentTimeLine(), 60000);
             requestAnimationFrame(() => this.renderCurrentTimeLine());
             const timeLineObs = new ResizeObserver(() => this.renderCurrentTimeLine());
             timeLineObs.observe(gridContainer);
@@ -5376,7 +5375,7 @@ class TodayModal extends Modal {
                     this.view.events[evIdx] = updatedEv;
                     
                     // WAIT for animation before re-rendering everything
-                    await new Promise(r => setTimeout(r, 250));
+                    await new Promise(r => activeSetTimeout(r, 250));
                     
                     await this.view.saveAllEntries();
                     await this.view.render();
@@ -5397,7 +5396,7 @@ class TodayModal extends Modal {
 
     onClose() {
         if (this.currentTimeInterval) {
-            clearInterval(this.currentTimeInterval);
+            activeClearInterval(this.currentTimeInterval);
             this.currentTimeInterval = undefined;
         }
         // @ts-ignore
@@ -5734,7 +5733,7 @@ class TodayModal extends Modal {
                             const rect = item.getBoundingClientRect();
                             const y = e.clientY - rect.top;
                             if (y < EDGE_SIZE || y > rect.height - EDGE_SIZE) {
-                                (item as any).setCssProps({ 'cursor': 'ns-resize' });
+                                (item as HTMLElement).addClass('dayble-cursor-ns-resize');
                                 item.setAttribute('draggable', 'false');
                             } else {
                                 (item as any).setCssProps({ 'cursor': 'pointer' });
@@ -5801,7 +5800,7 @@ class TodayModal extends Modal {
                                 window.removeEventListener('mousemove', onMove);
                                 window.removeEventListener('mouseup', onUp);
                                 item.removeClass('resizing');
-                                setTimeout(() => { isResizingCurrently = false; }, 100);
+                                activeSetTimeout(() => { isResizingCurrently = false; }, 100);
 
                                 const finalTop = parseFloat(item.style.getPropertyValue('--focus-item-top'));
                                 const finalHeight = parseFloat(item.style.getPropertyValue('--focus-item-height'));
@@ -6020,6 +6019,56 @@ function hexToRgba(hex: string, alpha: number): string {
 
 // removed: formatTimeRange
 
+declare const globalThis: { activeWindow?: Window; activeDocument?: Document };
+
+function activeSetInterval(callback: () => void, delay: number): number | undefined {
+    const targetWindow = globalThis.activeWindow ?? window;
+    return targetWindow.setInterval(callback, delay);
+}
+
+function activeClearInterval(id: number | undefined): void {
+    if (id === undefined) return;
+    const targetWindow = globalThis.activeWindow ?? window;
+    targetWindow.clearInterval(id);
+}
+
+function activeSetTimeout(callback: () => void, delay: number): number {
+    const targetWindow = globalThis.activeWindow ?? window;
+    return targetWindow.setTimeout(callback, delay);
+}
+
+function activeClearTimeout(id: number | undefined): void {
+    if (id === undefined) return;
+    const targetWindow = globalThis.activeWindow ?? window;
+    targetWindow.clearTimeout(id);
+}
+
+function activeDocument(): Document {
+    return globalThis.activeDocument ?? document;
+}
+
+function sanitizeHtml(html: string): string {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const elements = doc.querySelectorAll('*');
+    const allowedTags = new Set(['p','br','strong','b','em','i','u','s','del','strike','mark','code','pre','blockquote','h1','h2','h3','h4','h5','h6','ul','ol','li','a','img','table','thead','tbody','tr','th','td','hr','span','div','section','article']);
+    elements.forEach(el => {
+        const tag = el.tagName.toLowerCase();
+        if (!allowedTags.has(tag)) {
+            el.remove();
+            return;
+        }
+        const attrs = Array.from(el.attributes);
+        attrs.forEach(attr => {
+            const name = attr.name.toLowerCase();
+            if (name.startsWith('on') || name === 'javascript' || attr.value.toLowerCase().startsWith('javascript:') || attr.value.toLowerCase().startsWith('data:text/html')) {
+                el.removeAttribute(attr.name);
+            }
+        });
+    });
+    return doc.body.innerHTML;
+}
+
 function renderMarkdown(text: string, element: HTMLElement, app?: App): void {
     // Simple markdown rendering: headings, bold, italic, links, code, strikethrough, highlight, blockquote, images
     // NOTE: We do NOT escape HTML to allow users to use HTML tags directly (e.g., <u>underline</u>)
@@ -6066,10 +6115,9 @@ function renderMarkdown(text: string, element: HTMLElement, app?: App): void {
         .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="dayble-external-link">$1</a>')
         // Line breaks
         .replace(/\n/g, '<br>');
-    
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    element.replaceChildren(range.createContextualFragment(html));
+
+    const safeHtml = sanitizeHtml(html);
+    element.replaceChildren(document.createRange().createContextualFragment(safeHtml));
 }
 
 function resolveImagePath(imagePath: string, app: App): string {

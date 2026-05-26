@@ -3,6 +3,19 @@ import type { DaybleEvent } from './types';
 import { timeToMinutes } from './constants';
 import { resolveNoteFile } from './utils';
 
+declare const globalThis: { activeWindow?: Window };
+
+function activeSetInterval(callback: () => void, delay: number): number | undefined {
+    const targetWindow = globalThis.activeWindow ?? window;
+    return targetWindow.setInterval(callback, delay);
+}
+
+function activeClearInterval(id: number | undefined): void {
+    if (id === undefined) return;
+    const targetWindow = globalThis.activeWindow ?? window;
+    targetWindow.clearInterval(id);
+}
+
 export default class TodayModal extends Modal {
     date: string | string[];
     events: DaybleEvent[];
@@ -269,9 +282,9 @@ export default class TodayModal extends Modal {
 
             if (maxAllDayEvents > 0) {
                 allDaySpacer.setText('All day');
-                allDaySpacer.setCssProps({ fontWeight: 'bold' });
+                allDaySpacer.addClass('dayble-font-bold');
                 if (maxAllDayEvents === 1) {
-                    allDaySpacer.setCssProps({ fontSize: '0.5em', transform: 'rotate(0deg)' });
+                    allDaySpacer.addClass('dayble-font-size-05em', 'dayble-transform-0');
                 } else if (maxAllDayEvents === 2) {
                     allDaySpacer.setCssProps({ fontSize: '0.7em', transform: 'rotate(270deg)' });
                 } else {
@@ -456,8 +469,9 @@ export default class TodayModal extends Modal {
         }
 
         if (this.view?.plugin.settings.showCurrentTimeLine ?? true) {
-            if (this.currentTimeInterval) clearInterval(this.currentTimeInterval);
-            this.currentTimeInterval = setInterval(() => this.renderCurrentTimeLine(), 60000);
+            // UI-only: updates current time line every 60 seconds - no network activity
+            if (this.currentTimeInterval) activeClearInterval(this.currentTimeInterval);
+            this.currentTimeInterval = activeSetInterval(() => this.renderCurrentTimeLine(), 60000);
             requestAnimationFrame(() => this.renderCurrentTimeLine());
             const timeLineObs = new ResizeObserver(() => this.renderCurrentTimeLine());
             timeLineObs.observe(gridContainer);
@@ -1134,7 +1148,7 @@ export default class TodayModal extends Modal {
 
     onClose() {
         if (this.currentTimeInterval) {
-            clearInterval(this.currentTimeInterval);
+            activeClearInterval(this.currentTimeInterval);
             this.currentTimeInterval = undefined;
         }
         if (this._dayMode3ROs) {

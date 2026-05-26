@@ -3,7 +3,7 @@
 	"name": "Dayble Calendar",
 	"description": "A fast, highly customizable calendar with animations.",
 	"version": "0.3.0",
-	"minAppVersion": "0.15.0",
+	"minAppVersion": "v1.7.2",
 	"author": "Kazi Aidah Haque",
 	"authorUrl": "https://github.com/Kazi-Aidah",
 	"isDesktopOnly": false

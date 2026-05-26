@@ -4048,3 +4048,50 @@ button.dayble-btn.db-btn.button {
 .dayble-repeat-modal-container .db-modal-row {
 	margin-bottom: 0 !important;
 }
+
+/* ===== Static style utility classes (replacing setCssProps) ===== */
+.dayble-cursor-pointer { cursor: pointer !important; }
+.dayble-cursor-ns-resize { cursor: ns-resize !important; }
+.dayble-cursor-ew-resize { cursor: ew-resize !important; }
+.dayble-width-100 { width: 100% !important; }
+.dayble-height-100 { height: 100% !important; }
+.dayble-margin-bottom-0 { margin-bottom: 0 !important; }
+.dayble-margin-right-6 { margin-right: 6px !important; }
+.dayble-flex-shrink-0 { flex-shrink: 0 !important; }
+.dayble-font-bold { font-weight: bold !important; }
+.dayble-font-size-07em { font-size: 0.7em !important; }
+.dayble-font-size-09em { font-size: 0.9em !important; }
+.dayble-font-size-05em { font-size: 0.5em !important; }
+.dayble-transform-0 { transform: rotate(0deg) !important; }
+.dayble-transform-270 { transform: rotate(270deg) !important; }
+.dayble-text-align-center { text-align: center !important; }
+.dayble-display-flex { display: flex !important; }
+.dayble-flex-column { flex-direction: column !important; }
+.dayble-align-items-center { align-items: center !important; }
+.dayble-justify-content-center { justify-content: center !important; }
+.dayble-justify-content-flex-start { justify-content: flex-start !important; }
+.dayble-gap-8 { gap: 8px !important; }
+.dayble-gap-15 { gap: 15px !important; }
+.dayble-padding-10 { padding: 10px !important; }
+.dayble-padding-16 { padding: 16px !important; }
+.dayble-margin-top-18 { margin-top: 18px !important; }
+.dayble-position-absolute { position: absolute !important; }
+.dayble-position-relative { position: relative !important; }
+.dayble-overflow-hidden { overflow: hidden !important; }
+.dayble-margin-right-6 { margin-right: 6px !important; }
+.dayble-margin-right-8 { margin-right: 8px !important; }
+.dayble-overflow-auto { overflow: auto !important; }
+.dayble-white-space-nowrap { white-space: nowrap !important; }
+.dayble-text-overflow-ellipsis { text-overflow: ellipsis !important; }
+.dayble-box-sizing-border { box-sizing: border-box !important; }
+.dayble-min-width-0 { min-width: 0 !important; }
+.dayble-max-width-none { max-width: none !important; }
+.dayble-flex-grow-1 { flex-grow: 1 !important; }
+.dayble-z-index-1 { z-index: 1 !important; }
+.dayble-z-index-2 { z-index: 2 !important; }
+.dayble-z-index-5 { z-index: 5 !important; }
+.dayble-user-select-none { user-select: none !important; }
+.dayble-font-05-transform-0 { font-size: 0.5em !important; transform: rotate(0deg) !important; }
+.dayble-font-07-transform-270 { font-size: 0.7em !important; transform: rotate(270deg) !important; }
+.dayble-font-1-transform-270 { font-size: 1em !important; transform: rotate(270deg) !important; }
+.dayble-overflow-hidden { overflow: hidden !important; }
