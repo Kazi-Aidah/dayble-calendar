@@ -1167,21 +1167,6 @@ export default class DaybleSettingTab extends PluginSettingTab {
             });
 
         new Setting(containerEl)
-            .setName('Dim past events opacity')
-            .setDesc('Set the opacity for events that have already passed in day and 3-day view. Set to 1.0 to disable dimming.')
-            .addSlider(s => {
-                s.setLimits(0.1, 1, 0.05)
-                    .setValue(typeof this.plugin.settings.dimPastEvents === 'number' ? this.plugin.settings.dimPastEvents : 0.60)
-                    .setDynamicTooltip()
-                    .onChange(async v => {
-                        this.plugin.settings.dimPastEvents = v;
-                        await this.plugin.saveSettings();
-                        const view = this.plugin.getCalendarView();
-                        await view?.render();
-                    });
-            });
-
-        new Setting(containerEl)
             .setName('Enable weekly notes')
             .setDesc('Show a notes section below the calendar in weekly view')
             .addToggle(t => {
@@ -1258,6 +1243,55 @@ export default class DaybleSettingTab extends PluginSettingTab {
         if (!this.plugin.settings.showSaveImageIcon) {
             imageFolderSetting.settingEl.hide();
         }
+
+        new Setting(containerEl).setName('Past Dates').setHeading();
+
+        new Setting(containerEl)
+            .setName('Past date behavior')
+            .setDesc('Control how past dates appear in the calendar.')
+            .addDropdown(d => {
+                d.addOption('none', 'No special behavior')
+                    .addOption('hide-events', 'Hide events')
+                    .addOption('show-image', 'Show an image')
+                    .setValue(this.plugin.settings.pastDateBehavior ?? 'none')
+                    .onChange(async v => {
+                        this.plugin.settings.pastDateBehavior = v as 'none' | 'hide-events' | 'show-image';
+                        await this.plugin.saveSettings();
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
+                    });
+            });
+
+        new Setting(containerEl)
+            .setName('Apply to')
+            .setDesc('Which views should past date behavior apply to.')
+            .addDropdown(d => {
+                d.addOption('months', 'Month view only')
+                    .addOption('weeks', 'Week view only')
+                    .addOption('both', 'Both month and week views')
+                    .setValue(this.plugin.settings.pastDateScope ?? 'both')
+                    .onChange(async v => {
+                        this.plugin.settings.pastDateScope = v as 'months' | 'weeks' | 'both';
+                        await this.plugin.saveSettings();
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
+                    });
+            });
+
+        new Setting(containerEl)
+            .setName('Dim past events opacity')
+            .setDesc('Set the opacity for past events and day numbers. Set to 1.0 to disable dimming.')
+            .addSlider(s => {
+                s.setLimits(0.1, 1, 0.05)
+                    .setValue(typeof this.plugin.settings.dimPastEvents === 'number' ? this.plugin.settings.dimPastEvents : 0.75)
+                    .setDynamicTooltip()
+                    .onChange(async v => {
+                        this.plugin.settings.dimPastEvents = v;
+                        await this.plugin.saveSettings();
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
+                    });
+            });
 
         } // end appearance tab
 

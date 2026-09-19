@@ -1,17 +1,4 @@
-import { ItemView, WorkspaceLeaf, setIcon, setTooltip, Notice, Menu, normalizePath, moment, TFolder } from 'obsidian';
-import * as htmlToImage from 'html-to-image';
-import type DaybleCalendarPlugin from './plugin';
-import type { DaybleEvent, EventRecurrence } from './types';
-import { VIEW_TYPE, timeToMinutes } from './constants';
-import { chooseTextColor, hexToRgba, renderMarkdown, resolveNoteFile, randomId } from './utils';
-import PromptSearchModal from './modals/PromptSearchModal';
-import ImageSuggestModal from './modals/ImageSuggestModal';
-import StorageFolderNotSetModal from './modals/StorageFolderNotSetModal';
-import IconPickerModal from './modals/IconPickerModal';
-import EventModal from './EventModal';
-import TodayModal from './TodayModal';
-
-export default class DaybleCalendarView extends ItemView {
+class DaybleCalendarView extends ItemView {
     plugin: DaybleCalendarPlugin;
     rootEl: HTMLElement;
     headerEl: HTMLElement;
@@ -52,14 +39,12 @@ export default class DaybleCalendarView extends ItemView {
     viewSelectEl: HTMLSelectElement;
     copyBtn?: HTMLButtonElement;
     saveImageBtn?: HTMLButtonElement;
-    saveTimeout: unknown;
+    saveTimeout: any;
     isResizingWeeklyNotes = false;
     weeklyNotesResizeStartY = 0;
     weeklyNotesResizeStartHeight = 0;
     _boundWeeklyNotesMouseMove?: (e: MouseEvent) => void;
     _boundWeeklyNotesMouseUp?: (e: MouseEvent) => void;
-    _dragBeforeHeights?: Map<string, number>;
-    _dragElHeight?: number;
 
     constructor(leaf: WorkspaceLeaf, plugin: DaybleCalendarPlugin) {
         super(leaf);
@@ -204,7 +189,7 @@ export default class DaybleCalendarView extends ItemView {
             if (this.plugin.settings.calendarView === mode) opt.selected = true;
         });
         viewSelect.onchange = async () => {
-            this.plugin.settings.calendarView = viewSelect.value as unknown;
+            this.plugin.settings.calendarView = viewSelect.value as any;
             this.plugin.settings.calendarWeekActive = viewSelect.value === 'Week';
             await this.plugin.saveSettings();
             void this.render();
@@ -218,7 +203,7 @@ export default class DaybleCalendarView extends ItemView {
             
             if (newIndex !== currentIndex) {
                 viewSelect.selectedIndex = newIndex;
-                this.plugin.settings.calendarView = viewSelect.value as unknown;
+                this.plugin.settings.calendarView = viewSelect.value as any;
                 this.plugin.settings.calendarWeekActive = viewSelect.value === 'Week';
                 await this.plugin.saveSettings();
                 void this.render();
@@ -262,8 +247,8 @@ export default class DaybleCalendarView extends ItemView {
         settingsBtn.className = 'dayble-btn dayble-header-buttons dayble-settings-toggle';
         setIcon(settingsBtn, 'settings');
         settingsBtn.onclick = () => {
-            (this.app as unknown).setting.open();
-            (this.app as unknown).setting.openTabById(this.plugin.manifest.id);
+            (this.app as any).setting.open();
+            (this.app as any).setting.openTabById(this.plugin.manifest.id);
         };
         const copyBtn = document.createElement('button');
         copyBtn.className = 'dayble-btn dayble-header-buttons dayble-copy-toggle';
@@ -343,13 +328,13 @@ export default class DaybleCalendarView extends ItemView {
             this.holderEl.setCssProps({ 'width': newWidth + 'px' });
         };
         
-        this._boundHolderMouseUp = (e: MouseEvent) => {
+        this._boundHolderMouseUp = async (e: MouseEvent) => {
         if (this.isResizingHolder) {
             this.isResizingHolder = false;
             document.removeEventListener('mousemove', this._boundHolderMouseMove);
             document.removeEventListener('mouseup', this._boundHolderMouseUp);
             this.plugin.settings.holderWidth = this.holderEl.offsetWidth;
-            void this.plugin.saveSettings();
+            await this.plugin.saveSettings();
         }
     };
         
@@ -362,36 +347,6 @@ export default class DaybleCalendarView extends ItemView {
             document.addEventListener('mousemove', this._boundHolderMouseMove);
             document.addEventListener('mouseup', this._boundHolderMouseUp);
         };
-
-        if (!this.plugin.settings.disableTouchSupport) {
-            resizeHandle.addEventListener('touchstart', (e: TouchEvent) => {
-                const t = e.touches[0];
-                if (!t) return;
-                e.preventDefault();
-                e.stopPropagation();
-                this.isResizingHolder = true;
-                this.holderResizeStartX = t.clientX;
-                this.holderResizeStartWidth = this.holderEl.offsetWidth;
-                const onTouchMove = (te: TouchEvent) => {
-                    const tt = te.touches[0];
-                    if (!tt || !this.isResizingHolder) return;
-                    te.preventDefault();
-                    let diff = tt.clientX - this.holderResizeStartX;
-                    if (placement === 'right') diff = -diff;
-                    const newWidth = Math.max(200, this.holderResizeStartWidth + diff);
-                    this.holderEl.setCssProps({ 'width': newWidth + 'px' });
-                };
-                const onTouchEnd = () => {
-                    this.isResizingHolder = false;
-                    document.removeEventListener('touchmove', onTouchMove);
-                    document.removeEventListener('touchend', onTouchEnd);
-                    this.plugin.settings.holderWidth = this.holderEl.offsetWidth;
-                    void this.plugin.saveSettings();
-                };
-                document.addEventListener('touchmove', onTouchMove, { passive: false });
-                document.addEventListener('touchend', onTouchEnd);
-            }, { passive: false });
-        }
         
         const holderList = this.holderEl.createDiv({ cls: 'dayble-holder-list' });
         // Add drag handlers to holder for dropping events there
@@ -466,14 +421,14 @@ export default class DaybleCalendarView extends ItemView {
         }
         // Disconnect long event ResizeObserver and remove overlay to prevent leaks
         if (this._longRO) {
-            try { this._longRO.disconnect(); } catch { /* intentional */ }
+            try { this._longRO.disconnect(); } catch { }
             this._longRO = undefined;
         }
         if (this._longOverlayEl && this._longOverlayEl.isConnected) {
-            try { this._longOverlayEl.remove(); } catch { /* intentional */ }
+            try { this._longOverlayEl.remove(); } catch { }
         }
         this._longEls.forEach(el => {
-            try { if (el && el.parentElement) el.remove(); } catch { /* intentional */ }
+            try { if (el && el.parentElement) el.remove(); } catch { }
         });
         this._longEls.clear();
         if (this._boundWeeklyNotesMouseMove) {
@@ -531,7 +486,7 @@ export default class DaybleCalendarView extends ItemView {
             if (Array.isArray(hdata?.holder)) {
                 holderFromGlobal = hdata.holder;
             }
-        } catch { /* intentional */ }
+        } catch {}
 
         const holderAggregate: DaybleEvent[] = [];
         for (const filename of files) {
@@ -673,7 +628,7 @@ export default class DaybleCalendarView extends ItemView {
             try {
                 const jsonStr = JSON.stringify(data, null, 2);
                 await this.app.vault.adapter.write(file, jsonStr);
-            } catch { /* intentional */ }
+            } catch { }
         }
 
         const holderFile = this.plugin.getDataFilePath('holder.json');
@@ -684,7 +639,7 @@ export default class DaybleCalendarView extends ItemView {
             };
             const hjsonStr = JSON.stringify(hdata, null, 2);
             await this.app.vault.adapter.write(holderFile, hjsonStr);
-        } catch { /* intentional */ }
+        } catch { }
     }
 
     focusToday() {
@@ -760,19 +715,19 @@ export default class DaybleCalendarView extends ItemView {
         } else if (view === '3day') {
             this.gridEl.addClass('dayble-3day-mode');
             this.calendarEl.addClass('dayble-3day-mode');
-            this.render3DayView(titleEl);
+            await this.render3DayView(titleEl);
         } else if (view === 'Day') {
             this.gridEl.addClass('dayble-day-mode');
             this.calendarEl.addClass('dayble-day-mode');
-            this.renderDayView(titleEl);
+            await this.renderDayView(titleEl);
         } else if (view === 'Agenda') {
             this.gridEl.addClass('dayble-agenda-mode');
             this.calendarEl.addClass('dayble-agenda-mode');
-            this.renderAgendaView(titleEl);
+            await this.renderAgendaView(titleEl);
         } else {
             this.gridEl.addClass('dayble-month-mode');
             this.calendarEl.addClass('dayble-month-mode');
-            this.renderMonthView(titleEl);
+            await this.renderMonthView(titleEl);
         }
 
         // Post-render: The lane walls inside the event container act as spacers,
@@ -860,7 +815,7 @@ export default class DaybleCalendarView extends ItemView {
             eventLanes.set(ev.id, lane);
             for (const date of dates) {
                 if (!occupiedLanesByDate.has(date)) occupiedLanesByDate.set(date, new Set());
-                const occupied = occupiedLanesByDate.get(date);
+                const occupied = occupiedLanesByDate.get(date)!;
                 for (let i = 0; i < lanesNeeded; i++) {
                     occupied.add(lane + i);
                 }
@@ -869,83 +824,6 @@ export default class DaybleCalendarView extends ItemView {
         });
         
         return { eventLanes, maxLanesByDate };
-    }
-
-    /** Capture current day-cell heights so post-drop growth/shrink can be animated. */
-    captureDayHeights(): Map<string, number> {
-        const m = new Map<string, number>();
-        this.gridEl?.querySelectorAll('.dayble-day[data-date]').forEach(el => {
-            const d = (el as HTMLElement).dataset.date;
-            if (d) m.set(d, (el as HTMLElement).offsetHeight);
-        });
-        return m;
-    }
-
-    clearDropPlaceholders() {
-        this.gridEl?.querySelectorAll('.dayble-drop-placeholder').forEach(el => el.remove());
-    }
-
-    /**
-     * Show a smoothly-growing placeholder in the hovered day cell while dragging.
-     * This pre-grows the target row during dragover, so the drop itself
-     * doesn't cause an abrupt height jump.
-     */
-    showDropPlaceholder(cell: HTMLElement) {
-        const container = cell.querySelector('.dayble-event-container') as HTMLElement | null;
-        if (!container || !this.gridEl) return;
-        const dragging = this.gridEl.querySelector('.dayble-dragging') as HTMLElement | null
-            ?? document.querySelector('.dayble-holder-list .dayble-dragging') as HTMLElement | null;
-        // Reordering inside the same day uses the drop indicator instead.
-        if (dragging && container.contains(dragging)) return;
-        // Only one placeholder at a time — remove stale ones in other cells.
-        this.gridEl.querySelectorAll('.dayble-drop-placeholder').forEach(el => {
-            if (!container.contains(el)) el.remove();
-        });
-        if (container.querySelector('.dayble-drop-placeholder')) return;
-        const h = this._dragElHeight ?? dragging?.offsetHeight ?? 32;
-        const ph = document.createElement('div');
-        ph.className = 'dayble-drop-placeholder';
-        ph.style.height = '0px';
-        container.appendChild(ph);
-        requestAnimationFrame(() => {
-            ph.style.height = `${h}px`;
-        });
-    }
-
-    /** Re-render after a drag-drop, animating day-cell height deltas (FLIP). */
-    async smoothRerenderAfterDrop(before?: Map<string, number>) {
-        const beforeHeights = before ?? this._dragBeforeHeights;
-        this.clearDropPlaceholders();
-        this.gridEl?.querySelectorAll('.dayble-drag-over').forEach(el => el.removeClass('dayble-drag-over'));
-        await this.render();
-        await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())));
-        if (beforeHeights && beforeHeights.size) this.animateDayHeightChanges(beforeHeights);
-        this._dragBeforeHeights = undefined;
-        this._dragElHeight = undefined;
-    }
-
-    /** Animate day cells from their pre-drop heights to the new heights. */
-    animateDayHeightChanges(before: Map<string, number>) {
-        if (!this.gridEl) return;
-        const cells = Array.from(this.gridEl.querySelectorAll('.dayble-day[data-date]')) as HTMLElement[];
-        for (const cell of cells) {
-            const date = cell.dataset.date;
-            if (!date) continue;
-            const oldH = before.get(date);
-            if (oldH == null) continue;
-            const newH = cell.offsetHeight;
-            if (Math.abs(newH - oldH) < 4) continue;
-            try {
-                cell.style.overflow = 'hidden';
-                const anim = cell.animate(
-                    [{ height: `${oldH}px` }, { height: `${newH}px` }],
-                    { duration: 220, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
-                );
-                const cleanup = () => { cell.style.overflow = ''; cell.style.height = ''; };
-                anim.onfinish = cleanup;
-                anim.oncancel = cleanup;
-            } catch { /* ignore */ }
-        }
     }
 
     async renderWeekView(titleEl?: HTMLElement): Promise<void> {
@@ -1032,18 +910,7 @@ export default class DaybleCalendarView extends ItemView {
             dayHeader.createDiv({ cls: 'dayble-day-number', text: String(d.getDate()) });
             
             const t = new Date();
-            const todayStr = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
             const isToday = d.getDate() === t.getDate() && d.getMonth() === t.getMonth() && d.getFullYear() === t.getFullYear();
-            const isPast = fullDate < todayStr;
-            const pastBehavior = this.plugin.settings.pastDateBehavior ?? 'none';
-            const pastScope = this.plugin.settings.pastDateScope ?? 'both';
-            const shouldApplyPastBehavior = isPast && pastBehavior !== 'none' && (pastScope === 'weeks' || pastScope === 'both');
-            
-            if (shouldApplyPastBehavior) {
-                cell.addClass('dayble-past-date');
-                const dimOpacity = this.plugin.settings.dimPastEvents ?? 0.75;
-                cell.setCssProps({ '--dim-past-events-opacity': String(dimOpacity) });
-            }
             
             if (isToday) {
                 cell.addClass('dayble-current-day');
@@ -1057,9 +924,7 @@ export default class DaybleCalendarView extends ItemView {
                     return false;
                 };
                 searchBtn.onmousedown = (e) => { e.preventDefault(); e.stopPropagation(); };
-                if (!this.plugin.settings.disableTouchSupport) {
-                    searchBtn.ontouchstart = (e) => { e.preventDefault(); e.stopPropagation(); };
-                }
+                searchBtn.ontouchstart = (e) => { e.preventDefault(); e.stopPropagation(); };
             }
 
             const longContainer = cell.createDiv({ cls: 'dayble-long-container' });
@@ -1070,70 +935,11 @@ export default class DaybleCalendarView extends ItemView {
             // Create lane walls container for intelligent stacking
             container.createDiv({ cls: 'dayble-lane-walls' });
 
-            if (shouldApplyPastBehavior && pastBehavior === 'show-image') {
-                const images = this.plugin.settings.pastDateImages ?? {};
-                const imgPath = images[fullDate];
-                if (imgPath) {
-                    const imgWrapper = container.createDiv({ cls: 'dayble-past-date-image' });
-                    const img = imgWrapper.createEl('img');
-                    const file = this.app.vault.getAbstractFileByPath(imgPath);
-                    if (file) {
-                        img.src = this.app.vault.getResourcePath(file as any);
-                    }
-                    imgWrapper.oncontextmenu = (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const menu = new Menu();
-                        menu.addItem((item) => {
-                            item.setTitle('Change image').setIcon('image').onClick(async () => {
-                                const modal = new ImageSuggestModal(this.app, async (newFile) => {
-                                    if (!this.plugin.settings.pastDateImages) {
-                                        this.plugin.settings.pastDateImages = {};
-                                    }
-                                    this.plugin.settings.pastDateImages[fullDate] = newFile.path;
-                                    await this.plugin.saveSettings();
-                                    await this.render();
-                                });
-                                modal.open();
-                            });
-                        });
-                        menu.addItem((item) => {
-                            item.setTitle('Remove image').setIcon('trash').onClick(async () => {
-                                if (this.plugin.settings.pastDateImages) {
-                                    delete this.plugin.settings.pastDateImages[fullDate];
-                                    await this.plugin.saveSettings();
-                                    await this.render();
-                                }
-                            });
-                        });
-                        menu.showAtMouseEvent(e);
-                    };
-                } else {
-                    const addBtn = container.createDiv({ cls: 'dayble-past-date-add-btn' });
-                    setIcon(addBtn, 'image');
-                    addBtn.setAttr('title', 'Add an image for this day');
-                    addBtn.onclick = async (e) => {
-                        e.stopPropagation();
-                        const modal = new ImageSuggestModal(this.app, async (file) => {
-                            if (!this.plugin.settings.pastDateImages) {
-                                this.plugin.settings.pastDateImages = {};
-                            }
-                            this.plugin.settings.pastDateImages[fullDate] = file.path;
-                            await this.plugin.saveSettings();
-                            await this.render();
-                        });
-                        modal.open();
-                    };
-                }
-            } else if (shouldApplyPastBehavior && pastBehavior === 'hide-events') {
-                // Don't render events for past dates
-            } else {
-                let dayEvents = expandedEvents.filter(e => e.date === fullDate);
-                if (this.plugin.settings.onlyShowPinnedEventsWeek) {
-                    dayEvents = dayEvents.filter(e => e.pinned);
-                }
-                dayEvents.forEach(e => container.appendChild(this.createEventItem(e, false, false, false)));
+            let dayEvents = expandedEvents.filter(e => e.date === fullDate);
+            if (this.plugin.settings.onlyShowPinnedEventsWeek) {
+                dayEvents = dayEvents.filter(e => e.pinned);
             }
+            dayEvents.forEach(e => container.appendChild(this.createEventItem(e, false, false, false)));
             
             // Drag and Drop (reused optimized logic from month view)
             container.ondragover = (e) => { 
@@ -1225,20 +1031,15 @@ export default class DaybleCalendarView extends ItemView {
                 await this.saveAllEntries();
             };
             
-            // Drop on cell (move from holder or other day) — week view
-            cell.ondragover = (e) => { e.preventDefault(); cell.addClass('dayble-drag-over'); this.showDropPlaceholder(cell); };
-            cell.ondragleave = (e) => {
-                if (e.relatedTarget && cell.contains(e.relatedTarget as Node)) return;
-                cell.removeClass('dayble-drag-over');
-                cell.querySelectorAll('.dayble-drop-placeholder').forEach(el => el.remove());
-            };
+            // Drop on cell (move from holder or other day)
+            cell.ondragover = (e) => { e.preventDefault(); cell.addClass('dayble-drag-over'); };
+            cell.ondragleave = () => { cell.removeClass('dayble-drag-over'); };
             cell.ondrop = async (e) => {
                 e.preventDefault();
                 cell.removeClass('dayble-drag-over');
                 const id = e.dataTransfer?.getData('text/plain');
                 const src = e.dataTransfer?.getData('dayble-source');
-                if (!id) { this.clearDropPlaceholders(); return; };
-                const before = this._dragBeforeHeights ?? this.captureDayHeights();
+                if (!id) return;
                 
                 if (src === 'holder') {
                     const hIdx = this.holderEvents.findIndex(ev => ev.id === id);
@@ -1250,8 +1051,7 @@ export default class DaybleCalendarView extends ItemView {
                         this.events.push(evn);
                         await this.saveAllEntries();
                         await this.loadAllEntries();
-                        await this.smoothRerenderAfterDrop(before);
-                        return;
+                        await this.render();
                     }
                 } else if (src === 'calendar') {
                      // Move from another day
@@ -1275,17 +1075,14 @@ export default class DaybleCalendarView extends ItemView {
                              }
                              await this.saveAllEntries();
                              await this.loadAllEntries();
-                             await this.smoothRerenderAfterDrop(before);
-                             return;
+                             await this.render();
                          }
                      }
                 }
-                this.clearDropPlaceholders();
             };
 
             // Interactions
             cell.onclick = async (ev) => {
-                if (shouldApplyPastBehavior && pastBehavior === 'show-image') return;
                 const target = ev.target as HTMLElement;
                 if (!target.closest('.dayble-event') && target.closest('.dayble-event-container') === container) {
                     await this.openEventModal(undefined, fullDate, undefined, undefined, undefined, this.plugin.settings.onlyShowPinnedEventsWeek);
@@ -1297,7 +1094,6 @@ export default class DaybleCalendarView extends ItemView {
                 const target = ev.target as HTMLElement;
                 if (target.closest('.dayble-event')) return;
                 if (this.isDragging) return;
-                if (shouldApplyPastBehavior && pastBehavior === 'show-image') return;
                 this.startSelection(fullDate, cell);
             };
             
@@ -1305,19 +1101,16 @@ export default class DaybleCalendarView extends ItemView {
                 if (this.isSelecting && !this.isDragging) this.updateSelection(fullDate);
             };
             
-            if (!this.plugin.settings.disableTouchSupport) {
-                cell.ontouchstart = (ev) => {
-                    const target = ev.target as HTMLElement;
-                    if (target.closest('.dayble-event')) return;
-                    if (this.isDragging) return;
-                    if (shouldApplyPastBehavior && pastBehavior === 'show-image') return;
-                    this.startSelection(fullDate, cell);
-                };
-                
-                cell.ontouchmove = () => {
-                    if (this.isSelecting && !this.isDragging) this.updateSelection(fullDate);
-                };
-            }
+            cell.ontouchstart = (ev) => {
+                const target = ev.target as HTMLElement;
+                if (target.closest('.dayble-event')) return;
+                if (this.isDragging) return;
+                this.startSelection(fullDate, cell);
+            };
+            
+            cell.ontouchmove = () => {
+                if (this.isSelecting && !this.isDragging) this.updateSelection(fullDate);
+            };
         }
         
         this.gridEl.appendChild(fragment);
@@ -1330,7 +1123,7 @@ export default class DaybleCalendarView extends ItemView {
             this.gridEl.appendChild(this._longOverlayEl);
         }
         
-        requestAnimationFrame(() => { requestAnimationFrame(() => { this.renderLongEvents(); }); });
+        requestAnimationFrame(() => { this.renderLongEvents(); });
         
         if (!this._longRO && 'ResizeObserver' in window) {
             this._longRO = new ResizeObserver(() => {
@@ -1363,14 +1156,14 @@ export default class DaybleCalendarView extends ItemView {
                 const newH = Math.max(100, this.weeklyNotesResizeStartHeight - dy);
                 this.weeklyNotesEl.setCssProps({ 'height': `${newH}px !important` });
             };
-            this._boundWeeklyNotesMouseUp = () => {
+            this._boundWeeklyNotesMouseUp = async () => {
             if (!this.isResizingWeeklyNotes) return;
             this.isResizingWeeklyNotes = false;
             document.removeEventListener('mousemove', this._boundWeeklyNotesMouseMove as EventListener);
             document.removeEventListener('mouseup', this._boundWeeklyNotesMouseUp as EventListener);
             if (this.weeklyNotesEl) {
                 this.plugin.settings.weeklyNotesHeight = this.weeklyNotesEl.offsetHeight;
-                void this.plugin.saveSettings();
+                await this.plugin.saveSettings();
             }
         };
             dragHandle.onmousedown = (e) => {
@@ -1383,37 +1176,6 @@ export default class DaybleCalendarView extends ItemView {
                 document.addEventListener('mousemove', this._boundWeeklyNotesMouseMove as EventListener);
                 document.addEventListener('mouseup', this._boundWeeklyNotesMouseUp as EventListener);
             };
-
-            if (!this.plugin.settings.disableTouchSupport) {
-                dragHandle.addEventListener('touchstart', (e: TouchEvent) => {
-                    const t = e.touches[0];
-                    if (!t || !this.weeklyNotesEl) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    this.isResizingWeeklyNotes = true;
-                    this.weeklyNotesResizeStartY = t.clientY;
-                    this.weeklyNotesResizeStartHeight = this.weeklyNotesEl.offsetHeight;
-                    const onTouchMove = (te: TouchEvent) => {
-                        const tt = te.touches[0];
-                        if (!tt || !this.isResizingWeeklyNotes || !this.weeklyNotesEl) return;
-                        te.preventDefault();
-                        const dy = tt.clientY - this.weeklyNotesResizeStartY;
-                        const newH = Math.max(100, this.weeklyNotesResizeStartHeight - dy);
-                        this.weeklyNotesEl.setCssProps({ 'height': `${newH}px !important` });
-                    };
-                    const onTouchEnd = () => {
-                        this.isResizingWeeklyNotes = false;
-                        document.removeEventListener('touchmove', onTouchMove);
-                        document.removeEventListener('touchend', onTouchEnd);
-                        if (this.weeklyNotesEl) {
-                            this.plugin.settings.weeklyNotesHeight = this.weeklyNotesEl.offsetHeight;
-                            void this.plugin.saveSettings();
-                        }
-                    };
-                    document.addEventListener('touchmove', onTouchMove, { passive: false });
-                    document.addEventListener('touchend', onTouchEnd);
-                }, { passive: false });
-            }
 
             // Header
             const header = this.weeklyNotesEl.createDiv({ cls: 'dayble-weekly-notes-header' });
@@ -1454,7 +1216,7 @@ export default class DaybleCalendarView extends ItemView {
         await Promise.resolve();
     }
 
-    renderMonthView(titleEl?: HTMLElement): void {
+    async renderMonthView(titleEl?: HTMLElement): Promise<void> {
         const y = this.currentDate.getFullYear();
         const m = this.currentDate.getMonth();
         const monthLabel = new Date(y, m).toLocaleString('en-US', { month: 'long', year: 'numeric' });
@@ -1503,17 +1265,7 @@ export default class DaybleCalendarView extends ItemView {
             const dayHeader = cell.createDiv({ cls: 'dayble-day-header' });
             dayHeader.createDiv({ cls: 'dayble-day-number', text: String(day) });
             const t = new Date();
-            const todayStr = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
             const isToday = day === t.getDate() && m === t.getMonth() && y === t.getFullYear();
-            const isPast = fullDate < todayStr;
-            const pastBehavior = this.plugin.settings.pastDateBehavior ?? 'none';
-            const pastScope = this.plugin.settings.pastDateScope ?? 'both';
-            const shouldApplyPastBehavior = isPast && pastBehavior !== 'none' && (pastScope === 'months' || pastScope === 'both');
-            if (shouldApplyPastBehavior) {
-                cell.addClass('dayble-past-date');
-                const dimOpacity = this.plugin.settings.dimPastEvents ?? 0.75;
-                cell.setCssProps({ '--dim-past-events-opacity': String(dimOpacity) });
-            }
             if (isToday) {
                 cell.addClass('dayble-current-day');
                 const searchBtn = dayHeader.createEl('button', { cls: 'dayble-day-search-btn' });
@@ -1526,9 +1278,7 @@ export default class DaybleCalendarView extends ItemView {
                     return false;
                 };
                 searchBtn.onmousedown = (e) => { e.preventDefault(); e.stopPropagation(); };
-                if (!this.plugin.settings.disableTouchSupport) {
-                    searchBtn.ontouchstart = (e) => { e.preventDefault(); e.stopPropagation(); };
-                }
+                searchBtn.ontouchstart = (e) => { e.preventDefault(); e.stopPropagation(); };
             }
             const longContainer = cell.createDiv({ cls: 'dayble-long-container' });
             longContainer.addClass('db-long-container');
@@ -1537,70 +1287,11 @@ export default class DaybleCalendarView extends ItemView {
             // Create lane walls container for intelligent stacking
             container.createDiv({ cls: 'dayble-lane-walls' });
             
-            if (shouldApplyPastBehavior && pastBehavior === 'show-image') {
-                const images = this.plugin.settings.pastDateImages ?? {};
-                const imgPath = images[fullDate];
-                if (imgPath) {
-                    const imgWrapper = container.createDiv({ cls: 'dayble-past-date-image' });
-                    const img = imgWrapper.createEl('img');
-                    const file = this.app.vault.getAbstractFileByPath(imgPath);
-                    if (file) {
-                        img.src = this.app.vault.getResourcePath(file as any);
-                    }
-                    imgWrapper.oncontextmenu = (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const menu = new Menu();
-                        menu.addItem((item) => {
-                            item.setTitle('Change image').setIcon('image').onClick(async () => {
-                                const modal = new ImageSuggestModal(this.app, async (newFile) => {
-                                    if (!this.plugin.settings.pastDateImages) {
-                                        this.plugin.settings.pastDateImages = {};
-                                    }
-                                    this.plugin.settings.pastDateImages[fullDate] = newFile.path;
-                                    await this.plugin.saveSettings();
-                                    await this.render();
-                                });
-                                modal.open();
-                            });
-                        });
-                        menu.addItem((item) => {
-                            item.setTitle('Remove image').setIcon('trash').onClick(async () => {
-                                if (this.plugin.settings.pastDateImages) {
-                                    delete this.plugin.settings.pastDateImages[fullDate];
-                                    await this.plugin.saveSettings();
-                                    await this.render();
-                                }
-                            });
-                        });
-                        menu.showAtMouseEvent(e);
-                    };
-                } else {
-                    const addBtn = container.createDiv({ cls: 'dayble-past-date-add-btn' });
-                    setIcon(addBtn, 'image');
-                    addBtn.setAttr('title', 'Add an image for this day');
-                    addBtn.onclick = async (e) => {
-                        e.stopPropagation();
-                        const modal = new ImageSuggestModal(this.app, async (file) => {
-                            if (!this.plugin.settings.pastDateImages) {
-                                this.plugin.settings.pastDateImages = {};
-                            }
-                            this.plugin.settings.pastDateImages[fullDate] = file.path;
-                            await this.plugin.saveSettings();
-                            await this.render();
-                        });
-                        modal.open();
-                    };
-                }
-            } else if (shouldApplyPastBehavior && pastBehavior === 'hide-events') {
-                // Don't render events for past dates
-            } else {
-                let dayEvents = expandedEvents.filter(e => e.date === fullDate);
-                if (this.plugin.settings.onlyShowPinnedEventsMonth) {
-                    dayEvents = dayEvents.filter(e => e.pinned);
-                }
-                dayEvents.forEach(e => container.appendChild(this.createEventItem(e, false, false, false)));
+            let dayEvents = expandedEvents.filter(e => e.date === fullDate);
+            if (this.plugin.settings.onlyShowPinnedEventsMonth) {
+                dayEvents = dayEvents.filter(e => e.pinned);
             }
+            dayEvents.forEach(e => container.appendChild(this.createEventItem(e, false, false, false)));
             
             // Allow reordering events within the container
             container.ondragover = (e) => { 
@@ -1717,9 +1408,6 @@ export default class DaybleCalendarView extends ItemView {
             
             cell.onclick = async (ev) => {
                         const target = ev.target as HTMLElement;
-                        // Don't open event modal for past dates with show-image behavior
-                        const isPastShowImage = shouldApplyPastBehavior && pastBehavior === 'show-image';
-                        if (isPastShowImage) return;
                         // Only open modal if clicking on the cell itself or container, not on an event
                         if (!target.closest('.dayble-event') && target.closest('.dayble-event-container') === container) {
                             await this.openEventModal(undefined, fullDate, undefined, undefined, undefined, this.plugin.settings.onlyShowPinnedEventsMonth);
@@ -1732,45 +1420,30 @@ export default class DaybleCalendarView extends ItemView {
                 if (target.closest('.dayble-event')) return;
                 // Don't start selection if already dragging
                 if (this.isDragging) return;
-                // Don't start selection for past dates with show-image behavior
-                if (shouldApplyPastBehavior && pastBehavior === 'show-image') return;
                 this.startSelection(fullDate, cell);
             };
             cell.onmouseover = () => {
                 if (this.isSelecting && !this.isDragging) this.updateSelection(fullDate);
             };
-            if (!this.plugin.settings.disableTouchSupport) {
-                cell.ontouchstart = (ev) => {
-                    const target = ev.target as HTMLElement;
-                    // Don't start selection if touching an event
-                    if (target.closest('.dayble-event')) return;
-                    // Don't start selection if already dragging
-                    if (this.isDragging) return;
-                    // Don't start selection for past dates with show-image behavior
-                    if (shouldApplyPastBehavior && pastBehavior === 'show-image') return;
-                    this.startSelection(fullDate, cell);
-                };
-                cell.ontouchmove = () => {
-                    if (this.isSelecting && !this.isDragging) this.updateSelection(fullDate);
-                };
-            }
-            cell.ondragover = (e) => { 
-                if (shouldApplyPastBehavior && pastBehavior === 'show-image') return;
-                e.preventDefault(); cell.addClass('dayble-drag-over'); this.showDropPlaceholder(cell); 
+            cell.ontouchstart = (ev) => {
+                const target = ev.target as HTMLElement;
+                // Don't start selection if touching an event
+                if (target.closest('.dayble-event')) return;
+                // Don't start selection if already dragging
+                if (this.isDragging) return;
+                this.startSelection(fullDate, cell);
             };
-            cell.ondragleave = (e) => {
-                if (e.relatedTarget && cell.contains(e.relatedTarget as Node)) return;
-                cell.removeClass('dayble-drag-over');
-                cell.querySelectorAll('.dayble-drop-placeholder').forEach(el => el.remove());
+            cell.ontouchmove = () => {
+                if (this.isSelecting && !this.isDragging) this.updateSelection(fullDate);
             };
+            cell.ondragover = (e) => { e.preventDefault(); cell.addClass('dayble-drag-over'); };
+            cell.ondragleave = () => { cell.removeClass('dayble-drag-over'); };
             cell.ondrop = async (e) => {
-                if (shouldApplyPastBehavior && pastBehavior === 'show-image') return;
                 e.preventDefault();
                 cell.removeClass('dayble-drag-over');
                 const id = e.dataTransfer?.getData('text/plain');
                 const src = e.dataTransfer?.getData('dayble-source');
-                if (!id) { this.clearDropPlaceholders(); return; }
-                const before = this._dragBeforeHeights ?? this.captureDayHeights();
+                if (!id) return;
                 try {
                     if (src === 'holder') {
                         const hIdx = this.holderEvents.findIndex(ev => ev.id === id);
@@ -1781,9 +1454,8 @@ export default class DaybleCalendarView extends ItemView {
                             evn.endDate = fullDate;
                             this.events.push(evn);
                             await this.saveAllEntries();
-                            this.renderHolder();
-                            await this.smoothRerenderAfterDrop(before);
-                            return;
+                            await this.renderHolder();
+                            await this.render();
                         }
                     } else {
                         const idx = this.events.findIndex(ev => ev.id === id);
@@ -1805,8 +1477,8 @@ export default class DaybleCalendarView extends ItemView {
                             await this.saveAllEntries();
                         }
                     }
-                    this.renderHolder();
-                    await this.smoothRerenderAfterDrop(before);
+                    await this.renderHolder();
+                    await this.render();
                 } catch {
                     new Notice('Failed to save event changes');
                 }
@@ -1820,11 +1492,9 @@ export default class DaybleCalendarView extends ItemView {
             this.gridEl.appendChild(this._longOverlayEl);
         }
         requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                this.renderLongEvents();
-            });
+            this.renderLongEvents();
         });
-        this.renderHolder();
+        await this.renderHolder();
 
         if (!this._longRO && 'ResizeObserver' in window) {
             this._longRO = new ResizeObserver(() => {
@@ -1834,7 +1504,7 @@ export default class DaybleCalendarView extends ItemView {
         }
     }
 
-    renderDayView(titleEl?: HTMLElement): void {
+    async renderDayView(titleEl?: HTMLElement): Promise<void> {
         this.gridEl.empty();
         this.weekHeaderEl.empty();
         
@@ -1881,10 +1551,10 @@ export default class DaybleCalendarView extends ItemView {
         const dayLabel = moment(dateObj).format(this.plugin.settings.dayTitleFormat || 'dddd, D MMMM');
         if (this.monthTitleEl) this.monthTitleEl.setText(dayLabel);
 
-        this.renderHolder();
+        await this.renderHolder();
     }
 
-    render3DayView(titleEl?: HTMLElement): void {
+    async render3DayView(titleEl?: HTMLElement): Promise<void> {
         this.gridEl.empty();
         this.weekHeaderEl.empty();
         
@@ -1950,10 +1620,10 @@ export default class DaybleCalendarView extends ItemView {
         
         if (this.monthTitleEl) this.monthTitleEl.setText(rangeLabel);
 
-        this.renderHolder();
+        await this.renderHolder();
     }
 
-    renderAgendaView(titleEl?: HTMLElement): void {
+    async renderAgendaView(titleEl?: HTMLElement): Promise<void> {
         const agendaTitle = moment(this.currentDate).format(this.plugin.settings.agendaTitleFormat || 'MMMM YYYY');
         if (this.monthTitleEl) this.monthTitleEl.setText(agendaTitle);
         
@@ -2033,7 +1703,7 @@ export default class DaybleCalendarView extends ItemView {
                     const isMultiDay = ev.startDate && ev.endDate && ev.startDate !== ev.endDate;
                     const isAllDay = !ev.time || isMultiDay;
                     const item = agendaContainer.appendChild(this.createEventItem(ev, false, false, isAllDay, true));
-                    const itemEl = item;
+                    const itemEl = item as HTMLElement;
                     itemEl.setCssProps({ 'width': '100%' });
                     
                     if (isAllDay) {
@@ -2044,7 +1714,7 @@ export default class DaybleCalendarView extends ItemView {
             });
         }
 
-        this.renderHolder();
+        await this.renderHolder();
     }
 
     updateCopyCalendarButtonVisibility() {
@@ -2125,7 +1795,7 @@ export default class DaybleCalendarView extends ItemView {
                     maxHeight: 'none',
                     overflow: 'visible'
                 },
-                filter: (node: unknown) => {
+                filter: (node: any) => {
                     if (node && node.classList && typeof node.classList.contains === 'function') {
                         if (
                             node.classList.contains('dayble-header-buttons') || 
@@ -2404,7 +2074,7 @@ export default class DaybleCalendarView extends ItemView {
             if (this.plugin.settings.onlyShowPinnedEventsAgenda && !ev.pinned) return;
             if (ev.date) {
                 if (!dayMap.has(ev.date)) dayMap.set(ev.date, []);
-                dayMap.get(ev.date).push(ev);
+                dayMap.get(ev.date)!.push(ev);
             } else if (ev.startDate && ev.endDate) {
                 let curr = moment(ev.startDate, 'YYYY-MM-DD');
                 const end = moment(ev.endDate, 'YYYY-MM-DD');
@@ -2422,7 +2092,7 @@ export default class DaybleCalendarView extends ItemView {
                 while (curr.isSameOrBefore(effectiveEnd, 'day')) {
                     const dStr = curr.format('YYYY-MM-DD');
                     if (!dayMap.has(dStr)) dayMap.set(dStr, []);
-                    dayMap.get(dStr).push(ev);
+                    dayMap.get(dStr)!.push(ev);
                     curr.add(1, 'day');
                 }
             }
@@ -2552,12 +2222,8 @@ export default class DaybleCalendarView extends ItemView {
         this.selectionEndDate = date;
         this.highlightSelectionRange();
         document.addEventListener('mouseup', this._endSelOnce);
-        if (!this.plugin.settings.disableTouchSupport) {
-            document.addEventListener('touchend', this._endSelOnceTouchEnd);
-        }
     }
-    _endSelOnce = () => { document.removeEventListener('mouseup', this._endSelOnce); document.removeEventListener('touchend', this._endSelOnceTouchEnd); void this.endSelection(); };
-    _endSelOnceTouchEnd = () => { document.removeEventListener('touchend', this._endSelOnceTouchEnd); document.removeEventListener('mouseup', this._endSelOnce); void this.endSelection(); };
+    _endSelOnce = async () => { document.removeEventListener('mouseup', this._endSelOnce); await this.endSelection(); };
     updateSelection(date: string) {
         if (!this.isSelecting || this.isDragging) return;
         this.selectionEndDate = date;
@@ -2596,16 +2262,16 @@ export default class DaybleCalendarView extends ItemView {
         this.selectionEndDate = null;
     }
     scrollEventIntoView(eventId: string) {
-        const el = this.containerEl.querySelector(`.dayble-event[data-id="${eventId}"]`);
+        const el = this.containerEl.querySelector(`.dayble-event[data-id="${eventId}"]`) as HTMLElement | null;
         if (!el) return;
         const view = this.plugin.settings.calendarView || (this.plugin.settings.calendarWeekActive ? 'Week' : 'Month');
         let scrollEl: HTMLElement | null = null;
         if (view === 'Day' || view === '3day') {
             scrollEl = this.dayModeTodayModal?.scroller || null;
         } else if (view === 'Agenda') {
-            scrollEl = this.gridEl.querySelector('.dayble-agenda-container');
+            scrollEl = this.gridEl.querySelector('.dayble-agenda-container') as HTMLElement | null;
         } else {
-            const cont = el.closest('.dayble-event-container');
+            const cont = el.closest('.dayble-event-container') as HTMLElement | null;
             if (cont && cont.scrollHeight > cont.clientHeight) scrollEl = cont;
         }
         if (scrollEl) {
@@ -2655,15 +2321,6 @@ export default class DaybleCalendarView extends ItemView {
             this._longOverlayEl.addClass('dayble-long-overlay-box');
         }
         const cells = Array.from(this.gridEl.children).filter(el => (el as HTMLElement).hasClass?.('dayble-day')) as HTMLElement[];
-
-        // Guard: if cells have no layout yet, retry next frame
-        if (cells.length > 0) {
-            const firstActive = cells.find(c => c.getAttr('data-date'));
-            if (firstActive && firstActive.getBoundingClientRect().height === 0) {
-                requestAnimationFrame(() => { this.renderLongEvents(); });
-                return;
-            }
-        }
         
         // Fixed buffer from the top of the day cell to the first long event
         const HEADER_BUFFER = 38; // LN
@@ -2695,6 +2352,7 @@ export default class DaybleCalendarView extends ItemView {
         if ((isMonth && this.plugin.settings.onlyShowPinnedEventsMonth) || (isWeek && this.plugin.settings.onlyShowPinnedEventsWeek)) {
             longEvents = longEvents.filter(ev => ev.pinned);
         }
+
         const { eventLanes, maxLanesByDate } = this.calculateLongEventLanes(longEvents, { lanesPerEvent, lanesPerGap, lanesPerDesc, lanesPerIcon, liBottomGapReduceUnits: LI_BOTTOM_GAP_REDUCE_UNITS });
         const countsByDate = maxLanesByDate;
 
@@ -2777,7 +2435,7 @@ export default class DaybleCalendarView extends ItemView {
 
         // Build prev-type mapping per visible date
         const prevTypeByEventDateKey: Record<string, string> = {}; // LN
-        const visibleDates = cells.map(c => c.getAttr('data-date')).filter(Boolean); // LN
+        const visibleDates = cells.map(c => c.getAttr('data-date')).filter(Boolean) as string[]; // LN
         visibleDates.forEach(dateStr => {
             const evsOnDate = longEvents
                 .filter(ev => {
@@ -2826,12 +2484,9 @@ export default class DaybleCalendarView extends ItemView {
 
         // Function to position a single event segment using fixed calculations
         const positionEventSegment = (item: HTMLElement, first: HTMLElement, last: HTMLElement, stackIndex: number, evId?: string) => {
-            const gridRect = this.gridEl.getBoundingClientRect();
-            const frRect = first.getBoundingClientRect();
-            const lrRect = last.getBoundingClientRect();
-            const frLeft = frRect.left - gridRect.left;
-            const frTop = frRect.top - gridRect.top;
-            const lrRight = (lrRect.left - gridRect.left) + lrRect.width;
+            const frLeft = first.offsetLeft;
+            const frTop = first.offsetTop;
+            const lrRight = last.offsetLeft + last.offsetWidth;
             
             // Fixed top offset calculation based on lane unit index
             const baseTopOffset = HEADER_BUFFER + (stackIndex * LANE_UNIT_HEIGHT); // LN
@@ -2845,7 +2500,7 @@ export default class DaybleCalendarView extends ItemView {
                 if (dateStr) {
                     const prevType = prevTypeByEventDateKey[`${evId}|${dateStr}`];
                     if (prevType) {
-                        const currType = getEventType(this.events.find(e => e.id === evId));
+                        const currType = getEventType(this.events.find(e => e.id === evId)!);
                         pairAdjustPx = (PAIR_ADJUST[prevType]?.[currType] ?? 0);
                         if (stackIndex >= 1) {
                             if (currType === 'LI') seqCompressPx = 2; // LN
@@ -2870,9 +2525,9 @@ export default class DaybleCalendarView extends ItemView {
         };
 
         sortedLongEvents.forEach(ev => {
-            // Determine the visible date range in the current grid (skip inactive cells)
-            const gridStartStr = cells.find(c => c.getAttr('data-date'))?.getAttr('data-date') ?? null;
-            const gridEndStr = [...cells].reverse().find(c => c.getAttr('data-date'))?.getAttr('data-date') ?? null;
+            // Determine the visible date range in the current grid
+            const gridStartStr = cells[0]?.getAttr('data-date');
+            const gridEndStr = cells[cells.length - 1]?.getAttr('data-date');
             if (!gridStartStr || !gridEndStr) return;
 
             const evStartFull = new Date(ev.startDate);
@@ -2901,7 +2556,7 @@ export default class DaybleCalendarView extends ItemView {
             const endIdx = startIdx + span - 1;
             const endRow = Math.floor(endIdx / cellsPerRow);
             const category = this.plugin.settings.eventCategories?.find(c => c.id === ev.categoryId);
-            const styleSig = `${ev.categoryId || ''}|${ev.color || ''}|${ev.textColor || ''}|${ev.colorName || ''}|${category?.bgColor || ''}|${category?.textColor || ''}|${this.plugin.settings.eventBgOpacity}|${this.plugin.settings.iconPlacement}|${this.plugin.settings.onlyAnimateToday}|${this.plugin.settings.eventBorderWidth}|${this.plugin.settings.eventBorderRadius}|${this.plugin.settings.eventBorderOpacity}|${ev.pinned ? '1' : '0'}|${ev.completed ? '1' : '0'}|${ev.stateId || ''}`;
+            const styleSig = `${ev.categoryId || ''}|${ev.color || ''}|${ev.textColor || ''}|${ev.colorName || ''}|${category?.bgColor || ''}|${category?.textColor || ''}|${this.plugin.settings.eventBgOpacity}|${this.plugin.settings.iconPlacement}|${this.plugin.settings.onlyAnimateToday}|${this.plugin.settings.eventBorderWidth}|${this.plugin.settings.eventBorderRadius}|${this.plugin.settings.eventBorderOpacity}`;
             const contentSig = `${ev.title || ''}|${ev.description || ''}|${ev.icon || ''}|${ev.time || ''}`;
             
             if (startRow === endRow) {
@@ -2972,17 +2627,17 @@ export default class DaybleCalendarView extends ItemView {
 
         const updateNormalEventMargins = () => {
             cells.forEach(cell => {
-                const container = cell.querySelector('.dayble-event-container');
+                const container = cell.querySelector('.dayble-event-container') as HTMLElement;
                 if (container) {
                     const maxH = this.plugin.settings.dayCellMaxHeight ?? 0;
                     if (maxH > 0) {
-                        (cell).setCssProps({ '--dayble-cell-max-height': `${maxH}px` });
-                        (cell).addClass('dayble-cell-max');
+                        (cell as HTMLElement).setCssProps({ '--dayble-cell-max-height': `${maxH}px` });
+                        (cell as HTMLElement).addClass('dayble-cell-max');
                         container.removeClass('dayble-overflow-visible');
                         container.addClass('dayble-scroll-y', 'dayble-scroll-x-hidden');
                     } else {
-                        (cell).style.removeProperty('--dayble-cell-max-height');
-                        (cell).removeClass('dayble-cell-max');
+                        (cell as HTMLElement).style.removeProperty('--dayble-cell-max-height');
+                        (cell as HTMLElement).removeClass('dayble-cell-max');
                         container.removeClass('dayble-scroll-y', 'dayble-scroll-x-hidden');
                         container.addClass('dayble-overflow-visible');
                     }
@@ -2992,12 +2647,7 @@ export default class DaybleCalendarView extends ItemView {
 
         // Initial update
         updateNormalEventMargins();
-
-        // If any long event items have zero width, layout wasn't ready yet — retry once more
-        const hasZeroWidth = Array.from(this._longEls.values()).some(el => el.isConnected && el.offsetWidth === 0);
-        if (hasZeroWidth) {
-            requestAnimationFrame(() => { this.renderLongEvents(); });
-        }    }
+    }
 
     getEventTooltipText(ev: DaybleEvent): string {
         const title = (ev.title || 'Untitled').replace(/[#*`]/g, '');
@@ -3131,7 +2781,7 @@ export default class DaybleCalendarView extends ItemView {
         // Dynamic "center-left" transition logic
         if (titleAlign === 'center-left') {
             const checkAlignment = () => {
-                const titleEl = item.querySelector('.dayble-event-title');
+                const titleEl = item.querySelector('.dayble-event-title') as HTMLElement;
                 if (!titleEl) return;
                 // Measure natural single-line width
                 const canvas = document.createElement('canvas');
@@ -3141,7 +2791,7 @@ export default class DaybleCalendarView extends ItemView {
                 context.font = `${computedStyle.fontWeight} ${computedStyle.fontSize} ${computedStyle.fontFamily}`;
                 const naturalWidth = context.measureText(titleEl.innerText).width;
                 const containerWidth = item.getBoundingClientRect().width;
-                const iconEl = item.querySelector('.dayble-event-icon');
+                const iconEl = item.querySelector('.dayble-event-icon') as HTMLElement;
                 let iconWidth = 0;
                 const isSideIcon = item.classList.contains('dayble-icon-placement-left') || item.classList.contains('dayble-icon-placement-right');
                 
@@ -3406,8 +3056,8 @@ export default class DaybleCalendarView extends ItemView {
                     });
                     item.classList.add('dayble-event-colored');
                     // Update desc text color if present
-                    const desc = item.querySelector('.dayble-event-desc');
-                    if (desc) (desc).setCssProps({ 'color': textColor });
+                    const desc = item.querySelector('.dayble-event-desc') as HTMLElement;
+                    if (desc) (desc as HTMLElement).setCssProps({ 'color': textColor });
                 }
             }
         }
@@ -3421,7 +3071,7 @@ export default class DaybleCalendarView extends ItemView {
                 const file = resolveNoteFile(this.plugin.app, wiki);
                 if (file) {
                     const leaf = this.plugin.app.workspace.getLeaf(true);
-                    void (leaf).openFile(file);
+                    (leaf as WorkspaceLeaf).openFile(file);
                 }
             }
         }, { capture: true });
@@ -3429,11 +3079,6 @@ export default class DaybleCalendarView extends ItemView {
             this.isSelecting = false;
             this.isDragging = true;
             this.clearSelection();
-            // Snapshot heights before the drop so row growth/shrink can animate.
-            try {
-                this._dragBeforeHeights = this.captureDayHeights();
-                this._dragElHeight = item.offsetHeight;
-            } catch { /* ignore */ }
             e.dataTransfer?.setData('text/plain', ev.id);
             (e.dataTransfer)?.setData('dayble-source','calendar');
             try {
@@ -3455,7 +3100,7 @@ export default class DaybleCalendarView extends ItemView {
                 document.body.appendChild(dragImg);
                 e.dataTransfer?.setDragImage(dragImg, Math.min(8, rect.width / 4), Math.min(8, rect.height / 4));
                 (item as HTMLElement & { __dragImg?: HTMLElement }).__dragImg = dragImg;
-            } catch { /* intentional */ }
+            } catch { }
             item.addClass('dayble-dragging');
         };
         item.ondragend = () => {
@@ -3464,110 +3109,7 @@ export default class DaybleCalendarView extends ItemView {
             if (di && di.parentElement) di.remove();
             (item as HTMLElement & { __dragImg?: HTMLElement }).__dragImg = undefined;
             this.isDragging = false;
-            this.clearDropPlaceholders();
         };
-
-        // Touch drag support for mobile (month/week view)
-        if (!this.plugin.settings.disableTouchSupport) {
-            let touchDragTimer: ReturnType<typeof setTimeout> | null = null;
-            let touchDragging = false;
-            let touchGhost: HTMLElement | null = null;
-            item.addEventListener('touchstart', (e: TouchEvent) => {
-                const t = e.touches[0];
-                if (!t) return;
-                touchDragging = false;
-                touchDragTimer = setTimeout(() => {
-                    touchDragging = true;
-                    this.isSelecting = false;
-                    this.isDragging = true;
-                    this.clearSelection();
-                    try {
-                        this._dragBeforeHeights = this.captureDayHeights();
-                        this._dragElHeight = item.offsetHeight;
-                    } catch { /* ignore */ }
-                    if (navigator.vibrate) navigator.vibrate(50);
-                    item.addClass('dayble-dragging');
-                    // Create ghost
-                    const rect = item.getBoundingClientRect();
-                    touchGhost = document.body.createDiv({ cls: 'dayble-drag-ghost' });
-                    const clone = item.cloneNode(true) as HTMLElement;
-                    clone.setCssProps({ 'width': `${rect.width}px`, 'height': `${rect.height}px` });
-                    touchGhost.appendChild(clone);
-                    touchGhost.setCssProps({
-                        'position': 'fixed', 'z-index': '9999', 'pointer-events': 'none',
-                        'opacity': '0.8', 'left': `${rect.left}px`, 'top': `${rect.top}px`,
-                        'width': `${rect.width}px`, 'height': `${rect.height}px`
-                    });
-                }, 400);
-            }, { passive: true });
-
-            item.addEventListener('touchmove', (e: TouchEvent) => {
-                if (touchDragTimer) { clearTimeout(touchDragTimer); touchDragTimer = null; }
-                if (!touchDragging || !touchGhost) return;
-                e.preventDefault();
-                const t = e.touches[0];
-                if (!t) return;
-                touchGhost.setCssProps({ 'left': `${t.clientX - 20}px`, 'top': `${t.clientY - 20}px` });
-                // Highlight drop target
-                touchGhost.setCssProps({ 'pointer-events': 'none' });
-                const target = document.elementFromPoint(t.clientX, t.clientY);
-                this.gridEl.querySelectorAll('.dayble-drag-over').forEach(el => el.removeClass('dayble-drag-over'));
-                const cell = target?.closest('[data-date]');
-                if (cell) {
-                    (cell as HTMLElement).addClass('dayble-drag-over');
-                    this.showDropPlaceholder(cell as HTMLElement);
-                } else {
-                    this.clearDropPlaceholders();
-                }
-            }, { passive: false });
-
-            item.addEventListener('touchend', (e: TouchEvent) => {
-                if (touchDragTimer) { clearTimeout(touchDragTimer); touchDragTimer = null; }
-                if (!touchDragging) return;
-                e.preventDefault();
-                touchDragging = false;
-                item.removeClass('dayble-dragging');
-                if (touchGhost) { touchGhost.remove(); touchGhost = null; }
-                this.gridEl.querySelectorAll('.dayble-drag-over').forEach(el => el.removeClass('dayble-drag-over'));
-                this.isDragging = false;
-
-                const t = e.changedTouches[0];
-                if (!t) return;
-                const target = document.elementFromPoint(t.clientX, t.clientY);
-                const cell = target?.closest('[data-date]');
-                if (!cell) return;
-                const newDate = (cell as HTMLElement).dataset.date;
-                if (!newDate) return;
-
-                void (async () => {
-                    const before = this._dragBeforeHeights ?? this.captureDayHeights();
-                    try {
-                        const idx = this.events.findIndex(event => event.id === ev.id);
-                        if (idx === -1) { this.clearDropPlaceholders(); return; }
-                        const original = this.events[idx];
-                        const updated = JSON.parse(JSON.stringify(original));
-                        if (original.startDate && original.endDate && original.startDate !== original.endDate) {
-                            const diffMs = new Date(original.endDate).getTime() - new Date(original.startDate).getTime();
-                            const diffDays = Math.round(diffMs / 86400000);
-                            const newStart = new Date(newDate + 'T00:00:00');
-                            const newEnd = new Date(newStart);
-                            newEnd.setDate(newEnd.getDate() + diffDays);
-                            const pad = (n: number) => String(n).padStart(2, '0');
-                            updated.startDate = newDate;
-                            updated.endDate = `${newEnd.getFullYear()}-${pad(newEnd.getMonth()+1)}-${pad(newEnd.getDate())}`;
-                            updated.date = newDate;
-                        } else {
-                            updated.date = newDate;
-                            updated.startDate = newDate;
-                            updated.endDate = newDate;
-                        }
-                        this.events[idx] = updated;
-                        await this.saveAllEntries();
-                        await this.smoothRerenderAfterDrop(before);
-                    } catch { /* intentional */ }
-                })();
-            }, { passive: false });
-        }
         item.onclick = async (e) => { e.stopPropagation(); await this.openEventModal(ev.id); };
         item.oncontextmenu = (e) => {
             e.preventDefault();
@@ -3637,7 +3179,7 @@ export default class DaybleCalendarView extends ItemView {
                 ev.completed = !ev.completed;
                 await this.saveAllEntries();
                 await this.render();
-                if (!wasCompleted && ev.completed) { try { this.plugin.playSoundMarkComplete(); } catch { /* intentional */ } }
+                if (!wasCompleted && ev.completed) { try { this.plugin.playSoundMarkComplete(); } catch {} }
             }));
 
             menu.addSeparator();
@@ -3678,7 +3220,7 @@ export default class DaybleCalendarView extends ItemView {
         return false;
     }
 
-    renderHolder() {
+    async renderHolder() {
         const list = this.holderEl?.querySelector('.dayble-holder-list');
         if (!list) return;
         list.empty();
@@ -3689,10 +3231,6 @@ export default class DaybleCalendarView extends ItemView {
                 this.isDragging = true;
                 this.isSelecting = false;
                 this.clearSelection();
-                try {
-                    this._dragBeforeHeights = this.captureDayHeights();
-                    this._dragElHeight = item.offsetHeight;
-                } catch { /* ignore */ }
                 e.dataTransfer?.setData('text/plain', ev.id);
                 (e.dataTransfer)?.setData('dayble-source','holder');
                 try {
@@ -3714,7 +3252,7 @@ export default class DaybleCalendarView extends ItemView {
                     document.body.appendChild(dragImg);
                     e.dataTransfer?.setDragImage(dragImg, Math.min(8, rect.width / 4), Math.min(8, rect.height / 4));
                     (item as HTMLElement & { __dragImg?: HTMLElement }).__dragImg = dragImg;
-                } catch { /* intentional */ }
+                } catch { }
                 item.addClass('dayble-dragging');
             };
             item.ondragend = () => {
@@ -3723,7 +3261,6 @@ export default class DaybleCalendarView extends ItemView {
                 if (di && di.parentElement) di.remove();
                 (item as HTMLElement & { __dragImg?: HTMLElement }).__dragImg = undefined;
                 this.isDragging = false;
-                this.clearDropPlaceholders();
             };
             list.appendChild(item);
         });
@@ -3815,8 +3352,8 @@ export default class DaybleCalendarView extends ItemView {
             }
             try {
                 await this.saveAllEntries();
-            } catch { /* intentional */ }
-            this.renderHolder();
+            } catch { }
+            await this.renderHolder();
             await this.render();
             if (this.currentTodayModal) {
                 this.currentTodayModal.events = this.events;
@@ -3832,7 +3369,7 @@ export default class DaybleCalendarView extends ItemView {
                 await this.saveAllEntries();
                 await this.render();
             }
-        }, () => {
+        }, async () => {
             const picker = new IconPickerModal(this.app, icon => {
                 if (existing) existing.icon = icon;
                 modal.setIcon(icon);
@@ -3856,5 +3393,4 @@ export default class DaybleCalendarView extends ItemView {
         void modal.open();
     }
 }
-
 

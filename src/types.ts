@@ -114,6 +114,9 @@ export interface DaybleSettings {
     agendaTitleFormat?: string;
     agendaDateFormat?: string;
     dimPastEvents?: number;
+    pastDateBehavior?: 'none' | 'hide-events' | 'show-image';
+    pastDateScope?: 'months' | 'weeks' | 'both';
+    pastDateImages?: Record<string, string>;
     soundMarkComplete?: string;
     soundNextEvent?: string;
     soundMarkCompleteName?: string;
@@ -173,6 +176,9 @@ export const DEFAULT_SETTINGS: DaybleSettings = {
     agendaTitleFormat: 'MMMM YYYY',
     agendaDateFormat: 'dddd, D MMMM',
     dimPastEvents: 0.75,
+    pastDateBehavior: 'none',
+    pastDateScope: 'both',
+    pastDateImages: {},
     soundMarkComplete: '',
     soundNextEvent: '',
     soundMarkCompleteName: '',

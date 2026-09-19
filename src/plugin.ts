@@ -343,6 +343,18 @@ export default class DaybleCalendarPlugin extends Plugin {
                 return true;
             }
         });
+        this.addCommand({
+            id: 'toggle-holder',
+            name: 'Toggle holder',
+            callback: async () => {
+                const view = this.getCalendarView();
+                if (view && view.holderEl) {
+                    view.holderEl.classList.toggle('open');
+                    this.settings.holderOpen = view.holderEl.classList.contains('open');
+                    await this.saveSettings();
+                }
+            }
+        });
         this.addSettingTab(new DaybleSettingTab(this.app, this, EventStyleSettingsModal));
 
         // Replace new tab with homepage when enabled
