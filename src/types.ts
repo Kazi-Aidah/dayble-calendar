@@ -120,6 +120,7 @@ export interface DaybleSettings {
     soundNextEventName?: string;
     enableFiveMinIntervals?: boolean;
     replaceHomepageWithSidecards?: boolean;
+    disableTouchSupport?: boolean;
 }
 
 export const DEFAULT_SETTINGS: DaybleSettings = {
@@ -178,6 +179,7 @@ export const DEFAULT_SETTINGS: DaybleSettings = {
     soundNextEventName: '',
     enableFiveMinIntervals: true,
     replaceHomepageWithSidecards: false,
+    disableTouchSupport: false,
     swatches: [
         { name: 'Red',       color: '#952237', textColor: '#e9b7c1' },
         { name: 'Orange',    color: '#ae581e', textColor: '#eec7ad' },

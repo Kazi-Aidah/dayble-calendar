@@ -62,7 +62,8 @@ export function hexToRgba(hex: string, alpha: number): string {
 function sanitizeHtml(html: string): string {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
-    const elements = doc.querySelectorAll('*');
+    if (!doc.body) return '';
+    const elements = doc.body.querySelectorAll('*');
     const allowedTags = new Set(['p','br','strong','b','em','i','u','s','del','strike','mark','code','pre','blockquote','h1','h2','h3','h4','h5','h6','ul','ol','li','a','img','table','thead','tbody','tr','th','td','hr','span','div','section','article']);
     elements.forEach(el => {
         const tag = el.tagName.toLowerCase();
@@ -78,7 +79,7 @@ function sanitizeHtml(html: string): string {
             }
         });
     });
-    return doc.body.innerHTML;
+    return doc.body ? doc.body.innerHTML : '';
 }
 
 export function renderMarkdown(text: string, element: HTMLElement, app?: App): void {

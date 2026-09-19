@@ -4095,3 +4095,67 @@ button.dayble-btn.db-btn.button {
 .dayble-font-07-transform-270 { font-size: 0.7em !important; transform: rotate(270deg) !important; }
 .dayble-font-1-transform-270 { font-size: 1em !important; transform: rotate(270deg) !important; }
 .dayble-overflow-hidden { overflow: hidden !important; }
+/* ===== Smooth drag-drop row resizing (month/week) ===== */
+/* Placeholder reserves space in the hovered day so the target row
+   pre-grows smoothly during dragover instead of jumping on drop. */
+.dayble-drop-placeholder {
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 4px;
+    border: 2px dashed var(--interactive-accent);
+    border-radius: var(--event-border-radius, var(--input-radius));
+    background: color-mix(in srgb, var(--interactive-accent) 15%, transparent);
+    opacity: 0.9;
+    pointer-events: none;
+    transition: height 0.2s ease, opacity 0.2s ease;
+    overflow: hidden;
+}
+
+/* Dim the original while dragging so users see it as "lifted". */
+.dayble-event.dayble-dragging {
+    opacity: 0.4;
+}
+
+/* Quick Add Event Modal */
+.dayble-quick-time-row,
+.dayble-quick-name-row,
+.dayble-quick-dur-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
+}
+
+.dayble-quick-label {
+    font-size: 0.85em;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.dayble-quick-name-input {
+    width: 100%;
+    border: 1px solid var(--background-modifier-border);
+    font-size: 1em;
+}
+
+.dayble-quick-name-input:focus {
+    border-color: var(--interactive-accent);
+    outline: none;
+}
+
+.dayble-quick-dur-select {
+    width: 100%;
+    border: 1px solid var(--background-modifier-border);
+    font-size: 1em;
+    max-height: 160px;
+    overflow-y: auto;
+}
+
+.dayble-quick-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 20px;
+    padding-top: 12px;
+    border-top: 1px solid var(--background-modifier-border);
+}

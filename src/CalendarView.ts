@@ -1,6 +1,6 @@
 import { ItemView, WorkspaceLeaf, setIcon, setTooltip, Notice, Menu, normalizePath, moment, TFolder } from 'obsidian';
 import * as htmlToImage from 'html-to-image';
-import type DaybleCalendarPlugin from '../main';
+import type DaybleCalendarPlugin from './plugin';
 import type { DaybleEvent, EventRecurrence } from './types';
 import { VIEW_TYPE, timeToMinutes } from './constants';
 import { chooseTextColor, hexToRgba, renderMarkdown, resolveNoteFile, randomId } from './utils';
@@ -57,6 +57,8 @@ export default class DaybleCalendarView extends ItemView {
     weeklyNotesResizeStartHeight = 0;
     _boundWeeklyNotesMouseMove?: (e: MouseEvent) => void;
     _boundWeeklyNotesMouseUp?: (e: MouseEvent) => void;
+    _dragBeforeHeights?: Map<string, number>;
+    _dragElHeight?: number;
 
     constructor(leaf: WorkspaceLeaf, plugin: DaybleCalendarPlugin) {
         super(leaf);
@@ -360,33 +362,35 @@ export default class DaybleCalendarView extends ItemView {
             document.addEventListener('mouseup', this._boundHolderMouseUp);
         };
 
-        resizeHandle.addEventListener('touchstart', (e: TouchEvent) => {
-            const t = e.touches[0];
-            if (!t) return;
-            e.preventDefault();
-            e.stopPropagation();
-            this.isResizingHolder = true;
-            this.holderResizeStartX = t.clientX;
-            this.holderResizeStartWidth = this.holderEl.offsetWidth;
-            const onTouchMove = (te: TouchEvent) => {
-                const tt = te.touches[0];
-                if (!tt || !this.isResizingHolder) return;
-                te.preventDefault();
-                let diff = tt.clientX - this.holderResizeStartX;
-                if (placement === 'right') diff = -diff;
-                const newWidth = Math.max(200, this.holderResizeStartWidth + diff);
-                this.holderEl.setCssProps({ 'width': newWidth + 'px' });
-            };
-            const onTouchEnd = () => {
-                this.isResizingHolder = false;
-                document.removeEventListener('touchmove', onTouchMove);
-                document.removeEventListener('touchend', onTouchEnd);
-                this.plugin.settings.holderWidth = this.holderEl.offsetWidth;
-                void this.plugin.saveSettings();
-            };
-            document.addEventListener('touchmove', onTouchMove, { passive: false });
-            document.addEventListener('touchend', onTouchEnd);
-        }, { passive: false });
+        if (!this.plugin.settings.disableTouchSupport) {
+            resizeHandle.addEventListener('touchstart', (e: TouchEvent) => {
+                const t = e.touches[0];
+                if (!t) return;
+                e.preventDefault();
+                e.stopPropagation();
+                this.isResizingHolder = true;
+                this.holderResizeStartX = t.clientX;
+                this.holderResizeStartWidth = this.holderEl.offsetWidth;
+                const onTouchMove = (te: TouchEvent) => {
+                    const tt = te.touches[0];
+                    if (!tt || !this.isResizingHolder) return;
+                    te.preventDefault();
+                    let diff = tt.clientX - this.holderResizeStartX;
+                    if (placement === 'right') diff = -diff;
+                    const newWidth = Math.max(200, this.holderResizeStartWidth + diff);
+                    this.holderEl.setCssProps({ 'width': newWidth + 'px' });
+                };
+                const onTouchEnd = () => {
+                    this.isResizingHolder = false;
+                    document.removeEventListener('touchmove', onTouchMove);
+                    document.removeEventListener('touchend', onTouchEnd);
+                    this.plugin.settings.holderWidth = this.holderEl.offsetWidth;
+                    void this.plugin.saveSettings();
+                };
+                document.addEventListener('touchmove', onTouchMove, { passive: false });
+                document.addEventListener('touchend', onTouchEnd);
+            }, { passive: false });
+        }
         
         const holderList = this.holderEl.createDiv({ cls: 'dayble-holder-list' });
         // Add drag handlers to holder for dropping events there
@@ -475,11 +479,10 @@ export default class DaybleCalendarView extends ItemView {
             document.removeEventListener('mousemove', this._boundWeeklyNotesMouseMove);
         }
         if (this._boundWeeklyNotesMouseUp) {
-        document.removeEventListener('mouseup', this._boundWeeklyNotesMouseUp);
+            document.removeEventListener('mouseup', this._boundWeeklyNotesMouseUp);
+        }
+        await Promise.resolve();
     }
-    void this.renderHolder();
-    await Promise.resolve();
-}
 
     getRequiredFiles(): Set<string> {
         const files = new Set<string>();
@@ -710,6 +713,7 @@ export default class DaybleCalendarView extends ItemView {
     }
 
     async render(titleEl?: HTMLElement) {
+        if (!this.gridEl || !this.calendarEl) return;
         if (this.dayModeTodayModal) {
             this.dayModeTodayModal.onClose();
             this.dayModeTodayModal = undefined;
@@ -866,6 +870,83 @@ export default class DaybleCalendarView extends ItemView {
         return { eventLanes, maxLanesByDate };
     }
 
+    /** Capture current day-cell heights so post-drop growth/shrink can be animated. */
+    captureDayHeights(): Map<string, number> {
+        const m = new Map<string, number>();
+        this.gridEl?.querySelectorAll('.dayble-day[data-date]').forEach(el => {
+            const d = (el as HTMLElement).dataset.date;
+            if (d) m.set(d, (el as HTMLElement).offsetHeight);
+        });
+        return m;
+    }
+
+    clearDropPlaceholders() {
+        this.gridEl?.querySelectorAll('.dayble-drop-placeholder').forEach(el => el.remove());
+    }
+
+    /**
+     * Show a smoothly-growing placeholder in the hovered day cell while dragging.
+     * This pre-grows the target row during dragover, so the drop itself
+     * doesn't cause an abrupt height jump.
+     */
+    showDropPlaceholder(cell: HTMLElement) {
+        const container = cell.querySelector('.dayble-event-container') as HTMLElement | null;
+        if (!container || !this.gridEl) return;
+        const dragging = this.gridEl.querySelector('.dayble-dragging') as HTMLElement | null
+            ?? document.querySelector('.dayble-holder-list .dayble-dragging') as HTMLElement | null;
+        // Reordering inside the same day uses the drop indicator instead.
+        if (dragging && container.contains(dragging)) return;
+        // Only one placeholder at a time — remove stale ones in other cells.
+        this.gridEl.querySelectorAll('.dayble-drop-placeholder').forEach(el => {
+            if (!container.contains(el)) el.remove();
+        });
+        if (container.querySelector('.dayble-drop-placeholder')) return;
+        const h = this._dragElHeight ?? dragging?.offsetHeight ?? 32;
+        const ph = document.createElement('div');
+        ph.className = 'dayble-drop-placeholder';
+        ph.style.height = '0px';
+        container.appendChild(ph);
+        requestAnimationFrame(() => {
+            ph.style.height = `${h}px`;
+        });
+    }
+
+    /** Re-render after a drag-drop, animating day-cell height deltas (FLIP). */
+    async smoothRerenderAfterDrop(before?: Map<string, number>) {
+        const beforeHeights = before ?? this._dragBeforeHeights;
+        this.clearDropPlaceholders();
+        this.gridEl?.querySelectorAll('.dayble-drag-over').forEach(el => el.removeClass('dayble-drag-over'));
+        await this.render();
+        await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+        if (beforeHeights && beforeHeights.size) this.animateDayHeightChanges(beforeHeights);
+        this._dragBeforeHeights = undefined;
+        this._dragElHeight = undefined;
+    }
+
+    /** Animate day cells from their pre-drop heights to the new heights. */
+    animateDayHeightChanges(before: Map<string, number>) {
+        if (!this.gridEl) return;
+        const cells = Array.from(this.gridEl.querySelectorAll('.dayble-day[data-date]')) as HTMLElement[];
+        for (const cell of cells) {
+            const date = cell.dataset.date;
+            if (!date) continue;
+            const oldH = before.get(date);
+            if (oldH == null) continue;
+            const newH = cell.offsetHeight;
+            if (Math.abs(newH - oldH) < 4) continue;
+            try {
+                cell.style.overflow = 'hidden';
+                const anim = cell.animate(
+                    [{ height: `${oldH}px` }, { height: `${newH}px` }],
+                    { duration: 220, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
+                );
+                const cleanup = () => { cell.style.overflow = ''; cell.style.height = ''; };
+                anim.onfinish = cleanup;
+                anim.oncancel = cleanup;
+            } catch { /* ignore */ }
+        }
+    }
+
     async renderWeekView(titleEl?: HTMLElement): Promise<void> {
         let monthLabel = '';
         const weekStartSetting = this.plugin.settings.weekStartDay;
@@ -964,7 +1045,9 @@ export default class DaybleCalendarView extends ItemView {
                     return false;
                 };
                 searchBtn.onmousedown = (e) => { e.preventDefault(); e.stopPropagation(); };
-                searchBtn.ontouchstart = (e) => { e.preventDefault(); e.stopPropagation(); };
+                if (!this.plugin.settings.disableTouchSupport) {
+                    searchBtn.ontouchstart = (e) => { e.preventDefault(); e.stopPropagation(); };
+                }
             }
 
             const longContainer = cell.createDiv({ cls: 'dayble-long-container' });
@@ -1071,15 +1154,20 @@ export default class DaybleCalendarView extends ItemView {
                 await this.saveAllEntries();
             };
             
-            // Drop on cell (move from holder or other day)
-            cell.ondragover = (e) => { e.preventDefault(); cell.addClass('dayble-drag-over'); };
-            cell.ondragleave = () => { cell.removeClass('dayble-drag-over'); };
+            // Drop on cell (move from holder or other day) — week view
+            cell.ondragover = (e) => { e.preventDefault(); cell.addClass('dayble-drag-over'); this.showDropPlaceholder(cell); };
+            cell.ondragleave = (e) => {
+                if (e.relatedTarget && cell.contains(e.relatedTarget as Node)) return;
+                cell.removeClass('dayble-drag-over');
+                cell.querySelectorAll('.dayble-drop-placeholder').forEach(el => el.remove());
+            };
             cell.ondrop = async (e) => {
                 e.preventDefault();
                 cell.removeClass('dayble-drag-over');
                 const id = e.dataTransfer?.getData('text/plain');
                 const src = e.dataTransfer?.getData('dayble-source');
-                if (!id) return;
+                if (!id) { this.clearDropPlaceholders(); return; };
+                const before = this._dragBeforeHeights ?? this.captureDayHeights();
                 
                 if (src === 'holder') {
                     const hIdx = this.holderEvents.findIndex(ev => ev.id === id);
@@ -1091,7 +1179,8 @@ export default class DaybleCalendarView extends ItemView {
                         this.events.push(evn);
                         await this.saveAllEntries();
                         await this.loadAllEntries();
-                        await this.render();
+                        await this.smoothRerenderAfterDrop(before);
+                        return;
                     }
                 } else if (src === 'calendar') {
                      // Move from another day
@@ -1115,10 +1204,12 @@ export default class DaybleCalendarView extends ItemView {
                              }
                              await this.saveAllEntries();
                              await this.loadAllEntries();
-                             await this.render();
+                             await this.smoothRerenderAfterDrop(before);
+                             return;
                          }
                      }
                 }
+                this.clearDropPlaceholders();
             };
 
             // Interactions
@@ -1141,16 +1232,18 @@ export default class DaybleCalendarView extends ItemView {
                 if (this.isSelecting && !this.isDragging) this.updateSelection(fullDate);
             };
             
-            cell.ontouchstart = (ev) => {
-                const target = ev.target as HTMLElement;
-                if (target.closest('.dayble-event')) return;
-                if (this.isDragging) return;
-                this.startSelection(fullDate, cell);
-            };
-            
-            cell.ontouchmove = () => {
-                if (this.isSelecting && !this.isDragging) this.updateSelection(fullDate);
-            };
+            if (!this.plugin.settings.disableTouchSupport) {
+                cell.ontouchstart = (ev) => {
+                    const target = ev.target as HTMLElement;
+                    if (target.closest('.dayble-event')) return;
+                    if (this.isDragging) return;
+                    this.startSelection(fullDate, cell);
+                };
+                
+                cell.ontouchmove = () => {
+                    if (this.isSelecting && !this.isDragging) this.updateSelection(fullDate);
+                };
+            }
         }
         
         this.gridEl.appendChild(fragment);
@@ -1217,34 +1310,36 @@ export default class DaybleCalendarView extends ItemView {
                 document.addEventListener('mouseup', this._boundWeeklyNotesMouseUp as EventListener);
             };
 
-            dragHandle.addEventListener('touchstart', (e: TouchEvent) => {
-                const t = e.touches[0];
-                if (!t || !this.weeklyNotesEl) return;
-                e.preventDefault();
-                e.stopPropagation();
-                this.isResizingWeeklyNotes = true;
-                this.weeklyNotesResizeStartY = t.clientY;
-                this.weeklyNotesResizeStartHeight = this.weeklyNotesEl.offsetHeight;
-                const onTouchMove = (te: TouchEvent) => {
-                    const tt = te.touches[0];
-                    if (!tt || !this.isResizingWeeklyNotes || !this.weeklyNotesEl) return;
-                    te.preventDefault();
-                    const dy = tt.clientY - this.weeklyNotesResizeStartY;
-                    const newH = Math.max(100, this.weeklyNotesResizeStartHeight - dy);
-                    this.weeklyNotesEl.setCssProps({ 'height': `${newH}px !important` });
-                };
-                const onTouchEnd = () => {
-                    this.isResizingWeeklyNotes = false;
-                    document.removeEventListener('touchmove', onTouchMove);
-                    document.removeEventListener('touchend', onTouchEnd);
-                    if (this.weeklyNotesEl) {
-                        this.plugin.settings.weeklyNotesHeight = this.weeklyNotesEl.offsetHeight;
-                        void this.plugin.saveSettings();
-                    }
-                };
-                document.addEventListener('touchmove', onTouchMove, { passive: false });
-                document.addEventListener('touchend', onTouchEnd);
-            }, { passive: false });
+            if (!this.plugin.settings.disableTouchSupport) {
+                dragHandle.addEventListener('touchstart', (e: TouchEvent) => {
+                    const t = e.touches[0];
+                    if (!t || !this.weeklyNotesEl) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.isResizingWeeklyNotes = true;
+                    this.weeklyNotesResizeStartY = t.clientY;
+                    this.weeklyNotesResizeStartHeight = this.weeklyNotesEl.offsetHeight;
+                    const onTouchMove = (te: TouchEvent) => {
+                        const tt = te.touches[0];
+                        if (!tt || !this.isResizingWeeklyNotes || !this.weeklyNotesEl) return;
+                        te.preventDefault();
+                        const dy = tt.clientY - this.weeklyNotesResizeStartY;
+                        const newH = Math.max(100, this.weeklyNotesResizeStartHeight - dy);
+                        this.weeklyNotesEl.setCssProps({ 'height': `${newH}px !important` });
+                    };
+                    const onTouchEnd = () => {
+                        this.isResizingWeeklyNotes = false;
+                        document.removeEventListener('touchmove', onTouchMove);
+                        document.removeEventListener('touchend', onTouchEnd);
+                        if (this.weeklyNotesEl) {
+                            this.plugin.settings.weeklyNotesHeight = this.weeklyNotesEl.offsetHeight;
+                            void this.plugin.saveSettings();
+                        }
+                    };
+                    document.addEventListener('touchmove', onTouchMove, { passive: false });
+                    document.addEventListener('touchend', onTouchEnd);
+                }, { passive: false });
+            }
 
             // Header
             const header = this.weeklyNotesEl.createDiv({ cls: 'dayble-weekly-notes-header' });
@@ -1347,7 +1442,9 @@ export default class DaybleCalendarView extends ItemView {
                     return false;
                 };
                 searchBtn.onmousedown = (e) => { e.preventDefault(); e.stopPropagation(); };
-                searchBtn.ontouchstart = (e) => { e.preventDefault(); e.stopPropagation(); };
+                if (!this.plugin.settings.disableTouchSupport) {
+                    searchBtn.ontouchstart = (e) => { e.preventDefault(); e.stopPropagation(); };
+                }
             }
             const longContainer = cell.createDiv({ cls: 'dayble-long-container' });
             longContainer.addClass('db-long-container');
@@ -1494,25 +1591,32 @@ export default class DaybleCalendarView extends ItemView {
             cell.onmouseover = () => {
                 if (this.isSelecting && !this.isDragging) this.updateSelection(fullDate);
             };
-            cell.ontouchstart = (ev) => {
-                const target = ev.target as HTMLElement;
-                // Don't start selection if touching an event
-                if (target.closest('.dayble-event')) return;
-                // Don't start selection if already dragging
-                if (this.isDragging) return;
-                this.startSelection(fullDate, cell);
+            if (!this.plugin.settings.disableTouchSupport) {
+                cell.ontouchstart = (ev) => {
+                    const target = ev.target as HTMLElement;
+                    // Don't start selection if touching an event
+                    if (target.closest('.dayble-event')) return;
+                    // Don't start selection if already dragging
+                    if (this.isDragging) return;
+                    this.startSelection(fullDate, cell);
+                };
+                cell.ontouchmove = () => {
+                    if (this.isSelecting && !this.isDragging) this.updateSelection(fullDate);
+                };
+            }
+            cell.ondragover = (e) => { e.preventDefault(); cell.addClass('dayble-drag-over'); this.showDropPlaceholder(cell); };
+            cell.ondragleave = (e) => {
+                if (e.relatedTarget && cell.contains(e.relatedTarget as Node)) return;
+                cell.removeClass('dayble-drag-over');
+                cell.querySelectorAll('.dayble-drop-placeholder').forEach(el => el.remove());
             };
-            cell.ontouchmove = () => {
-                if (this.isSelecting && !this.isDragging) this.updateSelection(fullDate);
-            };
-            cell.ondragover = (e) => { e.preventDefault(); cell.addClass('dayble-drag-over'); };
-            cell.ondragleave = () => { cell.removeClass('dayble-drag-over'); };
             cell.ondrop = async (e) => {
                 e.preventDefault();
                 cell.removeClass('dayble-drag-over');
                 const id = e.dataTransfer?.getData('text/plain');
                 const src = e.dataTransfer?.getData('dayble-source');
-                if (!id) return;
+                if (!id) { this.clearDropPlaceholders(); return; }
+                const before = this._dragBeforeHeights ?? this.captureDayHeights();
                 try {
                     if (src === 'holder') {
                         const hIdx = this.holderEvents.findIndex(ev => ev.id === id);
@@ -1524,7 +1628,8 @@ export default class DaybleCalendarView extends ItemView {
                             this.events.push(evn);
                             await this.saveAllEntries();
                             this.renderHolder();
-                            await this.render();
+                            await this.smoothRerenderAfterDrop(before);
+                            return;
                         }
                     } else {
                         const idx = this.events.findIndex(ev => ev.id === id);
@@ -1547,7 +1652,7 @@ export default class DaybleCalendarView extends ItemView {
                         }
                     }
                     this.renderHolder();
-                    await this.render();
+                    await this.smoothRerenderAfterDrop(before);
                 } catch {
                     new Notice('Failed to save event changes');
                 }
@@ -2293,7 +2398,9 @@ export default class DaybleCalendarView extends ItemView {
         this.selectionEndDate = date;
         this.highlightSelectionRange();
         document.addEventListener('mouseup', this._endSelOnce);
-        document.addEventListener('touchend', this._endSelOnceTouchEnd);
+        if (!this.plugin.settings.disableTouchSupport) {
+            document.addEventListener('touchend', this._endSelOnceTouchEnd);
+        }
     }
     _endSelOnce = () => { document.removeEventListener('mouseup', this._endSelOnce); document.removeEventListener('touchend', this._endSelOnceTouchEnd); void this.endSelection(); };
     _endSelOnceTouchEnd = () => { document.removeEventListener('touchend', this._endSelOnceTouchEnd); document.removeEventListener('mouseup', this._endSelOnce); void this.endSelection(); };
@@ -3168,6 +3275,11 @@ export default class DaybleCalendarView extends ItemView {
             this.isSelecting = false;
             this.isDragging = true;
             this.clearSelection();
+            // Snapshot heights before the drop so row growth/shrink can animate.
+            try {
+                this._dragBeforeHeights = this.captureDayHeights();
+                this._dragElHeight = item.offsetHeight;
+            } catch { /* ignore */ }
             e.dataTransfer?.setData('text/plain', ev.id);
             (e.dataTransfer)?.setData('dayble-source','calendar');
             try {
@@ -3198,97 +3310,110 @@ export default class DaybleCalendarView extends ItemView {
             if (di && di.parentElement) di.remove();
             (item as HTMLElement & { __dragImg?: HTMLElement }).__dragImg = undefined;
             this.isDragging = false;
+            this.clearDropPlaceholders();
         };
 
         // Touch drag support for mobile (month/week view)
-        let touchDragTimer: ReturnType<typeof setTimeout> | null = null;
-        let touchDragging = false;
-        let touchGhost: HTMLElement | null = null;
-        item.addEventListener('touchstart', (e: TouchEvent) => {
-            const t = e.touches[0];
-            if (!t) return;
-            touchDragging = false;
-            touchDragTimer = setTimeout(() => {
-                touchDragging = true;
-                this.isSelecting = false;
-                this.isDragging = true;
-                this.clearSelection();
-                if (navigator.vibrate) navigator.vibrate(50);
-                item.addClass('dayble-dragging');
-                // Create ghost
-                const rect = item.getBoundingClientRect();
-                touchGhost = document.body.createDiv({ cls: 'dayble-drag-ghost' });
-                const clone = item.cloneNode(true) as HTMLElement;
-                clone.setCssProps({ 'width': `${rect.width}px`, 'height': `${rect.height}px` });
-                touchGhost.appendChild(clone);
-                touchGhost.setCssProps({
-                    'position': 'fixed', 'z-index': '9999', 'pointer-events': 'none',
-                    'opacity': '0.8', 'left': `${rect.left}px`, 'top': `${rect.top}px`,
-                    'width': `${rect.width}px`, 'height': `${rect.height}px`
-                });
-            }, 400);
-        }, { passive: true });
+        if (!this.plugin.settings.disableTouchSupport) {
+            let touchDragTimer: ReturnType<typeof setTimeout> | null = null;
+            let touchDragging = false;
+            let touchGhost: HTMLElement | null = null;
+            item.addEventListener('touchstart', (e: TouchEvent) => {
+                const t = e.touches[0];
+                if (!t) return;
+                touchDragging = false;
+                touchDragTimer = setTimeout(() => {
+                    touchDragging = true;
+                    this.isSelecting = false;
+                    this.isDragging = true;
+                    this.clearSelection();
+                    try {
+                        this._dragBeforeHeights = this.captureDayHeights();
+                        this._dragElHeight = item.offsetHeight;
+                    } catch { /* ignore */ }
+                    if (navigator.vibrate) navigator.vibrate(50);
+                    item.addClass('dayble-dragging');
+                    // Create ghost
+                    const rect = item.getBoundingClientRect();
+                    touchGhost = document.body.createDiv({ cls: 'dayble-drag-ghost' });
+                    const clone = item.cloneNode(true) as HTMLElement;
+                    clone.setCssProps({ 'width': `${rect.width}px`, 'height': `${rect.height}px` });
+                    touchGhost.appendChild(clone);
+                    touchGhost.setCssProps({
+                        'position': 'fixed', 'z-index': '9999', 'pointer-events': 'none',
+                        'opacity': '0.8', 'left': `${rect.left}px`, 'top': `${rect.top}px`,
+                        'width': `${rect.width}px`, 'height': `${rect.height}px`
+                    });
+                }, 400);
+            }, { passive: true });
 
-        item.addEventListener('touchmove', (e: TouchEvent) => {
-            if (touchDragTimer) { clearTimeout(touchDragTimer); touchDragTimer = null; }
-            if (!touchDragging || !touchGhost) return;
-            e.preventDefault();
-            const t = e.touches[0];
-            if (!t) return;
-            touchGhost.setCssProps({ 'left': `${t.clientX - 20}px`, 'top': `${t.clientY - 20}px` });
-            // Highlight drop target
-            touchGhost.setCssProps({ 'pointer-events': 'none' });
-            const target = document.elementFromPoint(t.clientX, t.clientY);
-            this.gridEl.querySelectorAll('.dayble-drag-over').forEach(el => el.removeClass('dayble-drag-over'));
-            const cell = target?.closest('[data-date]');
-            if (cell) (cell as HTMLElement).addClass('dayble-drag-over');
-        }, { passive: false });
+            item.addEventListener('touchmove', (e: TouchEvent) => {
+                if (touchDragTimer) { clearTimeout(touchDragTimer); touchDragTimer = null; }
+                if (!touchDragging || !touchGhost) return;
+                e.preventDefault();
+                const t = e.touches[0];
+                if (!t) return;
+                touchGhost.setCssProps({ 'left': `${t.clientX - 20}px`, 'top': `${t.clientY - 20}px` });
+                // Highlight drop target
+                touchGhost.setCssProps({ 'pointer-events': 'none' });
+                const target = document.elementFromPoint(t.clientX, t.clientY);
+                this.gridEl.querySelectorAll('.dayble-drag-over').forEach(el => el.removeClass('dayble-drag-over'));
+                const cell = target?.closest('[data-date]');
+                if (cell) {
+                    (cell as HTMLElement).addClass('dayble-drag-over');
+                    this.showDropPlaceholder(cell as HTMLElement);
+                } else {
+                    this.clearDropPlaceholders();
+                }
+            }, { passive: false });
 
-        item.addEventListener('touchend', (e: TouchEvent) => {
-            if (touchDragTimer) { clearTimeout(touchDragTimer); touchDragTimer = null; }
-            if (!touchDragging) return;
-            e.preventDefault();
-            touchDragging = false;
-            item.removeClass('dayble-dragging');
-            if (touchGhost) { touchGhost.remove(); touchGhost = null; }
-            this.gridEl.querySelectorAll('.dayble-drag-over').forEach(el => el.removeClass('dayble-drag-over'));
-            this.isDragging = false;
+            item.addEventListener('touchend', (e: TouchEvent) => {
+                if (touchDragTimer) { clearTimeout(touchDragTimer); touchDragTimer = null; }
+                if (!touchDragging) return;
+                e.preventDefault();
+                touchDragging = false;
+                item.removeClass('dayble-dragging');
+                if (touchGhost) { touchGhost.remove(); touchGhost = null; }
+                this.gridEl.querySelectorAll('.dayble-drag-over').forEach(el => el.removeClass('dayble-drag-over'));
+                this.isDragging = false;
 
-            const t = e.changedTouches[0];
-            if (!t) return;
-            const target = document.elementFromPoint(t.clientX, t.clientY);
-            const cell = target?.closest('[data-date]');
-            if (!cell) return;
-            const newDate = (cell as HTMLElement).dataset.date;
-            if (!newDate) return;
+                const t = e.changedTouches[0];
+                if (!t) return;
+                const target = document.elementFromPoint(t.clientX, t.clientY);
+                const cell = target?.closest('[data-date]');
+                if (!cell) return;
+                const newDate = (cell as HTMLElement).dataset.date;
+                if (!newDate) return;
 
-            void (async () => {
-                try {
-                    const idx = this.events.findIndex(event => event.id === ev.id);
-                    if (idx === -1) return;
-                    const original = this.events[idx];
-                    const updated = JSON.parse(JSON.stringify(original));
-                    if (original.startDate && original.endDate && original.startDate !== original.endDate) {
-                        const diffMs = new Date(original.endDate).getTime() - new Date(original.startDate).getTime();
-                        const diffDays = Math.round(diffMs / 86400000);
-                        const newStart = new Date(newDate + 'T00:00:00');
-                        const newEnd = new Date(newStart);
-                        newEnd.setDate(newEnd.getDate() + diffDays);
-                        const pad = (n: number) => String(n).padStart(2, '0');
-                        updated.startDate = newDate;
-                        updated.endDate = `${newEnd.getFullYear()}-${pad(newEnd.getMonth()+1)}-${pad(newEnd.getDate())}`;
-                        updated.date = newDate;
-                    } else {
-                        updated.date = newDate;
-                        updated.startDate = newDate;
-                        updated.endDate = newDate;
-                    }
-                    this.events[idx] = updated;
-                    await this.saveAllEntries();
-                    await this.render();
-                } catch { /* intentional */ }
-            })();
-        }, { passive: false });
+                void (async () => {
+                    const before = this._dragBeforeHeights ?? this.captureDayHeights();
+                    try {
+                        const idx = this.events.findIndex(event => event.id === ev.id);
+                        if (idx === -1) { this.clearDropPlaceholders(); return; }
+                        const original = this.events[idx];
+                        const updated = JSON.parse(JSON.stringify(original));
+                        if (original.startDate && original.endDate && original.startDate !== original.endDate) {
+                            const diffMs = new Date(original.endDate).getTime() - new Date(original.startDate).getTime();
+                            const diffDays = Math.round(diffMs / 86400000);
+                            const newStart = new Date(newDate + 'T00:00:00');
+                            const newEnd = new Date(newStart);
+                            newEnd.setDate(newEnd.getDate() + diffDays);
+                            const pad = (n: number) => String(n).padStart(2, '0');
+                            updated.startDate = newDate;
+                            updated.endDate = `${newEnd.getFullYear()}-${pad(newEnd.getMonth()+1)}-${pad(newEnd.getDate())}`;
+                            updated.date = newDate;
+                        } else {
+                            updated.date = newDate;
+                            updated.startDate = newDate;
+                            updated.endDate = newDate;
+                        }
+                        this.events[idx] = updated;
+                        await this.saveAllEntries();
+                        await this.smoothRerenderAfterDrop(before);
+                    } catch { /* intentional */ }
+                })();
+            }, { passive: false });
+        }
         item.onclick = async (e) => { e.stopPropagation(); await this.openEventModal(ev.id); };
         item.oncontextmenu = (e) => {
             e.preventDefault();
@@ -3410,6 +3535,10 @@ export default class DaybleCalendarView extends ItemView {
                 this.isDragging = true;
                 this.isSelecting = false;
                 this.clearSelection();
+                try {
+                    this._dragBeforeHeights = this.captureDayHeights();
+                    this._dragElHeight = item.offsetHeight;
+                } catch { /* ignore */ }
                 e.dataTransfer?.setData('text/plain', ev.id);
                 (e.dataTransfer)?.setData('dayble-source','holder');
                 try {
@@ -3440,6 +3569,7 @@ export default class DaybleCalendarView extends ItemView {
                 if (di && di.parentElement) di.remove();
                 (item as HTMLElement & { __dragImg?: HTMLElement }).__dragImg = undefined;
                 this.isDragging = false;
+                this.clearDropPlaceholders();
             };
             list.appendChild(item);
         });

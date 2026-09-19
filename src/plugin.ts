@@ -7,6 +7,7 @@ import DaybleCalendarView from './CalendarView';
 import DaybleSettingTab from './settings/SettingTab';
 import EventStyleSettingsModal from './settings/EventStyleSettingsModal';
 import PromptSearchModal from './modals/PromptSearchModal';
+import QuickAddEventModal from './modals/QuickAddEventModal';
 
 export default class DaybleCalendarPlugin extends Plugin {
     settings: DaybleSettings;
@@ -286,6 +287,14 @@ export default class DaybleCalendarPlugin extends Plugin {
             }
         });
         this.addCommand({
+            id: 'quick-add-event',
+            name: 'Quick add event for today',
+            callback: () => {
+                const modal = new QuickAddEventModal(this.app, this);
+                void modal.open();
+            }
+        });
+        this.addCommand({
             id: 'search-events',
             name: 'Search events',
             callback: async () => {
@@ -353,7 +362,9 @@ export default class DaybleCalendarPlugin extends Plugin {
         );
 
         try { await this.ensureEntriesFolder(); } catch { /* intentional */ }
-        void this.openDayble();
+        this.app.workspace.onLayoutReady(() => {
+            void this.openDayble();
+        });
     }
 
     onunload() {

@@ -1,10 +1,11 @@
 import { App, Modal, Notice, setIcon, setTooltip } from 'obsidian';
+import type DaybleCalendarPlugin from './plugin';
 import type { DaybleEvent, EventCategory, EventRecurrence } from './types';
 import { resolveNoteFile } from './utils';
 import EventRepeatModal from './EventRepeatModal';
 
 export default class EventModal extends Modal {
-    plugin: unknown;
+    plugin: DaybleCalendarPlugin;
     categories: EventCategory[] = [];
     ev?: DaybleEvent;
     date?: string;
@@ -26,7 +27,7 @@ export default class EventModal extends Modal {
 
     constructor(
         app: App,
-        plugin: unknown,
+        plugin: DaybleCalendarPlugin,
         ev: DaybleEvent | undefined,
         date: string | undefined,
         endDate: string | undefined,
