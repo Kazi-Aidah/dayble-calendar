@@ -31,27 +31,21 @@ export default class DaybleSettingTab extends PluginSettingTab {
         // --- TABS ---
         const tabContainer = containerEl.createDiv();
         tabContainer.addClass('act-tabs-container');
-        tabContainer.setAttr('style', 'display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--background-modifier-border); padding-bottom: 10px;');
 
         const tabs = [
             { id: 'general', label: 'General' },
             { id: 'appearance', label: 'Appearance' },
-            { id: 'styles', label: 'Styles' },
+            { id: 'event-styles', label: 'Event Styles' },
             { id: 'data', label: 'Data' },
         ];
 
         tabs.forEach((tab) => {
             const btn = tabContainer.createEl('button', { text: tab.label });
             btn.addClass('act-tab-button');
-            btn.setAttr('style', 'flex: 1 1 auto; cursor: pointer; border: none; background: transparent; box-shadow: none; border-radius: var(--input-radius); padding: 8px 16px;');
 
             if (this._activeTab === tab.id) {
+                btn.addClass('mod-cta');
                 btn.addClass('act-tab-active');
-                btn.style.fontWeight = 'bold';
-                btn.style.background = 'var(--color-accent)';
-                btn.style.color = 'var(--text-on-accent)';
-            } else {
-                btn.style.color = 'var(--text-muted)';
             }
 
             btn.onclick = () => {
@@ -1295,7 +1289,7 @@ export default class DaybleSettingTab extends PluginSettingTab {
 
         } // end appearance tab
 
-        if (this._activeTab === 'styles') {
+        if (this._activeTab === 'event-styles') {
 
         // Color Swatches - opens modal
         new Setting(containerEl)
@@ -1586,7 +1580,7 @@ export default class DaybleSettingTab extends PluginSettingTab {
         };
         renderStyles();
 
-        } // end styles tab
+        } // end event styles tab
 
         if (this._activeTab === 'data') {
 

@@ -2837,6 +2837,43 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     flex: 1;
 }
 
+/* :: Settings Tab Bar -- matches the Always Color Text tab strip */
+
+body .act-tabs-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--size-4-3);
+    margin-bottom: var(--size-4-5);
+    border-bottom: 1px solid var(--background-modifier-border);
+    padding-bottom: var(--size-4-3);
+}
+
+/* body prefix -- wins over the mobile-tap button chrome without !important */
+body .act-tabs-container button.act-tab-button {
+    flex: 1 1 auto;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    border-radius: var(--input-radius);
+    padding: var(--size-4-2) var(--size-4-4);
+}
+
+body .act-tabs-container button.act-tab-button.act-tab-active {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    font-weight: bold;
+}
+
+body .act-tabs-container button.act-tab-button:not(.act-tab-active) {
+    color: var(--text-muted);
+}
+
+/* focus ring -- re-states the keyboard ring that box-shadow: none above hides */
+body .act-tabs-container button.act-tab-button:focus-visible {
+    box-shadow: 0 0 0 3px var(--background-modifier-border-focus);
+}
+
 .dayble-settings-row-wrap {
     display: flex;
     gap: 8px;
