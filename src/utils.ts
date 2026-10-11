@@ -169,6 +169,15 @@ export function randomId(): string {
 }
 
 /**
+ * Strips the occurrence date suffix (`-YYYY-MM-DD`) that recurring event
+ * occurrences get appended to their base id, returning the base event id.
+ * Ids without such a suffix are returned unchanged.
+ */
+export function baseIdOf(id: string): string {
+    return id.replace(/-\d{4}-\d{2}-\d{2}$/, '');
+}
+
+/**
  * Adds touch event support to an element that already has mousedown-based drag logic.
  * Translates touchstart/touchmove/touchend into synthetic MouseEvent-like objects
  * so the same handler can be reused for both mouse and touch.

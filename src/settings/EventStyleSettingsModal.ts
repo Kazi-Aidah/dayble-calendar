@@ -177,6 +177,8 @@ export default class EventStyleSettingsModal extends Modal {
             const titleAlign = settings.eventTitleAlign ?? 'center';
             const descAlign = settings.eventDescAlign ?? 'center';
             const verticalPadding = settings.eventVerticalPadding ?? 2;
+            const horizontalPadding = settings.eventHorizontalPadding ?? 6;
+            const iconGap = settings.eventIconGap ?? 6;
 
             let finalDescAlign = descAlign;
             if (titleAlign === 'center-left' && descAlign === 'center-left') {
@@ -216,8 +218,12 @@ export default class EventStyleSettingsModal extends Modal {
                 color: textColor,
                 borderRadius: `${borderRadius}px`,
                 paddingTop: `${verticalPadding}px`,
-                paddingBottom: `${verticalPadding}px`
+                paddingBottom: `${verticalPadding}px`,
+                paddingLeft: `${horizontalPadding}px`,
+                paddingRight: `${horizontalPadding}px`
             });
+            // pinned inline so the gap slider always shows in the preview, regardless of CSS
+            eventBox.style.setProperty('gap', `${iconGap}px`, 'important');
 
             // Effects & Animations
             // Remove old classes
@@ -239,22 +245,16 @@ export default class EventStyleSettingsModal extends Modal {
 
             // Align title and desc
             eventTitle.setCssStyles({
-                fontSize: '0.85em',
+                fontSize: `${this.plugin.settings.eventTitleFontSize ?? 0.9}em`,
                 fontWeight: '600'
             });
-            eventTitle.setCssProps({
-                'text-align': `${titleAlign === 'center-left' ? 'left' : titleAlign} !important`,
-                'width': '100% !important'
-            });
+            eventTitle.style.setProperty('text-align', titleAlign === 'center-left' ? 'left' : titleAlign, 'important');
 
             eventDesc.setCssStyles({
-                fontSize: '0.75em',
+                fontSize: `${this.plugin.settings.eventDescFontSize ?? 0.85}em`,
                 opacity: '0.8'
             });
-            eventDesc.setCssProps({
-                'text-align': `${finalDescAlign === 'center-left' ? 'left' : finalDescAlign} !important`,
-                'width': '100% !important'
-            });
+            eventDesc.style.setProperty('text-align', finalDescAlign === 'center-left' ? 'left' : finalDescAlign, 'important');
 
             // Handle overall flex alignment based on title alignment
             if (titleAlign === 'center' || titleAlign === 'center-left') {

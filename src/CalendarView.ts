@@ -3,11 +3,13 @@ import * as htmlToImage from 'html-to-image';
 import type DaybleCalendarPlugin from './plugin';
 import type { DaybleEvent, EventRecurrence } from './types';
 import { VIEW_TYPE, timeToMinutes } from './constants';
-import { chooseTextColor, hexToRgba, renderMarkdown, resolveNoteFile, randomId } from './utils';
+import { chooseTextColor, hexToRgba, renderMarkdown, resolveNoteFile, randomId, baseIdOf } from './utils';
 import PromptSearchModal from './modals/PromptSearchModal';
 import ImageSuggestModal from './modals/ImageSuggestModal';
 import StorageFolderNotSetModal from './modals/StorageFolderNotSetModal';
 import IconPickerModal from './modals/IconPickerModal';
+import RepeatDeleteModal from './modals/RepeatDeleteModal';
+import QuickAddEventModal from './modals/QuickAddEventModal';
 import EventModal from './EventModal';
 import TodayModal from './TodayModal';
 
@@ -86,14 +88,17 @@ export default class DaybleCalendarView extends ItemView {
         if (rec.type === 'weekly') {
             const diffWeeks = date.clone().startOf('week').diff(start.clone().startOf('week'), 'weeks');
             if (diffWeeks < 0 || diffWeeks % (rec.interval || 1) !== 0) return false;
-            return (rec.daysOfWeek || []).includes(date.day());
+            // No days selected: repeat on the anchor's weekday
+            const days = (rec.daysOfWeek && rec.daysOfWeek.length > 0) ? rec.daysOfWeek : [start.day()];
+            return days.includes(date.day());
         }
         
         if (rec.type === 'monthly') {
-            const matchesDayOfWeek = (rec.daysOfWeek || []).length > 0 ? (rec.daysOfWeek || []).includes(date.day()) : false;
-            const matchesDate = rec.monthDate ? date.date() === rec.monthDate : false;
+            const days = rec.daysOfWeek || [];
+            const matchesDayOfWeek = days.length > 0 && days.includes(date.day());
+            const matchesDate = date.date() === (rec.monthDate || start.date());
             
-            if (rec.monthlyMode === 'days') return matchesDayOfWeek;
+            if (rec.monthlyMode === 'days') return days.length > 0 ? matchesDayOfWeek : matchesDate;
             if (rec.monthlyMode === 'date') return matchesDate;
             
             return matchesDayOfWeek || matchesDate;
@@ -115,8 +120,10 @@ export default class DaybleCalendarView extends ItemView {
             }
             
             const rec = ev.recurrence;
-            const recStart = moment(rec.startDate || ev.date || ev.startDate);
-            const recEnd = rec.endDate ? moment(rec.endDate) : null;
+            const anchorStr = rec.startDate || ev.date || ev.startDate || moment().format('YYYY-MM-DD');
+            const recStart = moment(anchorStr);
+            if (!recStart.isValid()) return;
+            const recEnd = rec.endDate && moment(rec.endDate).isValid() ? moment(rec.endDate) : null;
             
             if (recStart.isAfter(endRange)) return;
             if (recEnd && recEnd.isBefore(startRange)) return;
@@ -128,9 +135,10 @@ export default class DaybleCalendarView extends ItemView {
             const checkCur = checkStart.clone();
             
             while (checkCur.isSameOrBefore(checkEnd) && limit-- > 0) {
-                if (this.matchesRecurrence(rec, checkCur, recStart)) {
-                    const occurrence = { ...ev, id: `${ev.id}-${checkCur.format('YYYY-MM-DD')}`, isOccurrence: true };
-                    const dateStr = checkCur.format('YYYY-MM-DD');
+                const dateStr = checkCur.format('YYYY-MM-DD');
+                const isException = !!rec.exceptions && rec.exceptions.includes(dateStr);
+                if (this.matchesRecurrence(rec, checkCur, recStart) && !isException) {
+                    const occurrence = { ...ev, id: `${ev.id}-${dateStr}`, isOccurrence: true };
                     if (ev.date) occurrence.date = dateStr;
                     if (ev.startDate) {
                         const diff = moment(ev.endDate).diff(moment(ev.startDate), 'days');
@@ -143,6 +151,95 @@ export default class DaybleCalendarView extends ItemView {
             }
         });
         return expanded;
+    }
+
+    /** Resolves an occurrence back to the base event it was expanded from. */
+    baseEventOf(ev: DaybleEvent): DaybleEvent {
+        if (!ev.isOccurrence) return ev;
+        const baseId = baseIdOf(ev.id);
+        return this.events.find(e => e.id === baseId) || this.holderEvents.find(e => e.id === baseId) || ev;
+    }
+
+    /**
+     * Keeps a recurring series in sync when its event is moved to another date
+     * (drag/drop or edit), so the whole series re-anchors to the new date.
+     */
+    reanchorRecurrence(ev: DaybleEvent, prevStart?: string, sourceId?: string): void {
+        const rec = ev.recurrence;
+        if (!rec || rec.type === 'none') return;
+        const newStart = ev.startDate || ev.date;
+        if (!newStart) return;
+        if (!prevStart) {
+            // Event had no date before (e.g., dragged out of the holder)
+            if (rec.startDate) rec.startDate = newStart;
+            return;
+        }
+        if (prevStart === newStart) return;
+        // If the dragged id belongs to an occurrence, measure the move from that date
+        const occurrenceMatch = /-(\d{4}-\d{2}-\d{2})$/.exec(sourceId || '');
+        const from = occurrenceMatch ? occurrenceMatch[1] : prevStart;
+        const delta = moment(newStart).diff(moment(from), 'days');
+        if (!delta || Number.isNaN(delta)) return;
+        if (rec.startDate) rec.startDate = moment(rec.startDate).add(delta, 'days').format('YYYY-MM-DD');
+        if (rec.endDate) rec.endDate = moment(rec.endDate).add(delta, 'days').format('YYYY-MM-DD');
+    }
+
+    /** Stores an updated event after a drag/drop, re-anchoring its recurrence first. */
+    commitEvent(idx: number, updated: DaybleEvent, sourceId?: string): void {
+        const prev = this.events[idx];
+        this.reanchorRecurrence(updated, prev ? (prev.startDate || prev.date) : undefined, sourceId);
+        this.events[idx] = updated;
+    }
+
+    /**
+     * Deletes an event. For a recurring event opened on a specific occurrence
+     * date, asks whether to delete that occurrence, all future repeats, or the
+     * entire event.
+     */
+    async requestDelete(ev: DaybleEvent, occDate?: string): Promise<void> {
+        const base = this.baseEventOf(ev);
+        const rec = base.recurrence;
+        const isRecurring = !!rec && rec.type !== 'none';
+        const removeBase = () => {
+            this.events = this.events.filter(e => e.id !== base.id);
+            this.holderEvents = this.holderEvents.filter(e => e.id !== base.id);
+        };
+
+        if (isRecurring && occDate && rec) {
+            new RepeatDeleteModal(this.app, occDate, base.title, {
+                onDeleteOccurrence: async () => {
+                    rec.exceptions = rec.exceptions || [];
+                    if (!rec.exceptions.includes(occDate)) rec.exceptions.push(occDate);
+                    await this.saveAllEntries();
+                    void this.renderHolder();
+                    await this.render();
+                },
+                onDeleteFuture: async () => {
+                    const anchor = rec.startDate || base.startDate || base.date || '';
+                    const prevDay = moment(occDate).subtract(1, 'day').format('YYYY-MM-DD');
+                    if (!anchor || prevDay < anchor) {
+                        removeBase();
+                    } else {
+                        rec.endDate = prevDay;
+                    }
+                    await this.saveAllEntries();
+                    void this.renderHolder();
+                    await this.render();
+                },
+                onDeleteEntire: async () => {
+                    removeBase();
+                    await this.saveAllEntries();
+                    void this.renderHolder();
+                    await this.render();
+                }
+            }).open();
+            return;
+        }
+
+        removeBase();
+        await this.saveAllEntries();
+        void this.renderHolder();
+        await this.render();
     }
 
     getViewType() { return VIEW_TYPE; }
@@ -163,7 +260,8 @@ export default class DaybleCalendarView extends ItemView {
         this.rootEl.setCssProps({
             '--event-border-radius': `${this.plugin.settings.eventBorderRadius ?? 6}px`,
             '--day-cell-radius': `${this.plugin.settings.dayCellRadius ?? 8}px`,
-            '--event-vertical-padding': `${this.plugin.settings.eventVerticalPadding ?? 2}px`
+            '--event-vertical-padding': `${this.plugin.settings.eventVerticalPadding ?? 2}px`,
+            '--event-horizontal-padding': `${this.plugin.settings.eventHorizontalPadding ?? 6}px`
         });
         const initialMinW = this.plugin.settings.dayCellMinWidth ?? 0;
         if (initialMinW > 0) {
@@ -403,7 +501,7 @@ export default class DaybleCalendarView extends ItemView {
             const id = e.dataTransfer?.getData('text/plain');
             if (!id || e.dataTransfer?.getData('dayble-source') === 'holder') return; // Don't drop holder events on holder
             try {
-                const idx = this.events.findIndex(ev => ev.id === id);
+                const idx = this.events.findIndex(ev => ev.id === id || ev.id === baseIdOf(id));
                 if (idx !== -1) {
                     const ev = this.events.splice(idx, 1)[0];
                     // Reset date info when moving to holder
@@ -731,7 +829,8 @@ export default class DaybleCalendarView extends ItemView {
             this.rootEl.setCssProps({
                 '--event-border-radius': `${this.plugin.settings.eventBorderRadius ?? 6}px`,
                 '--day-cell-radius': `${this.plugin.settings.dayCellRadius ?? 8}px`,
-                '--event-vertical-padding': `${this.plugin.settings.eventVerticalPadding ?? 2}px`
+                '--event-vertical-padding': `${this.plugin.settings.eventVerticalPadding ?? 2}px`,
+                '--event-horizontal-padding': `${this.plugin.settings.eventHorizontalPadding ?? 6}px`
             });
             const minW = this.plugin.settings.dayCellMinWidth ?? 0;
             if (minW > 0) {
@@ -1247,6 +1346,7 @@ export default class DaybleCalendarView extends ItemView {
                         evn.date = fullDate;
                         evn.startDate = fullDate;
                         evn.endDate = fullDate;
+                        this.reanchorRecurrence(evn);
                         this.events.push(evn);
                         await this.saveAllEntries();
                         await this.loadAllEntries();
@@ -1255,9 +1355,10 @@ export default class DaybleCalendarView extends ItemView {
                     }
                 } else if (src === 'calendar') {
                      // Move from another day
-                     const idx = this.events.findIndex(ev => ev.id === id);
+                     const idx = this.events.findIndex(ev => ev.id === id || ev.id === baseIdOf(id));
                      if (idx !== -1) {
                          const ev = this.events[idx];
+                         const prevStart = ev.startDate || ev.date;
                          // Check if moving to same day (already handled by container.ondrop)
                          if (ev.date !== fullDate || ev.startDate !== fullDate) {
                              if (ev.startDate && ev.endDate && ev.startDate !== ev.endDate) {
@@ -1273,6 +1374,7 @@ export default class DaybleCalendarView extends ItemView {
                                  ev.startDate = fullDate;
                                  ev.endDate = fullDate;
                              }
+                             this.reanchorRecurrence(ev, prevStart, id);
                              await this.saveAllEntries();
                              await this.loadAllEntries();
                              await this.smoothRerenderAfterDrop(before);
@@ -1288,7 +1390,7 @@ export default class DaybleCalendarView extends ItemView {
                 if (shouldApplyPastBehavior && pastBehavior === 'show-image') return;
                 const target = ev.target as HTMLElement;
                 if (!target.closest('.dayble-event') && target.closest('.dayble-event-container') === container) {
-                    await this.openEventModal(undefined, fullDate, undefined, undefined, undefined, this.plugin.settings.onlyShowPinnedEventsWeek);
+                    await this.openEventModal(undefined, fullDate, undefined, undefined, undefined, this.plugin.settings.onlyShowPinnedEventsWeek, true);
                 }
             };
             
@@ -1722,7 +1824,7 @@ export default class DaybleCalendarView extends ItemView {
                         if (isPastShowImage) return;
                         // Only open modal if clicking on the cell itself or container, not on an event
                         if (!target.closest('.dayble-event') && target.closest('.dayble-event-container') === container) {
-                            await this.openEventModal(undefined, fullDate, undefined, undefined, undefined, this.plugin.settings.onlyShowPinnedEventsMonth);
+                            await this.openEventModal(undefined, fullDate, undefined, undefined, undefined, this.plugin.settings.onlyShowPinnedEventsMonth, true);
                         }
                     };
             cell.onmousedown = (ev) => {
@@ -1779,6 +1881,7 @@ export default class DaybleCalendarView extends ItemView {
                             evn.date = fullDate;
                             evn.startDate = fullDate;
                             evn.endDate = fullDate;
+                            this.reanchorRecurrence(evn);
                             this.events.push(evn);
                             await this.saveAllEntries();
                             this.renderHolder();
@@ -1786,9 +1889,10 @@ export default class DaybleCalendarView extends ItemView {
                             return;
                         }
                     } else {
-                        const idx = this.events.findIndex(ev => ev.id === id);
+                        const idx = this.events.findIndex(ev => ev.id === id || ev.id === baseIdOf(id));
                         if (idx !== -1) {
                             const ev = this.events[idx];
+                            const prevStart = ev.startDate || ev.date;
                             if (ev.startDate && ev.endDate && ev.startDate !== ev.endDate) {
                                 const span = Math.floor((new Date(ev.endDate).getTime() - new Date(ev.startDate).getTime()) / 86400000);
                                 ev.startDate = fullDate;
@@ -1802,6 +1906,7 @@ export default class DaybleCalendarView extends ItemView {
                                 ev.startDate = fullDate;
                                 ev.endDate = fullDate;
                             }
+                            this.reanchorRecurrence(ev, prevStart, id);
                             await this.saveAllEntries();
                         }
                     }
@@ -2624,6 +2729,15 @@ export default class DaybleCalendarView extends ItemView {
         if (!folder) { new StorageFolderNotSetModal(this.app).open(); return; }
         try { await this.app.vault.adapter.stat(folder); }
         catch { new StorageFolderNotSetModal(this.app).open(); return; }
+        const view = this.plugin.settings.calendarView;
+        const isMonth = view === 'Month' || (!view && !this.plugin.settings.calendarWeekActive);
+        const isWeek = view === 'Week' || (!view && this.plugin.settings.calendarWeekActive);
+        const isPinned = (isMonth && this.plugin.settings.onlyShowPinnedEventsMonth) || (isWeek && this.plugin.settings.onlyShowPinnedEventsWeek);
+        // A single-day cell selection is a day-cell creation too, so it swaps in quick add
+        if (start === end && this.plugin.settings.quickAddForNewEvents) {
+            new QuickAddEventModal(this.app, this.plugin, { date: start, pinned: isPinned }).open();
+            return;
+        }
         const modal = new EventModal(this.app, this.plugin, undefined, start, end, undefined, undefined, async result => {
             const ev: DaybleEvent = { id: randomId(), ...result } as DaybleEvent;
             this.events.push(ev);
@@ -2640,10 +2754,7 @@ export default class DaybleCalendarView extends ItemView {
         });
         modal.categories = this.plugin.settings.eventCategories || [];
         // plugin is passed in constructor
-        const view = this.plugin.settings.calendarView;
-        const isMonth = view === 'Month' || (!view && !this.plugin.settings.calendarWeekActive);
-        const isWeek = view === 'Week' || (!view && this.plugin.settings.calendarWeekActive);
-        if ((isMonth && this.plugin.settings.onlyShowPinnedEventsMonth) || (isWeek && this.plugin.settings.onlyShowPinnedEventsWeek)) {
+        if (isPinned) {
             modal.isPinned = true;
         }
         void modal.open();
@@ -2688,7 +2799,13 @@ export default class DaybleCalendarView extends ItemView {
         // const ICON_ONLY_TOP_LANE_ADJUST_PX = 60; // LN new: title + icon at top lane
         // const ICON_ONLY_BOTTOM_LANE_ADJUST_PX = 6; // LN new: title + icon at bottom lane
 
-        let longEvents = this.events.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
+        // Expand recurring events for the visible date range so repeating
+        // multi-day events appear in the long-event overlay as well
+        const cellDates = cells.map(c => c.getAttr('data-date')).filter(d => !!d).sort();
+        const longSource = cellDates.length > 0
+            ? this.getExpandedEvents(moment(cellDates[0]), moment(cellDates[cellDates.length - 1]))
+            : this.events;
+        let longEvents = longSource.filter(ev => ev.startDate && ev.endDate && ev.startDate !== ev.endDate);
         const isMonth = this.plugin.settings.calendarView === 'Month' || (!this.plugin.settings.calendarView && !this.plugin.settings.calendarWeekActive);
         const isWeek = this.plugin.settings.calendarView === 'Week' || (!this.plugin.settings.calendarView && this.plugin.settings.calendarWeekActive);
         
@@ -2901,7 +3018,7 @@ export default class DaybleCalendarView extends ItemView {
             const endIdx = startIdx + span - 1;
             const endRow = Math.floor(endIdx / cellsPerRow);
             const category = this.plugin.settings.eventCategories?.find(c => c.id === ev.categoryId);
-            const styleSig = `${ev.categoryId || ''}|${ev.color || ''}|${ev.textColor || ''}|${ev.colorName || ''}|${category?.bgColor || ''}|${category?.textColor || ''}|${this.plugin.settings.eventBgOpacity}|${this.plugin.settings.iconPlacement}|${this.plugin.settings.onlyAnimateToday}|${this.plugin.settings.eventBorderWidth}|${this.plugin.settings.eventBorderRadius}|${this.plugin.settings.eventBorderOpacity}|${ev.pinned ? '1' : '0'}|${ev.completed ? '1' : '0'}|${ev.stateId || ''}`;
+            const styleSig = `${ev.categoryId || ''}|${ev.color || ''}|${ev.textColor || ''}|${ev.colorName || ''}|${category?.bgColor || ''}|${category?.textColor || ''}|${this.plugin.settings.eventBgOpacity}|${this.plugin.settings.iconPlacement}|${this.plugin.settings.onlyAnimateToday}|${this.plugin.settings.eventBorderWidth}|${this.plugin.settings.eventBorderRadius}|${this.plugin.settings.eventBorderOpacity}|${ev.pinned ? '1' : '0'}|${ev.completed ? '1' : '0'}|${ev.stateId || ''}|${this.plugin.settings.completeBehavior ?? 'none'}|${this.plugin.showCompletedEvents ? '1' : '0'}`;
             const contentSig = `${ev.title || ''}|${ev.description || ''}|${ev.icon || ''}|${ev.time || ''}`;
             
             if (startRow === endRow) {
@@ -3047,15 +3164,19 @@ export default class DaybleCalendarView extends ItemView {
                     const endDate = ev.endDate || ev.date || ev.startDate;
                     endText = `End: ${formatTime(endTime.h, endTime.m)}, ${formatDate(endDate)}`;
                     
-                    if (ev.date || (ev.startDate === ev.endDate)) {
-                        const diff = endTime.total - startTime.total;
-                        if (diff > 0) {
-                            const hrs = Math.floor(diff / 60);
-                            const mins = diff % 60;
-                            const hText = hrs > 0 ? `${hrs} hour${hrs > 1 ? 's' : ''}` : '';
-                            const mText = mins > 0 ? `${mins} minute${mins > 1 ? 's' : ''}` : '';
-                            durationText = `Duration: ${hText}${hText && mText ? ' & ' : ''}${mText}.`;
-                        }
+                    const startDateStr = ev.startDate || ev.date;
+                    const endDateStr = ev.endDate || ev.date;
+                    const adjacentDays = !!(startDateStr && endDateStr && moment(endDateStr).diff(moment(startDateStr), 'days') === 1);
+                    const sameDay = !!ev.date || (ev.startDate === ev.endDate);
+                    let diff = endTime.total - startTime.total;
+                    const crossesMidnight = diff < 0;
+                    if (crossesMidnight) diff += 24 * 60;
+                    if ((sameDay || (crossesMidnight && adjacentDays)) && diff > 0) {
+                        const hrs = Math.floor(diff / 60);
+                        const mins = diff % 60;
+                        const hText = hrs > 0 ? `${hrs} hour${hrs > 1 ? 's' : ''}` : '';
+                        const mText = mins > 0 ? `${mins} minute${mins > 1 ? 's' : ''}` : '';
+                        durationText = `Duration: ${hText}${hText && mText ? ' & ' : ''}${mText}.`;
                     }
                 }
             }
@@ -3073,6 +3194,38 @@ export default class DaybleCalendarView extends ItemView {
         if (durationText) lines.push(durationText);
         
         return lines.join('\n');
+    }
+
+    // JS owns icon placement so the layout never depends on title/description alignment rules :: applyIconPlacement
+    private applyIconPlacement(item: HTMLElement, inner: HTMLElement, iconEl: HTMLElement, place: string, isDayMode: boolean): void {
+        const pin = (el: HTMLElement, prop: string, value: string) => el.style.setProperty(prop, value, 'important');
+        const gapPx = `${this.plugin.settings.eventIconGap ?? 6}px`;
+
+        if (place === 'left' || place === 'right') {
+            // DOM order picks the side; the text block shrinks so aligned titles stay inside the card
+            pin(item, 'flex-direction', 'row');
+            pin(item, 'justify-content', 'flex-start');
+            pin(item, 'gap', gapPx);
+            pin(iconEl, 'order', '0');
+            pin(iconEl, 'flex-shrink', '0');
+            pin(iconEl, 'margin', '0');
+            pin(inner, 'flex', '1 1 auto');
+            return;
+        }
+
+        const isTop = place.startsWith('top');
+        const justify = place.endsWith('-left') ? 'flex-start' : place.endsWith('-right') ? 'flex-end' : 'center';
+        pin(iconEl, 'justify-content', justify);
+        pin(iconEl, 'flex-shrink', '0');
+        // bottom icons must sort after the description, which uses order 4 in center mode
+        pin(iconEl, 'order', isTop ? '0' : '5');
+        // compact events hide vertical icons from CSS, so only style the visible ones
+        if (!item.hasClass('dayble-event-compact')) {
+            pin(iconEl, 'display', 'flex');
+            pin(iconEl, 'width', '100%');
+            // the gap setting owns the icon-to-text side; the outer margins stay fixed
+            pin(iconEl, 'margin', isDayMode ? '0' : isTop ? `6px 0 ${gapPx}` : `${gapPx} 0 8px`);
+        }
     }
 
     createEventItem(ev: DaybleEvent, isLong = false, isDayMode = false, isAllDay = false, isAgenda = false): HTMLElement {
@@ -3266,7 +3419,8 @@ export default class DaybleCalendarView extends ItemView {
         item.setCssProps({
             '--event-border-width': `${this.plugin.settings.eventBorderWidth ?? 2}px`,
             '--event-border-radius': `${this.plugin.settings.eventBorderRadius ?? 6}px`,
-            '--event-vertical-padding': `${this.plugin.settings.eventVerticalPadding ?? 2}px`
+            '--event-vertical-padding': `${this.plugin.settings.eventVerticalPadding ?? 2}px`,
+            '--event-horizontal-padding': `${this.plugin.settings.eventHorizontalPadding ?? 6}px`
         });
         
         // Apply effect and animation from state or category
@@ -3304,7 +3458,8 @@ export default class DaybleCalendarView extends ItemView {
             if (parts.length === 2) {
                 const start = timeToMinutes(parts[0]);
                 const end = timeToMinutes(parts[1]);
-                const diff = end - start;
+                let diff = end - start;
+                if (diff < 0) diff += 24 * 60; // crosses midnight
                 if (diff === 15) item.addClass('min15');
                 else if (diff === 30) item.addClass('min30');
                 else if (diff === 45) item.addClass('min45');
@@ -3381,13 +3536,15 @@ export default class DaybleCalendarView extends ItemView {
                 else iconEl.addClass('dayble-icon-bottom-center');
                 inner.appendChild(iconEl);
             }
+
+            this.applyIconPlacement(item, inner, iconEl, place, isDayMode);
         }
         // Completed behavior
         if (ev.completed) {
             const behavior = this.plugin.settings.completeBehavior ?? 'none';
             if (behavior === 'dim') item.addClass('dayble-event-dim');
             else if (behavior === 'strikethrough') item.addClass('dayble-strikethrough');
-            else if (behavior === 'hide') item.addClass('dayble-event-hidden');
+            else if (behavior === 'hide' && !this.plugin.showCompletedEvents) item.addClass('dayble-event-hidden');
             else if (behavior === 'color' && this.plugin.settings.completeColor) {
                 const swatches = [
                     ...(this.plugin.settings.swatches || []),
@@ -3542,7 +3699,7 @@ export default class DaybleCalendarView extends ItemView {
                 void (async () => {
                     const before = this._dragBeforeHeights ?? this.captureDayHeights();
                     try {
-                        const idx = this.events.findIndex(event => event.id === ev.id);
+                        const idx = this.events.findIndex(event => event.id === ev.id || event.id === baseIdOf(ev.id));
                         if (idx === -1) { this.clearDropPlaceholders(); return; }
                         const original = this.events[idx];
                         const updated = JSON.parse(JSON.stringify(original));
@@ -3561,6 +3718,7 @@ export default class DaybleCalendarView extends ItemView {
                             updated.startDate = newDate;
                             updated.endDate = newDate;
                         }
+                        this.reanchorRecurrence(updated, original.startDate || original.date, ev.id);
                         this.events[idx] = updated;
                         await this.saveAllEntries();
                         await this.smoothRerenderAfterDrop(before);
@@ -3573,6 +3731,7 @@ export default class DaybleCalendarView extends ItemView {
             e.preventDefault();
             e.stopPropagation();
             const menu = new Menu();
+            const base = this.baseEventOf(ev);
 
             // Section 1: Copy & Pin
             if (this.plugin.settings.showCopyTextOption) {
@@ -3584,8 +3743,8 @@ export default class DaybleCalendarView extends ItemView {
             }
 
             if (this.plugin.settings.onlyShowPinnedEventsMonth || this.plugin.settings.onlyShowPinnedEventsWeek || this.plugin.settings.onlyShowPinnedEventsAgenda) {
-                menu.addItem(i => i.setTitle(ev.pinned ? 'Unpin event' : 'Pin event').setIcon('pin').onClick(async () => {
-                    ev.pinned = !ev.pinned;
+                menu.addItem(i => i.setTitle(base.pinned ? 'Unpin event' : 'Pin event').setIcon('pin').onClick(async () => {
+                    base.pinned = !base.pinned;
                     await this.saveAllEntries();
                     await this.render();
                 }));
@@ -3593,7 +3752,7 @@ export default class DaybleCalendarView extends ItemView {
 
             // Section 2: Duplicate
             menu.addItem(i => i.setTitle('Duplicate').setIcon('copy').onClick(async () => {
-                const newEv: DaybleEvent = { ...ev, id: randomId() };
+                const newEv: DaybleEvent = { ...base, id: randomId() };
                 this.events.push(newEv);
                 await this.saveAllEntries();
                 await this.render();
@@ -3607,46 +3766,44 @@ export default class DaybleCalendarView extends ItemView {
                 // Individual states
                 eventStates.forEach(state => {
                     menu.addItem(i => i.setTitle(`Set as ${state.name}`).setIcon(state.icon || 'dot').onClick(async () => {
-                        if (state.colorName) ev.colorName = state.colorName;
-                        ev.stateId = state.id;
-                        ev.effect = state.effect || '';
-                        ev.animation = state.animation || '';
-                        ev.animation2 = state.animation2 || '';
+                        if (state.colorName) base.colorName = state.colorName;
+                        base.stateId = state.id;
+                        base.effect = state.effect || '';
+                        base.animation = state.animation || '';
+                        base.animation2 = state.animation2 || '';
                         await this.saveAllEntries();
                         await this.render();
                     }));
                 });
 
                 // Remove state option (only if a state is currently applied)
-                if (ev.stateId) {
+                if (base.stateId) {
                     menu.addItem(i => i.setTitle('Remove state').setIcon('x').onClick(async () => {
-                        ev.stateId = undefined;
-                        ev.colorName = undefined; // Reset colorName to let it fall back to category or default
+                        base.stateId = undefined;
+                        base.colorName = undefined; // Reset colorName to let it fall back to category or default
                         // Optional: Reset effects/animations if they were tied to the state
-                        ev.effect = '';
-                        ev.animation = '';
-                        ev.animation2 = '';
+                        base.effect = '';
+                        base.animation = '';
+                        base.animation2 = '';
                         await this.saveAllEntries();
                         await this.render();
                     }));
                 }
             }
 
-            menu.addItem(i => i.setTitle(ev.completed ? 'Mark incomplete' : 'Mark complete').setIcon('check').onClick(async () => {
-                const wasCompleted = !!ev.completed;
-                ev.completed = !ev.completed;
+            menu.addItem(i => i.setTitle(base.completed ? 'Mark incomplete' : 'Mark complete').setIcon('check').onClick(async () => {
+                const wasCompleted = !!base.completed;
+                base.completed = !base.completed;
                 await this.saveAllEntries();
                 await this.render();
-                if (!wasCompleted && ev.completed) { try { this.plugin.playSoundMarkComplete(); } catch { /* intentional */ } }
+                if (!wasCompleted && base.completed) { try { this.plugin.playSoundMarkComplete(); } catch { /* intentional */ } }
             }));
 
             menu.addSeparator();
 
             // Section 4: Delete
             menu.addItem(i => i.setTitle('Delete').setIcon('trash').onClick(async () => {
-                this.events = this.events.filter(e2 => e2.id !== ev.id);
-                await this.saveAllEntries();
-                await this.render();
+                await this.requestDelete(ev, ev.date || ev.startDate || undefined);
             }));
             
             menu.showAtMouseEvent(e);
@@ -3782,29 +3939,44 @@ export default class DaybleCalendarView extends ItemView {
         };
     }
 
-    async openEventModal(id?: string, date?: string, endDate?: string, startTime?: string, endTime?: string, defaultPinned?: boolean): Promise<void> {
+    async openEventModal(id?: string, date?: string, endDate?: string, startTime?: string, endTime?: string, defaultPinned?: boolean, fromDayClick = false): Promise<void> {
         const folder = this.plugin.settings.entriesFolder?.trim();
         if (!folder) { new StorageFolderNotSetModal(this.app).open(); return; }
         try { await this.app.vault.adapter.stat(folder); }
         catch { new StorageFolderNotSetModal(this.app).open(); return; }
         
         let originalId = id;
+        let occDate: string | undefined;
         if (id && id.includes('-')) {
             const parts = id.split('-');
             const lastPart = parts[parts.length - 1];
             if (/^\d{4}-\d{2}-\d{2}$/.test(lastPart)) {
                 originalId = id.substring(0, id.lastIndexOf('-'));
+                occDate = lastPart;
             }
         }
         
         const existing = originalId ? (this.events.find(e => e.id === originalId) ?? this.holderEvents.find(e => e.id === originalId)) : undefined;
-        const fromHolder = !!(existing && this.holderEvents.some(e => e.id === existing.id));
+
+        // Only day-cell clicks swap in quick add; commands and add buttons keep the full editor
+        const singleDay = !endDate || endDate === date;
+        if (!existing && fromDayClick && this.plugin.settings.quickAddForNewEvents && singleDay) {
+            new QuickAddEventModal(this.app, this.plugin, { date, startTime, endTime, pinned: defaultPinned }).open();
+            return;
+        }
+
         const modal = new EventModal(this.app, this.plugin, existing, date, endDate, startTime, endTime, async result => {
             const isMulti = !!(result.startDate && result.endDate);
             const isSingle = !!result.date || (!!result.startDate && !result.endDate);
             if (existing) {
+                const prevStart = existing.startDate || existing.date;
+                const prevRecStart = existing.recurrence?.startDate;
                 Object.assign(existing, result);
-
+                // Move the repeat anchor along with the event's own date, unless the
+                // user changed the repeat's start date inside the repeat modal
+                if (existing.recurrence && existing.recurrence.startDate === prevRecStart) {
+                    this.reanchorRecurrence(existing, prevStart);
+                }
             } else {
                 const ev: DaybleEvent = { id: randomId(), ...result } as DaybleEvent;
                 if (isMulti || isSingle) {
@@ -3824,13 +3996,9 @@ export default class DaybleCalendarView extends ItemView {
             }
         }, async () => {
             if (existing) {
-                if (fromHolder) {
-                    this.holderEvents = this.holderEvents.filter(e => e.id !== existing.id);
-                } else {
-                    this.events = this.events.filter(e => e.id !== existing.id);
-                }
-                await this.saveAllEntries();
-                await this.render();
+                const recActive = !!existing.recurrence && existing.recurrence.type !== 'none';
+                const delOcc = recActive ? (occDate || date || existing.date || existing.startDate) : undefined;
+                await this.requestDelete(existing, delOcc);
             }
         }, () => {
             const picker = new IconPickerModal(this.app, icon => {

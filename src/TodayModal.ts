@@ -3,7 +3,7 @@ import type DaybleCalendarPlugin from './plugin';
 import type DaybleCalendarView from './CalendarView';
 import type { DaybleEvent } from './types';
 import { timeToMinutes } from './constants';
-import { resolveNoteFile } from './utils';
+import { baseIdOf, resolveNoteFile } from './utils';
 
 declare const globalThis: { activeWindow?: Window };
 
@@ -123,7 +123,7 @@ export default class TodayModal extends Modal {
                 const headerDay = header.createDiv({ cls: 'dayble-3day-header-day', text: label });
                 headerDay.setCssProps({ cursor: 'pointer' });
                 headerDay.onclick = () => {
-                    this.view?.openEventModal(undefined, dStr, dStr);
+                    this.view?.openEventModal(undefined, dStr, dStr, undefined, undefined, undefined, true);
                 };
             });
 
@@ -135,7 +135,7 @@ export default class TodayModal extends Modal {
                 dayCol.setAttr('data-date', dStr);
                 dayCol.onclick = (e) => {
                     if ((e.target as HTMLElement).closest('.dayble-event')) return;
-                    this.view?.openEventModal(undefined, dStr);
+                    this.view?.openEventModal(undefined, dStr, undefined, undefined, undefined, undefined, true);
                 };
 
                 dayCol.ondragover = (e) => {
@@ -158,7 +158,7 @@ export default class TodayModal extends Modal {
                     const id = this.dragId;
                     if (!id) return;
                     try {
-                        const evIdx = (this.view?.events || []).findIndex((ev: DaybleEvent) => ev.id === id);
+                        const evIdx = (this.view?.events || []).findIndex((ev: DaybleEvent) => ev.id === id || ev.id === baseIdOf(id));
                         if (evIdx !== -1 && this.view) {
                             const originalEv = this.view.events[evIdx];
                             const updatedEv = JSON.parse(JSON.stringify(originalEv));
@@ -166,7 +166,7 @@ export default class TodayModal extends Modal {
                             updatedEv.startDate = dStr;
                             updatedEv.endDate = dStr;
                             updatedEv.time = undefined;
-                            this.view.events[evIdx] = updatedEv;
+                            this.view.commitEvent(evIdx, updatedEv, id);
                             await this.view.saveAllEntries();
                             await this.view.render();
                             this.onOpen();
@@ -257,11 +257,11 @@ export default class TodayModal extends Modal {
                             if (!dropDate) return;
                             void (async () => {
                                 try {
-                                    const evIdx = (this.view?.events || []).findIndex((event: DaybleEvent) => event.id === savedId);
+                                    const evIdx = (this.view?.events || []).findIndex((event: DaybleEvent) => event.id === savedId || event.id === baseIdOf(savedId));
                                     if (evIdx !== -1 && this.view) {
                                         const updatedEv = JSON.parse(JSON.stringify(this.view.events[evIdx]));
                                         updatedEv.date = dropDate; updatedEv.startDate = dropDate; updatedEv.endDate = dropDate; updatedEv.time = undefined;
-                                        this.view.events[evIdx] = updatedEv;
+                                        this.view.commitEvent(evIdx, updatedEv, savedId);
                                         await this.view.saveAllEntries();
                                         await this.view.render();
                                         this.onOpen();
@@ -350,7 +350,7 @@ export default class TodayModal extends Modal {
                 allDaySectionSingle.setAttr('data-date', primaryDate);
                 allDaySectionSingle.onclick = (e) => {
                     if ((e.target as HTMLElement).closest('.dayble-event')) return;
-                    this.view?.openEventModal(undefined, primaryDate);
+                    this.view?.openEventModal(undefined, primaryDate, undefined, undefined, undefined, undefined, true);
                 };
 
                 allDaySectionSingle.ondragover = (e) => {
@@ -366,7 +366,7 @@ export default class TodayModal extends Modal {
                     const id = this.dragId;
                     if (!id) return;
                     try {
-                        const evIdx = (this.view?.events || []).findIndex((ev: DaybleEvent) => ev.id === id);
+                        const evIdx = (this.view?.events || []).findIndex((ev: DaybleEvent) => ev.id === id || ev.id === baseIdOf(id));
                         if (evIdx !== -1 && this.view) {
                             const originalEv = this.view.events[evIdx];
                             const updatedEv = JSON.parse(JSON.stringify(originalEv));
@@ -374,7 +374,7 @@ export default class TodayModal extends Modal {
                             updatedEv.startDate = primaryDate;
                             updatedEv.endDate = primaryDate;
                             updatedEv.time = undefined;
-                            this.view.events[evIdx] = updatedEv;
+                            this.view.commitEvent(evIdx, updatedEv, id);
                             await this.view.saveAllEntries();
                             await this.view.render();
                             this.onOpen();
@@ -446,11 +446,11 @@ export default class TodayModal extends Modal {
                             this.dragId = undefined; this.dragDuration = undefined; this.dragEl = undefined;
                             void (async () => {
                                 try {
-                                    const evIdx = (this.view?.events || []).findIndex((event: DaybleEvent) => event.id === savedId);
+                                    const evIdx = (this.view?.events || []).findIndex((event: DaybleEvent) => event.id === savedId || event.id === baseIdOf(savedId));
                                     if (evIdx !== -1 && this.view) {
                                         const updatedEv = JSON.parse(JSON.stringify(this.view.events[evIdx]));
                                         updatedEv.date = primaryDate; updatedEv.startDate = primaryDate; updatedEv.endDate = primaryDate; updatedEv.time = undefined;
-                                        this.view.events[evIdx] = updatedEv;
+                                        this.view.commitEvent(evIdx, updatedEv, savedId);
                                         await this.view.saveAllEntries();
                                         await this.view.render();
                                         this.onOpen();
@@ -722,7 +722,7 @@ export default class TodayModal extends Modal {
 
             const sDate = targetDate;
             const eDate = endIsMidnightNext ? nextDateStr(targetDate) : targetDate;
-            await this.view?.openEventModal(undefined, sDate, eDate, sTime, eTime);
+            await this.view?.openEventModal(undefined, sDate, eDate, sTime, eTime, undefined, true);
         };
         const onGlobalMouseUp = (e: MouseEvent) => {
             if (!sel.active) return;
@@ -1131,7 +1131,7 @@ export default class TodayModal extends Modal {
                 if (this.view) {
                     this.view.lastScrollTop = currentScroller ? currentScroller.scrollTop : 0;
                 }
-                const evIdx = (this.view?.events || []).findIndex((ev: DaybleEvent) => ev.id === id);
+                const evIdx = (this.view?.events || []).findIndex((ev: DaybleEvent) => ev.id === id || ev.id === baseIdOf(id));
                 if (evIdx !== -1 && this.view) {
                     const originalEv = this.view.events[evIdx];
                     const updatedEv = JSON.parse(JSON.stringify(originalEv));
@@ -1139,7 +1139,7 @@ export default class TodayModal extends Modal {
                     updatedEv.startDate = targetDate;
                     updatedEv.endDate = endDate;
                     updatedEv.time = `${startStr}-${endStr}`;
-                    this.view.events[evIdx] = updatedEv;
+                    this.view.commitEvent(evIdx, updatedEv, id);
                     await new Promise(r => setTimeout(r, 250));
                     await this.view.saveAllEntries();
                     await this.view.render();
@@ -1324,18 +1324,25 @@ export default class TodayModal extends Modal {
                     const startStr = parts[0] || '';
                     const endStr = parts[1] || '';
                     if (!startStr) return null;
-                    let startTotal = parseHM(startStr);
-                    let endTotal = startTotal + 30;
+                    const baseStart = parseHM(startStr);
+                    const anchorDate = ev.startDate || ev.date;
+                    const isContinuation = !!(anchorDate && dStr > anchorDate);
+                    const continuesNext = !!(ev.endDate && dStr < ev.endDate);
+                    let endTotal = baseStart + 30;
                     if (endStr) {
-                        endTotal = parseHM(endStr);
-                        if (endTotal === 0 && startTotal > 0) {
-                            endTotal = 24 * 60;
+                        const parsedEnd = parseHM(endStr);
+                        if (parsedEnd <= baseStart) {
+                            // End is not after the start: the event runs past midnight
+                            endTotal = parsedEnd + 24 * 60;
+                        } else {
+                            endTotal = parsedEnd;
                         }
                     }
-                    if (ev.startDate && ev.endDate && ev.startDate !== ev.endDate) {
-                        if (dStr > ev.startDate) startTotal = 0;
-                        if (dStr < ev.endDate) endTotal = 24 * 60;
-                    }
+                    // On the day after the start, the event runs from midnight up to its end time
+                    if (isContinuation && endTotal > 24 * 60) endTotal -= 24 * 60;
+                    const startTotal = isContinuation ? 0 : baseStart;
+                    if (continuesNext) endTotal = 24 * 60;
+                    if (endTotal > 24 * 60) endTotal = 24 * 60;
                     if (startTotal >= endTotal) return null;
                     return { ev, startTotal, endTotal, column: 0, totalColumns: 1 };
                 }).filter((item: { ev: DaybleEvent, startTotal: number, endTotal: number, column: number, totalColumns: number } | null) => item !== null) as { ev: DaybleEvent, startTotal: number, endTotal: number, column: number, totalColumns: number }[];
@@ -1551,7 +1558,7 @@ export default class TodayModal extends Modal {
 
                                 const newTimeRange = `${newStartTime}-${newEndTime}`;
                                 try {
-                                    const evIdx = (this.view?.events || []).findIndex((event: DaybleEvent) => event.id === ev.id);
+                                    const evIdx = (this.view?.events || []).findIndex((event: DaybleEvent) => event.id === ev.id || event.id === baseIdOf(ev.id));
                                     if (evIdx !== -1 && this.view) {
                                         const updatedEv = JSON.parse(JSON.stringify(this.view.events[evIdx]));
                                         updatedEv.time = newTimeRange;
@@ -1664,14 +1671,14 @@ export default class TodayModal extends Modal {
                                 void (async () => {
                                     try {
                                         if (this.view) this.view.lastScrollTop = this.scroller ? this.scroller.scrollTop : 0;
-                                        const evIdx = (this.view?.events || []).findIndex((event: DaybleEvent) => event.id === savedId);
+                                        const evIdx = (this.view?.events || []).findIndex((event: DaybleEvent) => event.id === savedId || event.id === baseIdOf(savedId));
                                         if (evIdx !== -1 && this.view) {
                                             const updatedEv = JSON.parse(JSON.stringify(this.view.events[evIdx]));
                                             updatedEv.date = targetDate;
                                             updatedEv.startDate = targetDate;
                                             updatedEv.endDate = endDate;
                                             updatedEv.time = `${startStr}-${endStr}`;
-                                            this.view.events[evIdx] = updatedEv;
+                                            this.view.commitEvent(evIdx, updatedEv, savedId);
                                             await new Promise(r => setTimeout(r, 100));
                                             await this.view.saveAllEntries();
                                             await this.view.render();
@@ -1772,7 +1779,7 @@ export default class TodayModal extends Modal {
 
                                     void (async () => {
                                         try {
-                                            const evIdx = (this.view?.events || []).findIndex((event: DaybleEvent) => event.id === ev.id);
+                                            const evIdx = (this.view?.events || []).findIndex((event: DaybleEvent) => event.id === ev.id || event.id === baseIdOf(ev.id));
                                             if (evIdx !== -1 && this.view) {
                                                 const updatedEv = JSON.parse(JSON.stringify(this.view.events[evIdx]));
                                                 updatedEv.time = `${newStartTime}-${newEndTime}`;

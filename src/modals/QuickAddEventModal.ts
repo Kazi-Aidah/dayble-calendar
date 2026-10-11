@@ -14,7 +14,18 @@ const DURATION_PRESETS = [
     { label: '30m', minutes: 30 },
     { label: '45m', minutes: 45 },
     { label: '1h', minutes: 60 },
+    { label: '1h30m', minutes: 90 },
+    { label: '2h', minutes: 120 },
 ];
+
+// matches DURATION_PRESETS labels like 1h30m :: formatDuration
+function formatDuration(totalMinutes: number): string {
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    if (h && m) return `${h}h${m}m`;
+    if (h) return `${h}h`;
+    return `${m}m`;
+}
 
 function createCustomTimeInput(parent: HTMLElement, initialValue: string, format: '12h' | '24h') {
     const wrap = parent.createDiv({ cls: 'dayble-custom-time-input' });
@@ -112,7 +123,14 @@ function createCustomTimeInput(parent: HTMLElement, initialValue: string, format
 
     if (ampmInput) {
         ampmInput.onfocus = () => ampmInput?.select();
+        // Tapping/clicking the segment flips between AM and PM
+        ampmInput.onclick = () => {
+            if (!ampmInput) return;
+            ampmInput.value = ampmInput.value === 'AM' ? 'PM' : 'AM';
+            ampmInput.select();
+        };
         ampmInput.onkeydown = (e) => {
+            if (!ampmInput) return;
             if (e.key === 'ArrowLeft') { e.preventDefault(); mInput.focus(); }
             if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === ' ') {
                 e.preventDefault();
@@ -137,26 +155,44 @@ function createCustomTimeInput(parent: HTMLElement, initialValue: string, format
     return { getValue, setValue };
 }
 
+interface QuickAddOptions {
+    /** Day the event belongs to; defaults to today */
+    date?: string;
+    /** Prefilled start time (HH:mm) */
+    startTime?: string;
+    /** End time (HH:mm) used to derive the duration preset */
+    endTime?: string;
+    /** Create the event pinned */
+    pinned?: boolean;
+}
+
 export default class QuickAddEventModal extends Modal {
     plugin: DaybleCalendarPlugin;
+    private readonly opts: QuickAddOptions;
 
-    constructor(app: App, plugin: DaybleCalendarPlugin) {
+    constructor(app: App, plugin: DaybleCalendarPlugin, opts: QuickAddOptions = {}) {
         super(app);
         this.plugin = plugin;
+        this.opts = opts;
     }
 
     onOpen() {
         const c = this.contentEl;
         c.empty();
 
-        c.createEl('h2', { text: 'Quick Add Event for Today' });
+        const todayStr = moment().format('YYYY-MM-DD');
+        const targetDate = this.opts.date && moment(this.opts.date, 'YYYY-MM-DD', true).isValid() ? this.opts.date : todayStr;
+        const isToday = targetDate === todayStr;
+        const dateLabel = isToday ? 'Today' : moment(targetDate).format('MMM D, YYYY');
+
+        c.createEl('h2', { text: `Quick Add Event for ${dateLabel}` });
 
         const timeFmt = this.plugin.getTimeFormat();
 
         // Start time row
         const timeRow = c.createDiv({ cls: 'dayble-quick-time-row' });
         timeRow.createEl('label', { text: 'Start time', cls: 'dayble-quick-label' });
-        const timeInput = createCustomTimeInput(timeRow, moment().format('HH:mm'), timeFmt);
+        const timeInput = createCustomTimeInput(timeRow, this.opts.startTime ?? moment().format('HH:mm'), timeFmt);
 
         // Task name input
         const nameRow = c.createDiv({ cls: 'dayble-quick-name-row' });
@@ -175,6 +211,19 @@ export default class QuickAddEventModal extends Modal {
             selectEl.createEl('option', { value: String(preset.minutes), text: preset.label });
         }
         selectEl.value = '15'; // default 15m
+
+        // A caller-selected time range arrives as start/end, so derive its duration
+        if (this.opts.startTime && this.opts.endTime) {
+            const toMinutes = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+            let duration = toMinutes(this.opts.endTime) - toMinutes(this.opts.startTime);
+            if (duration < 0) duration += 24 * 60; // range crossed midnight
+            if (duration > 0) {
+                if (!DURATION_PRESETS.some(p => p.minutes === duration)) {
+                    selectEl.createEl('option', { value: String(duration), text: formatDuration(duration) });
+                }
+                selectEl.value = String(duration);
+            }
+        }
 
         // Footer buttons
         const footer = c.createDiv({ cls: 'dayble-quick-footer' });
@@ -200,20 +249,22 @@ export default class QuickAddEventModal extends Modal {
             const durationMinutes = parseInt(selectEl.value, 10);
             const [sh, sm] = startTime.split(':').map(Number);
             const totalMinutes = sh * 60 + sm + durationMinutes;
+            const crossesNextDay = totalMinutes >= 24 * 60;
             const endH = Math.floor(totalMinutes / 60) % 24;
             const endM = totalMinutes % 60;
             const endTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
 
-            const today = moment().format('YYYY-MM-DD');
+            const nextDay = moment(targetDate).add(1, 'day').format('YYYY-MM-DD');
 
             const ev: DaybleEvent = {
                 id: randomId(),
                 title: taskName,
-                date: today,
-                startDate: today,
-                endDate: today,
+                date: crossesNextDay ? undefined : targetDate,
+                startDate: targetDate,
+                endDate: crossesNextDay ? nextDay : targetDate,
                 time: `${startTime}-${endTime}`,
             };
+            if (this.opts.pinned) ev.pinned = true;
 
             const folder = this.plugin.settings.entriesFolder?.trim();
             if (!folder) {
@@ -245,7 +296,7 @@ export default class QuickAddEventModal extends Modal {
                 }
             }
 
-            new Notice(`Event "${taskName}" added for today`);
+            new Notice(`Event "${taskName}" added for ${isToday ? 'today' : dateLabel}`);
             this.close();
         };
 

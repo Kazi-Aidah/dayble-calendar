@@ -17,9 +17,41 @@ export default class EventRepeatModal extends Modal {
 
     onClose() {
         if (!this.isSaved) {
-            this.onSave(this.recurrence);
+            this.saveRecurrence();
         }
         this.contentEl.empty();
+    }
+
+    // Fills in sensible defaults so a saved recurrence always produces occurrences
+    private saveRecurrence() {
+        this.isSaved = true;
+        const rec = this.recurrence;
+        if (rec.type === 'none') {
+            this.onSave(rec);
+            return;
+        }
+
+        const anchorStr = rec.startDate || this.currentDate || moment().format('YYYY-MM-DD');
+        const parsed = moment(anchorStr);
+        const anchor = parsed.isValid() ? parsed : moment();
+
+        if (!rec.startDate || !moment(rec.startDate).isValid()) {
+            rec.startDate = anchor.format('YYYY-MM-DD');
+        }
+        if (rec.interval !== undefined && (!Number.isFinite(rec.interval) || rec.interval < 1)) {
+            rec.interval = 1;
+        }
+        // Weekly with no days selected repeats on the start day
+        if (rec.type === 'weekly' && (!rec.daysOfWeek || rec.daysOfWeek.length === 0)) {
+            rec.daysOfWeek = [anchor.day()];
+        }
+        // Monthly "on weekdays" with no days selected falls back to repeating on the start date
+        if (rec.type === 'monthly' && (rec.monthlyMode || 'days') === 'days' && (!rec.daysOfWeek || rec.daysOfWeek.length === 0)) {
+            rec.monthlyMode = 'date';
+            rec.monthDate = rec.monthDate || anchor.date();
+        }
+
+        this.onSave(rec);
     }
 
     onOpen() {
@@ -164,8 +196,7 @@ export default class EventRepeatModal extends Modal {
         };
         const saveBtn = footer.createEl('button', { text: 'Save', cls: 'mod-cta db-btn' });
         saveBtn.onclick = () => {
-            this.isSaved = true;
-            this.onSave(this.recurrence);
+            this.saveRecurrence();
             this.close();
         };
     }

@@ -6,6 +6,7 @@ export interface EventRecurrence {
     startDate?: string;
     endDate?: string;
     monthlyMode?: 'days' | 'date';
+    exceptions?: string[]; // occurrence dates that were deleted individually (YYYY-MM-DD)
 }
 
 export interface DaybleEvent {
@@ -65,6 +66,8 @@ export interface DaybleSettings {
     iconPlacement?: 'left' | 'right' | 'none' | 'top' | 'top-left' | 'top-right' | 'bottom' | 'bottom-left' | 'bottom-right';
     eventTitleAlign?: 'left' | 'center' | 'right' | 'center-left';
     eventDescAlign?: 'left' | 'center' | 'right' | 'center-left';
+    eventTitleFontSize?: number; // em, font size of event titles
+    eventDescFontSize?: number; // em, font size of event descriptions
     timeFormat?: '24h' | '12h' | 'system';
     holderOpen?: boolean;
     holderWidth?: number; // in pixels
@@ -77,6 +80,8 @@ export interface DaybleSettings {
     eventBorderOpacity?: number; // 0-1, controls border color opacity (for colored events)
     dayCellRadius?: number; // px, controls day cell border radius
     eventVerticalPadding?: number; // px, controls event vertical padding
+    eventHorizontalPadding?: number; // px, controls event horizontal padding
+    eventIconGap?: number; // px, space between the event icon and its text
     colorSwatchPosition?: 'under-title' | 'under-description' | 'none'; // position of color swatches in modal
     onlyAnimateToday?: boolean;
     completeBehavior?: 'none' | 'dim' | 'strikethrough' | 'hide' | 'color';
@@ -97,6 +102,7 @@ export interface DaybleSettings {
     scrollToCurrentTime?: boolean;
     showCurrentTimeLine?: boolean;
     todayModalSplitView?: boolean;
+    quickAddForNewEvents?: boolean;
     tooltipEnabled?: boolean;
     showCopyTextOption?: boolean;
     showCopyCalendarIcon?: boolean;
@@ -132,6 +138,8 @@ export const DEFAULT_SETTINGS: DaybleSettings = {
     iconPlacement: 'left',
     eventTitleAlign: 'center-left',
     eventDescAlign: 'center-left',
+    eventTitleFontSize: 0.9,
+    eventDescFontSize: 0.85,
     timeFormat: 'system',
     holderOpen: true,
     weeklyNotesHeight: 200,
@@ -142,6 +150,8 @@ export const DEFAULT_SETTINGS: DaybleSettings = {
     eventBorderOpacity: 0.25,
     dayCellRadius: 8,
     eventVerticalPadding: 9,
+    eventHorizontalPadding: 6,
+    eventIconGap: 6,
     colorSwatchPosition: 'under-title',
     onlyAnimateToday: false,
     completeBehavior: 'dim',
@@ -159,6 +169,7 @@ export const DEFAULT_SETTINGS: DaybleSettings = {
     scrollToCurrentTime: true,
     showCurrentTimeLine: true,
     todayModalSplitView: true,
+    quickAddForNewEvents: false,
     tooltipEnabled: true,
     showCopyTextOption: false,
     showCopyCalendarIcon: false,

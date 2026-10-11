@@ -2,6 +2,8 @@
     --dayble-focus-event-default-bg: var(--background-secondary);
     --dayble-focus-event-default-border: var(--background-modifier-border);
     --dayble-focus-event-default-text: var(--text-normal);
+    --dayble-event-title-font-size: 0.9em;
+    --dayble-event-desc-font-size: 0.85em;
 }
 
 .workspace-leaf:has(.dayble-root) .view-content,
@@ -662,7 +664,7 @@
     display: flex !important;
     flex-direction: row !important; /* Allow side-by-side icon and inner */
     align-items: center !important;
-    padding: var(--event-vertical-padding, 4px) 6px !important;
+    padding: var(--event-vertical-padding, 4px) var(--event-horizontal-padding, 6px) !important;
     background: var(--background-primary);
     color: var(--text-normal);
     border: var(--event-border-width, 2px) solid var(--background-modifier-border);
@@ -670,7 +672,7 @@
     margin-bottom: 4px;
     cursor: grab;
     position: relative;
-    gap: 6px; /* Space between icon and inner */
+    gap: var(--dayble-event-icon-gap, 6px); /* Space between icon and inner */
     filter: brightness(1);
     transition: filter 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
     width: 100%;
@@ -724,18 +726,6 @@
     justify-content: flex-start !important;
 }
 
-.dayble-icon-placement-right.dayble-event:not(.dayble-layout-center-flex) {
-    flex-direction: row !important;
-}
-
-.dayble-icon-placement-right.dayble-event:not(.dayble-layout-center-flex) .dayble-event-icon {
-    align-self: flex-start !important;
-}
-
-.dayble-icon-placement-left.dayble-event:not(.dayble-layout-center-flex) {
-    flex-direction: row !important;
-}
-
 .dayble-event.dayble-layout-center-flex {
     display: flex !important;
     flex-direction: column !important;
@@ -744,14 +734,6 @@
     gap: 0 !important; /* Spacing handled by inner */
     flex-wrap: nowrap !important;
     text-align: center !important;
-}
-
-/* Ensure row layout when icon is on left/right even in center-flex mode */
-.dayble-event.dayble-layout-center-flex.dayble-icon-placement-left,
-.dayble-event.dayble-layout-center-flex.dayble-icon-placement-right {
-    flex-direction: row !important;
-    gap: 6px !important;
-    justify-content: center !important;
 }
 
 .dayble-event-inner {
@@ -799,7 +781,7 @@
 }
 
 .dayble-event-title {
-    font-size: .9em;
+    font-size: var(--dayble-event-title-font-size, 0.9em);
     font-weight: 600;
     word-break: break-word;
     overflow-wrap: break-word;
@@ -823,7 +805,7 @@
 }
 
 .dayble-event-desc {
-    font-size: .85em;
+    font-size: var(--dayble-event-desc-font-size, 0.85em);
     color: inherit;
     width: 100% !important;
     max-width: 100%;
@@ -931,25 +913,6 @@
     align-items: flex-start !important;
 }
 
-.dayble-title-align-left.dayble-event {
-    justify-content: flex-start !important;
-}
-
-.dayble-title-align-right.dayble-event {
-    justify-content: flex-end !important;
-}
-
-.dayble-title-align-left .dayble-event-icon:not(.dayble-icon-top):first-child {
-    align-self: flex-start;
-    margin-right: 0; /* Handled by gap on .dayble-event */
-    flex-shrink: 0;
-}
-
-.dayble-title-align-right .dayble-event-icon:not(.dayble-icon-top):not(:first-child) {
-    align-self: flex-end;
-    margin-left: 0; /* Handled by gap on .dayble-event */
-}
-
 .dayble-desc-align-left .dayble-event-desc {
     text-align: left !important;
 }
@@ -1011,21 +974,6 @@
     margin-top: 2px !important;
 } */
 
-.dayble-icon-top-center,
-.dayble-icon-top-left,
-.dayble-icon-top-right {
-    margin-top: 6px !important;
-    margin-bottom: 2px !important;
-    order: -1;
-}
-
-.dayble-focus-event-abs .dayble-icon-top-center,
-.dayble-focus-event-abs .dayble-icon-top-left,
-.dayble-focus-event-abs .dayble-icon-top-right {
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-}
-
 .workspace-leaf.mod-active:has(.workspace-leaf-content[data-type="dayble-calendar-view"]) ~ .status-bar,
 body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-calendar-view"]) .status-bar {
     display: none !important;
@@ -1041,7 +989,7 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
     align-items: center;
     justify-content: center !important;
     gap: 6px;
-    padding: var(--event-vertical-padding, 4px) 8px !important;
+    padding: var(--event-vertical-padding, 4px) var(--event-horizontal-padding, 8px) !important;
     box-sizing: border-box;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1115,8 +1063,6 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
     border-left: 2px solid var(--background-modifier-border);
 }
 
-
-
 .dayble-event-icon {
     display: inline-flex;
     align-items: center;
@@ -1125,91 +1071,6 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
     min-width: 1.2em;
     height: 1.2em;
     line-height: 1;
-}
-
-.dayble-icon-top {
-    width: 100%;
-    margin-bottom: 4px;
-}
-
-.dayble-event.dayble-layout-center-flex > .dayble-event-icon:not(.dayble-icon-top):first-child {
-    order: 1;
-    margin-left: 0;
-    margin-right: 6px;
-}
-
-.dayble-event.dayble-layout-center-flex > .dayble-event-icon:not(.dayble-icon-top):not(:first-child) {
-    order: 3;
-    margin-left: 6px;
-    margin-right: 0;
-}
-
-.dayble-title-align-center.dayble-event.dayble-layout-center-flex:has(.dayble-event-icon:not(.dayble-icon-top)) {
-    gap: 3px;
-}
-
-.dayble-title-align-center.dayble-event.dayble-layout-center-flex > .dayble-event-icon:not(.dayble-icon-top):first-child {
-    margin-right: 3px;
-}
-
-.dayble-title-align-center.dayble-event.dayble-layout-center-flex > .dayble-event-icon:not(.dayble-icon-top):not(:first-child) {
-    margin-left: 3px;
-}
-
-.dayble-icon-top {
-    display: flex;
-    justify-content: center;
-    width: 100%;
-    margin-bottom: 2px;
-    grid-column: 1 / -1;
-    min-height: 1.2em;
-}
-
-.dayble-icon-bottom {
-    display: flex;
-    justify-content: center;
-    width: 100%;
-    margin-top: 2px;
-    grid-column: 1 / -1;
-    min-height: 1.2em;
-    order: 10;
-}
-
-.dayble-event.dayble-layout-center-flex .dayble-icon-top {
-    order: 0;
-    width: 100%;
-}
-
-.dayble-icon-top-left {
-    justify-content: flex-start;
-}
-
-.dayble-icon-top-center {
-    justify-content: center;
-}
-
-.dayble-icon-top-right {
-    justify-content: flex-end;
-}
-
-.dayble-icon-bottom-left {
-    justify-content: flex-start;
-}
-
-.dayble-icon-bottom-center {
-    justify-content: center;
-}
-
-.dayble-icon-bottom-right {
-    justify-content: flex-end;
-}
-
-.dayble-event:has(.dayble-event-icon.dayble-icon-top) .dayble-event-title {
-    grid-row: 2;
-}
-
-.dayble-event:has(.dayble-event-icon.dayble-icon-top) .dayble-event-desc {
-    grid-row: 3;
 }
 
 .dayble-icon-list {
@@ -1224,38 +1085,6 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
 .dayble-modal-column {
     display: flex;
     flex-direction: column;
-}
-
-.dayble-event-icon.dayble-icon-top.dayble-icon-top-center {
-    margin: 8px 0 4px;
-}
-
-.dayble-event-icon.dayble-icon-top.dayble-icon-top-left {
-    margin: 8px 0 4px;
-    margin-left: 4px;
-    margin-right: 2px;
-}
-
-.dayble-event-icon.dayble-icon-top.dayble-icon-top-right {
-    margin: 8px 0 4px;
-    margin-left: 2px;
-    margin-right: 4px;
-}
-
-.dayble-event-icon.dayble-icon-bottom.dayble-icon-bottom-center {
-    margin: 4px 0 8px;
-}
-
-.dayble-event-icon.dayble-icon-bottom.dayble-icon-bottom-left {
-    margin: 4px 0 8px;
-    margin-left: 4px;
-    margin-right: 2px;
-}
-
-.dayble-event-icon.dayble-icon-bottom.dayble-icon-bottom-right {
-    margin: 4px 0 8px;
-    margin-left: 2px;
-    margin-right: 4px;
 }
 
 .dayble-drag-over {
@@ -1376,9 +1205,13 @@ body:has(.workspace-leaf.mod-active .workspace-leaf-content[data-type="dayble-ca
 
 .dayble-time-segment-ampm {
     width: 30px;
-    cursor: default;
+    cursor: pointer;
     font-weight: bold;
     color: var(--text-muted);
+}
+
+.dayble-time-segment-ampm:hover {
+    color: var(--text-normal);
 }
 
 .dayble-time-segment:focus {
@@ -2457,7 +2290,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     display: flex;
     align-items: center;
     justify-content: flex-start !important; /* Force left alignment for agenda long segments */
-    padding: var(--event-vertical-padding, 4px) 6px !important;
+    padding: var(--event-vertical-padding, 4px) var(--event-horizontal-padding, 6px) !important;
 }
 
 .dayble-title-align-center .dayble-long-segment {
@@ -2466,10 +2299,6 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 .dayble-title-align-right .dayble-long-segment {
     justify-content: flex-end !important;
-}
-
-.dayble-long-container .dayble-long-segment .dayble-event-icon {
-    margin-right: 6px;
 }
 
 .db-category-row,
@@ -3229,7 +3058,7 @@ body .act-tabs-container button.act-tab-button:focus-visible {
     flex-direction: row !important;
     align-items: center !important;
     gap: 4px;
-    padding: var(--event-vertical-padding, 0px) 4px !important;
+    padding: var(--event-vertical-padding, 0px) var(--event-horizontal-padding, 4px) !important;
     overflow: hidden !important;
     /* max-height removed to fix day mode height issue */
 }
@@ -3242,7 +3071,6 @@ body .act-tabs-container button.act-tab-button:focus-visible {
     flex-shrink: 0;
     width: 14px;
     height: 14px;
-    order: -1 !important;
 }
 
 .dayble-event-compact .dayble-event-inner {
@@ -3420,7 +3248,7 @@ body .act-tabs-container button.act-tab-button:focus-visible {
     display: flex !important;
     flex-direction: row !important;
     align-items: center;
-    padding: var(--event-vertical-padding, 2px) 8px !important;
+    padding: var(--event-vertical-padding, 2px) var(--event-horizontal-padding, 8px) !important;
     margin-bottom: 0 !important;
     border-width: var(--event-border-width, 2px) !important;
     border-style: solid !important;
@@ -3456,16 +3284,6 @@ body .act-tabs-container button.act-tab-button:focus-visible {
 .dayble-3day-all-day-day .dayble-event {
     justify-content: flex-start !important;
     text-align: left !important;
-}
-
-.dayble-all-day-section .dayble-event .dayble-event-icon,
-.dayble-3day-all-day-day .dayble-event .dayble-event-icon,
-.dayble-agenda-all-day .dayble-event-icon {
-    order: -1 !important;
-    grid-column: auto !important;
-    justify-self: auto !important;
-    margin: 0 !important;
-    flex-shrink: 0;
 }
 
 .dayble-all-day-section .dayble-event .dayble-event-inner,
@@ -3866,13 +3684,6 @@ button.dayble-btn.db-btn.button {
     justify-content: flex-start !important;
 }
 
-.dayble-month-mode .dayble-event .dayble-event-icon,
-.dayble-week-mode .dayble-event .dayble-event-icon {
-    order: -1 !important;
-    margin-right: 6px !important;
-    margin-left: 0 !important;
-}
-
 /* Ensure the inner container also aligns left if it's month/week mode */
 .dayble-month-mode .dayble-event .dayble-event-inner,
 .dayble-week-mode .dayble-event .dayble-event-inner {
@@ -4011,19 +3822,19 @@ button.dayble-btn.db-btn.button {
 
 .dayble-event-preview-container .dayble-event-item.dayble-icon-placement-left,
 .dayble-event-preview-container .dayble-event-item.dayble-icon-placement-right {
-    gap: 8px !important;
+    gap: var(--dayble-event-icon-gap, 8px) !important;
     width: 200px !important;
 }
 
 .dayble-event-preview-container .dayble-event-item.dayble-icon-placement-top,
 .dayble-event-preview-container .dayble-event-item.dayble-icon-placement-bottom {
-    gap: 4px !important;
+    gap: var(--dayble-event-icon-gap, 4px) !important;
     width: 200px !important;
 }
 
 .dayble-style-settings-modal .dayble-event-preview-container .dayble-event-item.dayble-icon-placement-top,
 .dayble-style-settings-modal .dayble-event-preview-container .dayble-event-item.dayble-icon-placement-bottom {
-    gap: 2px !important;
+    gap: var(--dayble-event-icon-gap, 2px) !important;
     width: 180px !important;
 }
 

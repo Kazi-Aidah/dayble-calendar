@@ -180,7 +180,14 @@ export default class EventModal extends Modal {
 
         if (ampmInput) {
             ampmInput.onfocus = () => ampmInput?.select();
+            // Tapping/clicking the segment flips between AM and PM
+            ampmInput.onclick = () => {
+                if (!ampmInput) return;
+                ampmInput.value = ampmInput.value === 'AM' ? 'PM' : 'AM';
+                ampmInput.select();
+            };
             ampmInput.onkeydown = (e) => {
+                if (!ampmInput) return;
                 if (e.key === 'ArrowLeft') { e.preventDefault(); mInput.focus(); }
                 if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === ' ') {
                     e.preventDefault();
@@ -452,7 +459,8 @@ export default class EventModal extends Modal {
             const del = footer.createEl('button', { cls: 'dayble-btn dayble-delete' });
             del.addClass('db-btn');
             setIcon(del, 'trash-2');
-            del.onclick = async () => { await this.onDelete(); this.close(); };
+            // Close first so a follow-up confirmation modal doesn't stack on top of this one
+            del.onclick = async () => { this.close(); await this.onDelete(); };
         }
 
         // Cancel and Save buttons on right
@@ -504,21 +512,36 @@ export default class EventModal extends Modal {
                 }
             }
 
-            const finalIsMultiDay = startDate.value !== endDateInput.value;
+            let finalIsMultiDay = startDate.value !== endDateInput.value;
             const startTimeVal = customStart.getValue();
             const endTimeVal = customEnd.getValue();
             payload.time = (startTimeVal && endTimeVal) ? `${startTimeVal}-${endTimeVal}` : (startTimeVal || '');
 
+            let finalEndDate = endDateInput.value;
+            if (!finalIsMultiDay && startTimeVal && endTimeVal && endTimeVal < startTimeVal) {
+                // End time is earlier than start time: the event runs past midnight
+                const [sy, sm, sd] = startDate.value.split('-').map(Number);
+                const t = new Date(sy, (sm || 1) - 1, sd || 1);
+                t.setDate(t.getDate() + 1);
+                const pad2 = (n: number) => String(n).padStart(2, '0');
+                finalEndDate = `${t.getFullYear()}-${pad2(t.getMonth() + 1)}-${pad2(t.getDate())}`;
+                finalIsMultiDay = true;
+            }
+
             if (finalIsMultiDay) {
                 // Multi-day event
                 payload.startDate = startDate.value;
-                payload.endDate = endDateInput.value;
+                payload.endDate = finalEndDate;
                 payload.date = undefined;
             } else {
                 // Single day event
                 payload.date = startDate.value;
                 payload.startDate = startDate.value;
                 payload.endDate = startDate.value;
+            }
+
+            if (payload.recurrence && payload.recurrence.type !== 'none' && !payload.recurrence.startDate) {
+                payload.recurrence.startDate = startDate.value || this.date;
             }
 
             try {

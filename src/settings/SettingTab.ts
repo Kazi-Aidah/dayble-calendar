@@ -441,544 +441,6 @@ export default class DaybleSettingTab extends PluginSettingTab {
                     });
             });
 
-        } // end general tab
-
-        if (this._activeTab === 'appearance') {
-
-        new Setting(containerEl).setName('Event appearance').setHeading();
-
-        const previewContainer = containerEl.createDiv({ cls: 'dayble-event-preview-container' });
-        previewContainer.setCssStyles({
-            margin: '10px 0',
-            padding: '10px',
-            borderRadius: 'var(--setting-items-radius)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '8px',
-            backgroundColor: 'var(--background-primary-alt)'
-        });
-
-        const eventBox = previewContainer.createDiv({ cls: 'dayble-event-item' });
-        eventBox.setCssStyles({
-            padding: '4px 8px',
-            display: 'flex',
-            alignItems: 'center',
-            flexShrink: '0'
-        });
-
-        const eventIcon = eventBox.createDiv({ cls: 'dayble-event-icon' });
-        setIcon(eventIcon, 'clock');
-
-        const eventTextContainer = eventBox.createDiv({ cls: 'dayble-event-text-container' });
-        eventTextContainer.setCssStyles({
-            display: 'flex',
-            flexDirection: 'column',
-            flexGrow: '1'
-        });
-
-        const eventTitle = eventTextContainer.createDiv({ text: 'Customize me :D', cls: 'dayble-event-title' });
-        eventTitle.setCssStyles({ fontSize: '0.85em', fontWeight: '600' });
-
-        const eventDesc = eventTextContainer.createDiv({ text: 'I\'m the event description!', cls: 'dayble-event-desc' });
-        eventDesc.setCssStyles({ fontSize: '0.75em', opacity: '0.8' });
-
-        const updateEventPreview = () => {
-            const settings = this.plugin.settings;
-            const defaultColorName = settings.defaultEventColorName;
-            const swatches = [
-                ...(settings.swatches || []),
-                ...(settings.userCustomSwatches || []).map((s: { name: string, color: string, textColor?: string }, idx: number) => ({ ...s, name: s.name || `custom-${idx}` }))
-            ];
-
-            const selectedSwatch = swatches.find((s: { name: string }) => s.name === defaultColorName);
-
-            const opacity = settings.eventBgOpacity ?? 1;
-            const borderOpacity = settings.eventBorderOpacity ?? 1;
-            const borderWidth = settings.eventBorderWidth ?? 2;
-            const borderRadius = settings.eventBorderRadius ?? 6;
-            const titleAlign = settings.eventTitleAlign ?? 'center';
-            const descAlign = settings.eventDescAlign ?? 'center';
-            const verticalPadding = settings.eventVerticalPadding ?? 2;
-
-            let finalDescAlign = descAlign;
-            if (titleAlign === 'center-left' && descAlign === 'center-left') {
-                finalDescAlign = titleAlign;
-            }
-
-            if (selectedSwatch) {
-                const baseColor = (selectedSwatch as { color: string }).color;
-                const textColor = (selectedSwatch as { textColor?: string }).textColor || '#ffffff';
-
-                if (baseColor.startsWith('var')) {
-                    eventBox.setCssProps({ 'background-color': `rgba(from ${baseColor} r g b / ${opacity})` });
-                    if (textColor.startsWith('var')) {
-                        eventBox.setCssProps({ 'border': `${borderWidth}px solid rgba(from ${textColor} r g b / ${borderOpacity})` });
-                    } else {
-                        eventBox.setCssProps({ 'border': `${borderWidth}px solid ${textColor}`, 'border-color': textColor });
-                        if (textColor.startsWith('#')) {
-                            const r = parseInt(textColor.slice(1, 3), 16);
-                            const g = parseInt(textColor.slice(3, 5), 16);
-                            const b = parseInt(textColor.slice(5, 7), 16);
-                            eventBox.setCssProps({ 'border-color': `rgba(${r}, ${g}, ${b}, ${borderOpacity})` });
-                        }
-                    }
-                } else {
-                    eventBox.setCssProps({ 'background-color': baseColor });
-                    eventBox.setCssProps({ 'opacity': String(opacity) });
-                    if (textColor.startsWith('#')) {
-                        const r = parseInt(textColor.slice(1, 3), 16);
-                        const g = parseInt(textColor.slice(3, 5), 16);
-                        const b = parseInt(textColor.slice(5, 7), 16);
-                        eventBox.setCssProps({ 'border': `${borderWidth}px solid rgba(${r}, ${g}, ${b}, ${borderOpacity})` });
-                    } else {
-                        eventBox.setCssProps({ 'border': `${borderWidth}px solid ${textColor}` });
-                    }
-                }
-                eventBox.setCssStyles({ color: textColor });
-            } else {
-                eventBox.setCssStyles({
-                    backgroundColor: 'var(--background-primary)',
-                    color: 'var(--text-normal)',
-                    border: `${borderWidth}px solid var(--background-modifier-border)`,
-                    opacity: '1'
-                });
-            }
-
-            eventBox.setCssStyles({
-                borderRadius: `${borderRadius}px`,
-                paddingTop: `${verticalPadding}px`,
-                paddingBottom: `${verticalPadding}px`
-            });
-
-            eventTitle.setCssStyles({ fontSize: '0.85em', fontWeight: '600' });
-            eventTitle.setCssProps({
-                'text-align': `${titleAlign === 'center-left' ? 'left' : titleAlign} !important`,
-                'width': '100% !important'
-            });
-
-            eventDesc.setCssStyles({ fontSize: '0.75em', opacity: '0.8' });
-            eventDesc.setCssProps({
-                'text-align': `${finalDescAlign === 'center-left' ? 'left' : finalDescAlign} !important`,
-                'width': '100% !important'
-            });
-
-            if (titleAlign === 'center' || titleAlign === 'center-left') {
-                eventBox.setCssStyles({ justifyContent: 'center' });
-            } else if (titleAlign === 'right') {
-                eventBox.setCssStyles({ justifyContent: 'flex-end' });
-            } else {
-                eventBox.setCssStyles({ justifyContent: 'flex-start' });
-            }
-
-            const placement = settings.iconPlacement ?? 'left';
-            eventIcon.setCssStyles({ display: placement === 'none' ? 'none' : 'block' });
-
-            Array.from(eventBox.classList).forEach(cls => {
-                if (cls.startsWith('dayble-icon-placement-')) {
-                    eventBox.classList.remove(cls);
-                }
-            });
-
-            if (placement === 'right') {
-                eventBox.addClass('dayble-icon-placement-right');
-                eventBox.setCssStyles({ flexDirection: 'row', alignItems: 'center' });
-                eventBox.appendChild(eventIcon);
-            } else if (placement === 'left') {
-                eventBox.addClass('dayble-icon-placement-left');
-                eventBox.setCssStyles({ flexDirection: 'row', alignItems: 'center' });
-                eventBox.prepend(eventIcon);
-            } else if (placement.startsWith('top') || placement.startsWith('bottom')) {
-                eventBox.setCssStyles({ flexDirection: 'column' });
-
-                if (placement.startsWith('top')) {
-                    eventBox.addClass('dayble-icon-placement-top');
-                    eventBox.prepend(eventIcon);
-                } else {
-                    eventBox.addClass('dayble-icon-placement-bottom');
-                    eventBox.appendChild(eventIcon);
-                }
-
-                if (placement.endsWith('-left')) {
-                    eventBox.setCssStyles({ alignItems: 'flex-start' });
-                } else if (placement.endsWith('-right')) {
-                    eventBox.setCssStyles({ alignItems: 'flex-end' });
-                } else {
-                    eventBox.setCssStyles({ alignItems: 'center' });
-                }
-
-                if (titleAlign === 'center' || titleAlign === 'center-left') {
-                    eventTextContainer.setCssStyles({ alignItems: 'center' });
-                } else if (titleAlign === 'right') {
-                    eventTextContainer.setCssStyles({ alignItems: 'flex-end' });
-                } else {
-                    eventTextContainer.setCssStyles({ alignItems: 'flex-start' });
-                }
-            } else {
-                eventBox.setCssStyles({ flexDirection: 'row', alignItems: 'center' });
-                eventBox.prepend(eventIcon);
-            }
-
-            if (!placement.startsWith('top')) {
-                eventTextContainer.setCssStyles({ alignItems: 'stretch' });
-            }
-        };
-
-        updateEventPreview();
-
-        new Setting(containerEl)
-            .setName('Default event color')
-            .setDesc('Default color for events when no category or user color is set.')
-            .addDropdown(d => {
-                const swatches = [
-                    ...(this.plugin.settings.swatches || []),
-                    ...(this.plugin.settings.userCustomSwatches || []).map((s: { name: string, color: string, textColor?: string }, idx: number) => ({ ...s, name: s.name || `custom-${idx}` }))
-                ];
-                d.addOption('', 'No default color');
-                swatches.forEach((s: { name: string }) => { d.addOption(s.name, s.name); });
-                d.setValue(this.plugin.settings.defaultEventColorName || '');
-                d.onChange(v => {
-                    void (async () => {
-                        this.plugin.settings.defaultEventColorName = v;
-                        await this.plugin.saveSettings();
-                        applyColorStyles();
-                        updateEventPreview();
-                        const view = this.plugin.getCalendarView();
-                        await view?.render();
-                    })();
-                });
-
-                const applyColorStyles = () => {
-                    const currentValue = d.getValue();
-                    const selectedSwatch = swatches.find((sw: { name: string }) => sw.name === currentValue);
-
-                    if (selectedSwatch) {
-                        (d.selectEl).setCssProps({
-                            'background-color': `${(selectedSwatch as { color: string }).color} !important`,
-                            'color': `${(selectedSwatch as { textColor?: string }).textColor || chooseTextColor((selectedSwatch as { color: string }).color)} !important`
-                        });
-                    } else {
-                        (d.selectEl).style.removeProperty('background-color');
-                        (d.selectEl).style.removeProperty('color');
-                    }
-
-                    Array.from(d.selectEl.options).forEach(opt => {
-                        if (!opt.value) {
-                            opt.setCssProps({
-                                'background-color': 'var(--background-primary)',
-                                'color': 'var(--text-normal)'
-                            });
-                            return;
-                        }
-                        const s = swatches.find((sw: { name: string }) => sw.name === opt.value);
-                        if (s) {
-                            opt.setCssProps({
-                                'background-color': (s as { color: string }).color,
-                                'color': (s as { textColor?: string }).textColor || chooseTextColor((s as { color: string }).color)
-                            });
-                        }
-                    });
-                };
-                applyColorStyles();
-                (d.selectEl).classList.add('db-select');
-                (d.selectEl).addClass('dayble-default-color-select');
-            });
-
-        new Setting(containerEl)
-            .setName('Event tooltips')
-            .setDesc('Show detailed tooltips when hovering over events.')
-            .addToggle(t => {
-                t.setValue(this.plugin.settings.tooltipEnabled ?? false)
-                    .onChange(async v => {
-                        this.plugin.settings.tooltipEnabled = v;
-                        await this.plugin.saveSettings();
-                        const view = this.plugin.getCalendarView();
-                        await view?.render();
-                    });
-            });
-
-        new Setting(containerEl)
-            .setName('Icon placement')
-            .setDesc('Position of event icon')
-            .addDropdown(d => {
-                d.addOption('left', 'Left')
-                    .addOption('right', 'Right')
-                    .addOption('none', 'None')
-                    .addOption('top', 'Top center')
-                    .addOption('top-left', 'Top left')
-                    .addOption('top-right', 'Top right')
-                    .addOption('bottom', 'Bottom center')
-                    .addOption('bottom-left', 'Bottom left')
-                    .addOption('bottom-right', 'Bottom right')
-                    .setValue(this.plugin.settings.iconPlacement ?? 'left')
-                    .onChange(v => {
-                        this.plugin.settings.iconPlacement = v as DaybleSettings['iconPlacement'];
-                        void this.plugin.saveSettings().then(async () => {
-                            updateEventPreview();
-                            const view = this.plugin.getCalendarView();
-                            await view?.render();
-                        });
-                    });
-            });
-
-        new Setting(containerEl)
-            .setName('Event title alignment')
-            .setDesc('Alignment of event titles')
-            .addDropdown(d => {
-                d.addOption('left', 'Left')
-                    .addOption('center', 'Center')
-                    .addOption('right', 'Right')
-                    .addOption('center-left', 'Center-left')
-                    .setValue(this.plugin.settings.eventTitleAlign ?? 'left')
-                    .onChange(v => {
-                        this.plugin.settings.eventTitleAlign = v as DaybleSettings['eventTitleAlign'];
-                        void this.plugin.saveSettings().then(async () => {
-                            updateEventPreview();
-                            const view = this.plugin.getCalendarView();
-                            await view?.render();
-                        });
-                    });
-            });
-        new Setting(containerEl)
-            .setName('Event description alignment')
-            .setDesc('Alignment of event descriptions')
-            .addDropdown(d => {
-                d.addOption('left', 'Left')
-                    .addOption('center', 'Center')
-                    .addOption('right', 'Right')
-                    .addOption('center-left', 'Center-left')
-                    .setValue(this.plugin.settings.eventDescAlign ?? 'left')
-                    .onChange(v => {
-                        this.plugin.settings.eventDescAlign = v as DaybleSettings['eventDescAlign'];
-                        void this.plugin.saveSettings().then(() => {
-                            updateEventPreview();
-                            const view = this.plugin.getCalendarView();
-                            void view?.render();
-                        });
-                    });
-            });
-
-        new Setting(containerEl)
-            .setName('Event background opacity')
-            .setDesc('Controls transparency of event backgrounds.')
-            .addSlider(s => {
-                s.setLimits(0, 1, 0.1)
-                    .setValue(this.plugin.settings.eventBgOpacity ?? 1)
-                    .onChange(v => {
-                        this.plugin.settings.eventBgOpacity = v;
-                        void this.plugin.saveSettings().then(async () => {
-                            updateEventPreview();
-                            const view = this.plugin.getCalendarView();
-                            await view?.render();
-                        });
-                    })
-                    .setDynamicTooltip();
-            });
-        new Setting(containerEl)
-            .setName('Event border thickness')
-            .setDesc('Controls event border thickness (0-5px)')
-            .addSlider(s => {
-                s.setLimits(0, 5, 0.5)
-                    .setValue(this.plugin.settings.eventBorderWidth ?? 2)
-                    .onChange(v => {
-                        this.plugin.settings.eventBorderWidth = v;
-                        void this.plugin.saveSettings().then(async () => {
-                            updateEventPreview();
-                            const view = this.plugin.getCalendarView();
-                            await view?.render();
-                        });
-                    })
-                    .setDynamicTooltip();
-            });
-        new Setting(containerEl)
-            .setName('Event border opacity')
-            .setDesc('Controls border color opacity for colored events (0-1)')
-            .addSlider(s => {
-                s.setLimits(0, 1, 0.1)
-                    .setValue(this.plugin.settings.eventBorderOpacity ?? 1)
-                    .onChange(v => {
-                        this.plugin.settings.eventBorderOpacity = v;
-                        void this.plugin.saveSettings().then(async () => {
-                            updateEventPreview();
-                            const view = this.plugin.getCalendarView();
-                            await view?.render();
-                        });
-                    })
-                    .setDynamicTooltip();
-            });
-        new Setting(containerEl)
-            .setName('Event border radius')
-            .setDesc('Controls event corner roundness (px)')
-            .addSlider(s => {
-                s.setLimits(0, 24, 1)
-                    .setValue(this.plugin.settings.eventBorderRadius ?? 6)
-                    .onChange(v => {
-                        this.plugin.settings.eventBorderRadius = v;
-                        void this.plugin.saveSettings().then(async () => {
-                            updateEventPreview();
-                            const view = this.plugin.getCalendarView();
-                            await view?.render();
-                        });
-                    })
-                    .setDynamicTooltip();
-            });
-
-        new Setting(containerEl)
-            .setName('Day cell radius')
-            .setDesc('Controls day cell corner roundness (px)')
-            .addSlider(s => {
-                s.setLimits(0, 24, 1)
-                    .setValue(this.plugin.settings.dayCellRadius ?? 8)
-                    .onChange(v => {
-                        this.plugin.settings.dayCellRadius = v;
-                        void this.plugin.saveSettings().then(async () => {
-                            const view = this.plugin.getCalendarView();
-                            await view?.render();
-                        });
-                    })
-                    .setDynamicTooltip();
-            });
-
-        new Setting(containerEl)
-            .setName('Event vertical padding')
-            .setDesc('Controls vertical space inside events (0-12px)')
-            .addSlider(s => {
-                s.setLimits(0, 12, 1)
-                    .setValue(this.plugin.settings.eventVerticalPadding ?? 2)
-                    .onChange(v => {
-                        this.plugin.settings.eventVerticalPadding = v;
-                        void this.plugin.saveSettings().then(async () => {
-                            updateEventPreview();
-                            const view = this.plugin.getCalendarView();
-                            await view?.render();
-                        });
-                    })
-                    .setDynamicTooltip();
-            });
-
-        new Setting(containerEl)
-            .setName('Max day cell height (px)')
-            .setDesc('If set, day cells cap at this height and events scroll vertically')
-            .addText(t => {
-                t.setPlaceholder('0 (disabled)');
-                t.setValue(String(this.plugin.settings.dayCellMaxHeight ?? 0));
-                t.onChange(v => {
-                    const num = parseInt(v || '0', 10);
-                    this.plugin.settings.dayCellMaxHeight = isNaN(num) ? 0 : Math.max(0, num);
-                    void this.plugin.saveSettings().then(async () => {
-                        const view = this.plugin.getCalendarView();
-                        await view?.render();
-                    });
-                });
-                (t.inputEl).type = 'number';
-                (t.inputEl).min = '0';
-            });
-
-        new Setting(containerEl)
-            .setName('Day cell min width (px)')
-            .setDesc('If set, day cells will not shrink below this width (useful for horizontal scrolling). 0 to disable.')
-            .addText(t => {
-                t.setPlaceholder('0 (disabled)');
-                t.setValue(String(this.plugin.settings.dayCellMinWidth ?? 0));
-                t.onChange(v => {
-                    const num = parseInt(v || '0', 10);
-                    this.plugin.settings.dayCellMinWidth = isNaN(num) ? 0 : Math.max(0, num);
-                    void this.plugin.saveSettings().then(async () => {
-                        const view = this.plugin.getCalendarView();
-                        await view?.render();
-                    });
-                });
-                (t.inputEl).type = 'number';
-                (t.inputEl).min = '0';
-            });
-
-        new Setting(containerEl)
-            .setName('Completed event display')
-            .setDesc('How completed events appear')
-            .addDropdown(d => {
-                d.addOption('none', 'No change')
-                    .addOption('dim', 'Dim')
-                    .addOption('strikethrough', 'Strikethrough')
-                    .addOption('hide', 'Hide')
-                    .addOption('color', 'Change color')
-                    .setValue(this.plugin.settings.completeBehavior ?? 'none')
-                    .onChange(v => {
-                        this.plugin.settings.completeBehavior = v as "none" | "hide" | "dim" | "strikethrough" | "color" | undefined;
-                        this.display(); // Refresh to show/hide color dropdown
-                        void this.plugin.saveSettings().then(async () => {
-                            const view = this.plugin.getCalendarView();
-                            await view?.render();
-                        });
-                    });
-            });
-
-        if (this.plugin.settings.completeBehavior === 'color') {
-            new Setting(containerEl)
-                .setName('Change color to')
-                .setDesc('Color for completed events')
-                .addDropdown(d => {
-                    const swatches = [
-                        ...(this.plugin.settings.swatches || []),
-                        ...(this.plugin.settings.userCustomSwatches || []).map((s: { name: string, color: string, textColor?: string }, idx: number) => ({ ...s, name: s.name || `custom-${idx}` }))
-                    ];
-                    d.addOption('', 'Default color');
-                    swatches.forEach((s: { name: string }) => { d.addOption(s.name, s.name); });
-                    d.setValue(this.plugin.settings.completeColor || '');
-                    d.onChange(v => {
-                        void (async () => {
-                            this.plugin.settings.completeColor = v;
-                            await this.plugin.saveSettings();
-                            applyColorStyles();
-                            const view = this.plugin.getCalendarView();
-                            await view?.render();
-                        })();
-                    });
-
-                    const applyColorStyles = () => {
-                        const currentValue = d.getValue();
-                        const selectedSwatch = swatches.find((sw: { name: string }) => sw.name === currentValue);
-
-                        if (selectedSwatch) {
-                            (d.selectEl).setCssProps({
-                                'background-color': `${(selectedSwatch as { color: string }).color} !important`,
-                                'color': `${(selectedSwatch as { textColor?: string }).textColor || chooseTextColor((selectedSwatch as { color: string }).color)} !important`
-                            });
-                        } else {
-                            (d.selectEl).style.removeProperty('background-color');
-                            (d.selectEl).style.removeProperty('color');
-                        }
-
-                        Array.from(d.selectEl.options).forEach(opt => {
-                            if (!opt.value) return;
-                            const s = swatches.find((sw: { name: string }) => sw.name === opt.value);
-                            if (s) {
-                                opt.setCssProps({
-                                    'background-color': (s as { color: string }).color,
-                                    'color': (s as { textColor?: string }).textColor || chooseTextColor((s as { color: string }).color)
-                                });
-                            }
-                        });
-                    };
-                    applyColorStyles();
-                    (d.selectEl).classList.add('db-select');
-                    (d.selectEl).addClass('dayble-complete-color-select');
-                });
-        }
-
-        new Setting(containerEl)
-            .setName(`Only animate today's events`)
-            .setDesc('Stop animation for all events except today')
-            .addToggle(t => {
-                t.setValue(this.plugin.settings.onlyAnimateToday ?? false)
-                    .onChange(v => {
-                        this.plugin.settings.onlyAnimateToday = v;
-                        void this.plugin.saveSettings().then(async () => {
-                            const view = this.plugin.getCalendarView();
-                            await view?.render();
-                        });
-                    });
-            });
-
         new Setting(containerEl).setName('Sounds').setHeading();
 
         const markCompleteSetting = new Setting(containerEl);
@@ -1145,6 +607,17 @@ export default class DaybleSettingTab extends PluginSettingTab {
             });
 
         new Setting(containerEl)
+            .setName('Quick add for new events')
+            .setDesc('When clicking a day to create an event, open the quick add modal instead of the full editor. The add event commands and buttons still open the full editor.')
+            .addToggle(t => {
+                t.setValue(this.plugin.settings.quickAddForNewEvents ?? false)
+                    .onChange(async v => {
+                        this.plugin.settings.quickAddForNewEvents = v;
+                        await this.plugin.saveSettings();
+                    });
+            });
+
+        new Setting(containerEl)
             .setName('Disable touch support')
             .setDesc('Disable touch interactions (drag, long-press, selection) on mobile. Use only mouse/tap events.')
             .addToggle(t => {
@@ -1237,6 +710,612 @@ export default class DaybleSettingTab extends PluginSettingTab {
         if (!this.plugin.settings.showSaveImageIcon) {
             imageFolderSetting.settingEl.hide();
         }
+
+        } // end general tab
+
+        if (this._activeTab === 'appearance') {
+
+        new Setting(containerEl).setName('Event appearance').setHeading();
+
+        const previewContainer = containerEl.createDiv({ cls: 'dayble-event-preview-container' });
+        previewContainer.setCssStyles({
+            margin: '10px 0',
+            padding: '10px',
+            borderRadius: 'var(--setting-items-radius)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '8px',
+            backgroundColor: 'var(--background-primary-alt)'
+        });
+
+        const eventBox = previewContainer.createDiv({ cls: 'dayble-event-item' });
+        eventBox.setCssStyles({
+            padding: '4px 8px',
+            display: 'flex',
+            alignItems: 'center',
+            flexShrink: '0'
+        });
+
+        const eventIcon = eventBox.createDiv({ cls: 'dayble-event-icon' });
+        setIcon(eventIcon, 'clock');
+
+        const eventTextContainer = eventBox.createDiv({ cls: 'dayble-event-text-container' });
+        eventTextContainer.setCssStyles({
+            display: 'flex',
+            flexDirection: 'column',
+            flexGrow: '1'
+        });
+
+        const eventTitle = eventTextContainer.createDiv({ text: 'Customize me :D', cls: 'dayble-event-title' });
+        eventTitle.setCssStyles({ fontSize: `${this.plugin.settings.eventTitleFontSize ?? 0.9}em`, fontWeight: '600' });
+
+        const eventDesc = eventTextContainer.createDiv({ text: 'I\'m the event description!', cls: 'dayble-event-desc' });
+        eventDesc.setCssStyles({ fontSize: `${this.plugin.settings.eventDescFontSize ?? 0.85}em`, opacity: '0.8' });
+
+        const updateEventPreview = () => {
+            const settings = this.plugin.settings;
+            const defaultColorName = settings.defaultEventColorName;
+            const swatches = [
+                ...(settings.swatches || []),
+                ...(settings.userCustomSwatches || []).map((s: { name: string, color: string, textColor?: string }, idx: number) => ({ ...s, name: s.name || `custom-${idx}` }))
+            ];
+
+            const selectedSwatch = swatches.find((s: { name: string }) => s.name === defaultColorName);
+
+            const opacity = settings.eventBgOpacity ?? 1;
+            const borderOpacity = settings.eventBorderOpacity ?? 1;
+            const borderWidth = settings.eventBorderWidth ?? 2;
+            const borderRadius = settings.eventBorderRadius ?? 6;
+            const titleAlign = settings.eventTitleAlign ?? 'center';
+            const descAlign = settings.eventDescAlign ?? 'center';
+            const verticalPadding = settings.eventVerticalPadding ?? 2;
+            const horizontalPadding = settings.eventHorizontalPadding ?? 6;
+            const iconGap = settings.eventIconGap ?? 6;
+
+            let finalDescAlign = descAlign;
+            if (titleAlign === 'center-left' && descAlign === 'center-left') {
+                finalDescAlign = titleAlign;
+            }
+
+            if (selectedSwatch) {
+                const baseColor = (selectedSwatch as { color: string }).color;
+                const textColor = (selectedSwatch as { textColor?: string }).textColor || '#ffffff';
+
+                if (baseColor.startsWith('var')) {
+                    eventBox.setCssProps({ 'background-color': `rgba(from ${baseColor} r g b / ${opacity})` });
+                    if (textColor.startsWith('var')) {
+                        eventBox.setCssProps({ 'border': `${borderWidth}px solid rgba(from ${textColor} r g b / ${borderOpacity})` });
+                    } else {
+                        eventBox.setCssProps({ 'border': `${borderWidth}px solid ${textColor}`, 'border-color': textColor });
+                        if (textColor.startsWith('#')) {
+                            const r = parseInt(textColor.slice(1, 3), 16);
+                            const g = parseInt(textColor.slice(3, 5), 16);
+                            const b = parseInt(textColor.slice(5, 7), 16);
+                            eventBox.setCssProps({ 'border-color': `rgba(${r}, ${g}, ${b}, ${borderOpacity})` });
+                        }
+                    }
+                } else {
+                    eventBox.setCssProps({ 'background-color': baseColor });
+                    eventBox.setCssProps({ 'opacity': String(opacity) });
+                    if (textColor.startsWith('#')) {
+                        const r = parseInt(textColor.slice(1, 3), 16);
+                        const g = parseInt(textColor.slice(3, 5), 16);
+                        const b = parseInt(textColor.slice(5, 7), 16);
+                        eventBox.setCssProps({ 'border': `${borderWidth}px solid rgba(${r}, ${g}, ${b}, ${borderOpacity})` });
+                    } else {
+                        eventBox.setCssProps({ 'border': `${borderWidth}px solid ${textColor}` });
+                    }
+                }
+                eventBox.setCssStyles({ color: textColor });
+            } else {
+                eventBox.setCssStyles({
+                    backgroundColor: 'var(--background-primary)',
+                    color: 'var(--text-normal)',
+                    border: `${borderWidth}px solid var(--background-modifier-border)`,
+                    opacity: '1'
+                });
+            }
+
+            eventBox.setCssStyles({
+                borderRadius: `${borderRadius}px`,
+                paddingTop: `${verticalPadding}px`,
+                paddingBottom: `${verticalPadding}px`,
+                paddingLeft: `${horizontalPadding}px`,
+                paddingRight: `${horizontalPadding}px`
+            });
+            // pinned inline so the gap slider always shows in the preview, regardless of CSS
+            eventBox.style.setProperty('gap', `${iconGap}px`, 'important');
+
+            eventTitle.setCssStyles({ fontSize: `${settings.eventTitleFontSize ?? 0.9}em`, fontWeight: '600' });
+            eventTitle.style.setProperty('text-align', titleAlign === 'center-left' ? 'left' : titleAlign, 'important');
+
+            eventDesc.setCssStyles({ fontSize: `${settings.eventDescFontSize ?? 0.85}em`, opacity: '0.8' });
+            eventDesc.style.setProperty('text-align', finalDescAlign === 'center-left' ? 'left' : finalDescAlign, 'important');
+
+            if (titleAlign === 'center' || titleAlign === 'center-left') {
+                eventBox.setCssStyles({ justifyContent: 'center' });
+            } else if (titleAlign === 'right') {
+                eventBox.setCssStyles({ justifyContent: 'flex-end' });
+            } else {
+                eventBox.setCssStyles({ justifyContent: 'flex-start' });
+            }
+
+            const placement = settings.iconPlacement ?? 'left';
+            eventIcon.setCssStyles({ display: placement === 'none' ? 'none' : 'block' });
+
+            Array.from(eventBox.classList).forEach(cls => {
+                if (cls.startsWith('dayble-icon-placement-')) {
+                    eventBox.classList.remove(cls);
+                }
+            });
+
+            if (placement === 'right') {
+                eventBox.addClass('dayble-icon-placement-right');
+                eventBox.setCssStyles({ flexDirection: 'row', alignItems: 'center' });
+                eventBox.appendChild(eventIcon);
+            } else if (placement === 'left') {
+                eventBox.addClass('dayble-icon-placement-left');
+                eventBox.setCssStyles({ flexDirection: 'row', alignItems: 'center' });
+                eventBox.prepend(eventIcon);
+            } else if (placement.startsWith('top') || placement.startsWith('bottom')) {
+                eventBox.setCssStyles({ flexDirection: 'column' });
+
+                if (placement.startsWith('top')) {
+                    eventBox.addClass('dayble-icon-placement-top');
+                    eventBox.prepend(eventIcon);
+                } else {
+                    eventBox.addClass('dayble-icon-placement-bottom');
+                    eventBox.appendChild(eventIcon);
+                }
+
+                if (placement.endsWith('-left')) {
+                    eventBox.setCssStyles({ alignItems: 'flex-start' });
+                } else if (placement.endsWith('-right')) {
+                    eventBox.setCssStyles({ alignItems: 'flex-end' });
+                } else {
+                    eventBox.setCssStyles({ alignItems: 'center' });
+                }
+
+                if (titleAlign === 'center' || titleAlign === 'center-left') {
+                    eventTextContainer.setCssStyles({ alignItems: 'center' });
+                } else if (titleAlign === 'right') {
+                    eventTextContainer.setCssStyles({ alignItems: 'flex-end' });
+                } else {
+                    eventTextContainer.setCssStyles({ alignItems: 'flex-start' });
+                }
+            } else {
+                eventBox.setCssStyles({ flexDirection: 'row', alignItems: 'center' });
+                eventBox.prepend(eventIcon);
+            }
+
+            if (!placement.startsWith('top')) {
+                eventTextContainer.setCssStyles({ alignItems: 'stretch' });
+            }
+        };
+
+        updateEventPreview();
+
+        new Setting(containerEl)
+            .setName('Default event color')
+            .setDesc('Default color for events when no category or user color is set.')
+            .addDropdown(d => {
+                const swatches = [
+                    ...(this.plugin.settings.swatches || []),
+                    ...(this.plugin.settings.userCustomSwatches || []).map((s: { name: string, color: string, textColor?: string }, idx: number) => ({ ...s, name: s.name || `custom-${idx}` }))
+                ];
+                d.addOption('', 'No default color');
+                swatches.forEach((s: { name: string }) => { d.addOption(s.name, s.name); });
+                d.setValue(this.plugin.settings.defaultEventColorName || '');
+                d.onChange(v => {
+                    void (async () => {
+                        this.plugin.settings.defaultEventColorName = v;
+                        await this.plugin.saveSettings();
+                        applyColorStyles();
+                        updateEventPreview();
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
+                    })();
+                });
+
+                const applyColorStyles = () => {
+                    const currentValue = d.getValue();
+                    const selectedSwatch = swatches.find((sw: { name: string }) => sw.name === currentValue);
+
+                    if (selectedSwatch) {
+                        (d.selectEl).setCssProps({
+                            'background-color': `${(selectedSwatch as { color: string }).color} !important`,
+                            'color': `${(selectedSwatch as { textColor?: string }).textColor || chooseTextColor((selectedSwatch as { color: string }).color)} !important`
+                        });
+                    } else {
+                        (d.selectEl).style.removeProperty('background-color');
+                        (d.selectEl).style.removeProperty('color');
+                    }
+
+                    Array.from(d.selectEl.options).forEach(opt => {
+                        if (!opt.value) {
+                            opt.setCssProps({
+                                'background-color': 'var(--background-primary)',
+                                'color': 'var(--text-normal)'
+                            });
+                            return;
+                        }
+                        const s = swatches.find((sw: { name: string }) => sw.name === opt.value);
+                        if (s) {
+                            opt.setCssProps({
+                                'background-color': (s as { color: string }).color,
+                                'color': (s as { textColor?: string }).textColor || chooseTextColor((s as { color: string }).color)
+                            });
+                        }
+                    });
+                };
+                applyColorStyles();
+                (d.selectEl).classList.add('db-select');
+                (d.selectEl).addClass('dayble-default-color-select');
+            });
+
+        new Setting(containerEl)
+            .setName('Event tooltips')
+            .setDesc('Show detailed tooltips when hovering over events.')
+            .addToggle(t => {
+                t.setValue(this.plugin.settings.tooltipEnabled ?? false)
+                    .onChange(async v => {
+                        this.plugin.settings.tooltipEnabled = v;
+                        await this.plugin.saveSettings();
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
+                    });
+            });
+
+        new Setting(containerEl)
+            .setName('Icon placement')
+            .setDesc('Position of event icon')
+            .addDropdown(d => {
+                d.addOption('left', 'Left')
+                    .addOption('right', 'Right')
+                    .addOption('none', 'None')
+                    .addOption('top', 'Top center')
+                    .addOption('top-left', 'Top left')
+                    .addOption('top-right', 'Top right')
+                    .addOption('bottom', 'Bottom center')
+                    .addOption('bottom-left', 'Bottom left')
+                    .addOption('bottom-right', 'Bottom right')
+                    .setValue(this.plugin.settings.iconPlacement ?? 'left')
+                    .onChange(v => {
+                        this.plugin.settings.iconPlacement = v as DaybleSettings['iconPlacement'];
+                        void this.plugin.saveSettings().then(async () => {
+                            updateEventPreview();
+                            const view = this.plugin.getCalendarView();
+                            await view?.render();
+                        });
+                    });
+            });
+
+        new Setting(containerEl)
+            .setName('Icon gap')
+            .setDesc('Controls the space between the event icon and its text (0-24px)')
+            .addSlider(s => {
+                s.setLimits(0, 24, 1)
+                    .setValue(this.plugin.settings.eventIconGap ?? 6)
+                    .onChange(v => {
+                        this.plugin.settings.eventIconGap = v;
+                        void this.plugin.saveSettings().then(async () => {
+                            updateEventPreview();
+                            const view = this.plugin.getCalendarView();
+                            await view?.render();
+                        });
+                    })
+                    .setDynamicTooltip();
+            });
+
+        new Setting(containerEl)
+            .setName('Event title alignment')
+            .setDesc('Alignment of event titles')
+            .addDropdown(d => {
+                d.addOption('left', 'Left')
+                    .addOption('center', 'Center')
+                    .addOption('right', 'Right')
+                    .addOption('center-left', 'Center-left')
+                    .setValue(this.plugin.settings.eventTitleAlign ?? 'left')
+                    .onChange(v => {
+                        this.plugin.settings.eventTitleAlign = v as DaybleSettings['eventTitleAlign'];
+                        void this.plugin.saveSettings().then(async () => {
+                            updateEventPreview();
+                            const view = this.plugin.getCalendarView();
+                            await view?.render();
+                        });
+                    });
+            });
+        new Setting(containerEl)
+            .setName('Event description alignment')
+            .setDesc('Alignment of event descriptions')
+            .addDropdown(d => {
+                d.addOption('left', 'Left')
+                    .addOption('center', 'Center')
+                    .addOption('right', 'Right')
+                    .addOption('center-left', 'Center-left')
+                    .setValue(this.plugin.settings.eventDescAlign ?? 'left')
+                    .onChange(v => {
+                        this.plugin.settings.eventDescAlign = v as DaybleSettings['eventDescAlign'];
+                        void this.plugin.saveSettings().then(() => {
+                            updateEventPreview();
+                            const view = this.plugin.getCalendarView();
+                            void view?.render();
+                        });
+                    });
+            });
+
+        new Setting(containerEl)
+            .setName('Event title font size')
+            .setDesc('Font size of event titles (in em)')
+            .addSlider(s => {
+                s.setLimits(0.4, 2, 0.05)
+                    .setValue(this.plugin.settings.eventTitleFontSize ?? 0.9)
+                    .onChange(v => {
+                        this.plugin.settings.eventTitleFontSize = v;
+                        void this.plugin.saveSettings().then(() => {
+                            updateEventPreview();
+                            const view = this.plugin.getCalendarView();
+                            void view?.render();
+                        });
+                    })
+                    .setDynamicTooltip();
+            });
+
+        new Setting(containerEl)
+            .setName('Event description font size')
+            .setDesc('Font size of event descriptions (in em)')
+            .addSlider(s => {
+                s.setLimits(0.4, 2, 0.05)
+                    .setValue(this.plugin.settings.eventDescFontSize ?? 0.85)
+                    .onChange(v => {
+                        this.plugin.settings.eventDescFontSize = v;
+                        void this.plugin.saveSettings().then(() => {
+                            updateEventPreview();
+                            const view = this.plugin.getCalendarView();
+                            void view?.render();
+                        });
+                    })
+                    .setDynamicTooltip();
+            });
+
+        new Setting(containerEl)
+            .setName('Event background opacity')
+            .setDesc('Controls transparency of event backgrounds.')
+            .addSlider(s => {
+                s.setLimits(0, 1, 0.05)
+                    .setValue(this.plugin.settings.eventBgOpacity ?? 1)
+                    .onChange(v => {
+                        this.plugin.settings.eventBgOpacity = v;
+                        void this.plugin.saveSettings().then(async () => {
+                            updateEventPreview();
+                            const view = this.plugin.getCalendarView();
+                            await view?.render();
+                        });
+                    })
+                    .setDynamicTooltip();
+            });
+        new Setting(containerEl)
+            .setName('Event border thickness')
+            .setDesc('Controls event border thickness (0-5px)')
+            .addSlider(s => {
+                s.setLimits(0, 5, 0.25)
+                    .setValue(this.plugin.settings.eventBorderWidth ?? 2)
+                    .onChange(v => {
+                        this.plugin.settings.eventBorderWidth = v;
+                        void this.plugin.saveSettings().then(async () => {
+                            updateEventPreview();
+                            const view = this.plugin.getCalendarView();
+                            await view?.render();
+                        });
+                    })
+                    .setDynamicTooltip();
+            });
+        new Setting(containerEl)
+            .setName('Event border opacity')
+            .setDesc('Controls border color opacity for colored events (0-1)')
+            .addSlider(s => {
+                s.setLimits(0, 1, 0.05)
+                    .setValue(this.plugin.settings.eventBorderOpacity ?? 1)
+                    .onChange(v => {
+                        this.plugin.settings.eventBorderOpacity = v;
+                        void this.plugin.saveSettings().then(async () => {
+                            updateEventPreview();
+                            const view = this.plugin.getCalendarView();
+                            await view?.render();
+                        });
+                    })
+                    .setDynamicTooltip();
+            });
+        new Setting(containerEl)
+            .setName('Event border radius')
+            .setDesc('Controls event corner roundness (px)')
+            .addSlider(s => {
+                s.setLimits(0, 24, 1)
+                    .setValue(this.plugin.settings.eventBorderRadius ?? 6)
+                    .onChange(v => {
+                        this.plugin.settings.eventBorderRadius = v;
+                        void this.plugin.saveSettings().then(async () => {
+                            updateEventPreview();
+                            const view = this.plugin.getCalendarView();
+                            await view?.render();
+                        });
+                    })
+                    .setDynamicTooltip();
+            });
+
+        new Setting(containerEl)
+            .setName('Day cell radius')
+            .setDesc('Controls day cell corner roundness (px)')
+            .addSlider(s => {
+                s.setLimits(0, 24, 1)
+                    .setValue(this.plugin.settings.dayCellRadius ?? 8)
+                    .onChange(v => {
+                        this.plugin.settings.dayCellRadius = v;
+                        void this.plugin.saveSettings().then(async () => {
+                            const view = this.plugin.getCalendarView();
+                            await view?.render();
+                        });
+                    })
+                    .setDynamicTooltip();
+            });
+
+        new Setting(containerEl)
+            .setName('Event vertical padding')
+            .setDesc('Controls vertical space inside events (0-12px)')
+            .addSlider(s => {
+                s.setLimits(0, 12, 1)
+                    .setValue(this.plugin.settings.eventVerticalPadding ?? 2)
+                    .onChange(v => {
+                        this.plugin.settings.eventVerticalPadding = v;
+                        void this.plugin.saveSettings().then(async () => {
+                            updateEventPreview();
+                            const view = this.plugin.getCalendarView();
+                            await view?.render();
+                        });
+                    })
+                    .setDynamicTooltip();
+            });
+
+        new Setting(containerEl)
+            .setName('Event horizontal padding')
+            .setDesc('Controls horizontal space inside events (0-24px)')
+            .addSlider(s => {
+                s.setLimits(0, 24, 1)
+                    .setValue(this.plugin.settings.eventHorizontalPadding ?? 6)
+                    .onChange(v => {
+                        this.plugin.settings.eventHorizontalPadding = v;
+                        void this.plugin.saveSettings().then(async () => {
+                            updateEventPreview();
+                            const view = this.plugin.getCalendarView();
+                            await view?.render();
+                        });
+                    })
+                    .setDynamicTooltip();
+            });
+
+        new Setting(containerEl)
+            .setName('Max day cell height (px)')
+            .setDesc('If set, day cells cap at this height and events scroll vertically')
+            .addText(t => {
+                t.setPlaceholder('0 (disabled)');
+                t.setValue(String(this.plugin.settings.dayCellMaxHeight ?? 0));
+                t.onChange(v => {
+                    const num = parseInt(v || '0', 10);
+                    this.plugin.settings.dayCellMaxHeight = isNaN(num) ? 0 : Math.max(0, num);
+                    void this.plugin.saveSettings().then(async () => {
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
+                    });
+                });
+                (t.inputEl).type = 'number';
+                (t.inputEl).min = '0';
+            });
+
+        new Setting(containerEl)
+            .setName('Day cell min width (px)')
+            .setDesc('If set, day cells will not shrink below this width (useful for horizontal scrolling). 0 to disable.')
+            .addText(t => {
+                t.setPlaceholder('0 (disabled)');
+                t.setValue(String(this.plugin.settings.dayCellMinWidth ?? 0));
+                t.onChange(v => {
+                    const num = parseInt(v || '0', 10);
+                    this.plugin.settings.dayCellMinWidth = isNaN(num) ? 0 : Math.max(0, num);
+                    void this.plugin.saveSettings().then(async () => {
+                        const view = this.plugin.getCalendarView();
+                        await view?.render();
+                    });
+                });
+                (t.inputEl).type = 'number';
+                (t.inputEl).min = '0';
+            });
+
+        new Setting(containerEl)
+            .setName('Completed event display')
+            .setDesc('How completed events appear. When set to hide, the show/hide completed events command toggles them without changing this setting.')
+            .addDropdown(d => {
+                d.addOption('none', 'No change')
+                    .addOption('dim', 'Dim')
+                    .addOption('strikethrough', 'Strikethrough')
+                    .addOption('hide', 'Hide')
+                    .addOption('color', 'Change color')
+                    .setValue(this.plugin.settings.completeBehavior ?? 'none')
+                    .onChange(v => {
+                        this.plugin.settings.completeBehavior = v as "none" | "hide" | "dim" | "strikethrough" | "color" | undefined;
+                        this.display(); // Refresh to show/hide color dropdown
+                        void this.plugin.saveSettings().then(async () => {
+                            const view = this.plugin.getCalendarView();
+                            await view?.render();
+                        });
+                    });
+            });
+
+        if (this.plugin.settings.completeBehavior === 'color') {
+            new Setting(containerEl)
+                .setName('Change color to')
+                .setDesc('Color for completed events')
+                .addDropdown(d => {
+                    const swatches = [
+                        ...(this.plugin.settings.swatches || []),
+                        ...(this.plugin.settings.userCustomSwatches || []).map((s: { name: string, color: string, textColor?: string }, idx: number) => ({ ...s, name: s.name || `custom-${idx}` }))
+                    ];
+                    d.addOption('', 'Default color');
+                    swatches.forEach((s: { name: string }) => { d.addOption(s.name, s.name); });
+                    d.setValue(this.plugin.settings.completeColor || '');
+                    d.onChange(v => {
+                        void (async () => {
+                            this.plugin.settings.completeColor = v;
+                            await this.plugin.saveSettings();
+                            applyColorStyles();
+                            const view = this.plugin.getCalendarView();
+                            await view?.render();
+                        })();
+                    });
+
+                    const applyColorStyles = () => {
+                        const currentValue = d.getValue();
+                        const selectedSwatch = swatches.find((sw: { name: string }) => sw.name === currentValue);
+
+                        if (selectedSwatch) {
+                            (d.selectEl).setCssProps({
+                                'background-color': `${(selectedSwatch as { color: string }).color} !important`,
+                                'color': `${(selectedSwatch as { textColor?: string }).textColor || chooseTextColor((selectedSwatch as { color: string }).color)} !important`
+                            });
+                        } else {
+                            (d.selectEl).style.removeProperty('background-color');
+                            (d.selectEl).style.removeProperty('color');
+                        }
+
+                        Array.from(d.selectEl.options).forEach(opt => {
+                            if (!opt.value) return;
+                            const s = swatches.find((sw: { name: string }) => sw.name === opt.value);
+                            if (s) {
+                                opt.setCssProps({
+                                    'background-color': (s as { color: string }).color,
+                                    'color': (s as { textColor?: string }).textColor || chooseTextColor((s as { color: string }).color)
+                                });
+                            }
+                        });
+                    };
+                    applyColorStyles();
+                    (d.selectEl).classList.add('db-select');
+                    (d.selectEl).addClass('dayble-complete-color-select');
+                });
+        }
+
+        new Setting(containerEl)
+            .setName(`Only animate today's events`)
+            .setDesc('Stop animation for all events except today')
+            .addToggle(t => {
+                t.setValue(this.plugin.settings.onlyAnimateToday ?? false)
+                    .onChange(v => {
+                        this.plugin.settings.onlyAnimateToday = v;
+                        void this.plugin.saveSettings().then(async () => {
+                            const view = this.plugin.getCalendarView();
+                            await view?.render();
+                        });
+                    });
+            });
 
         new Setting(containerEl).setName('Past Dates').setHeading();
 

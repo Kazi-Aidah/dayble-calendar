@@ -11,6 +11,8 @@ import QuickAddEventModal from './modals/QuickAddEventModal';
 
 export default class DaybleCalendarPlugin extends Plugin {
     settings: DaybleSettings;
+    // Session-only peek: shows completed events while completeBehavior stays 'hide' :: showCompletedEvents
+    showCompletedEvents = false;
 
     getTimeFormat(): '12h' | '24h' {
         const setting = this.settings.timeFormat;
@@ -142,6 +144,7 @@ export default class DaybleCalendarPlugin extends Plugin {
     async onload() {
         await this.loadSettings();
         this.reorderTriggersGlobally(); // Ensure triggers follow category order from start
+        this.applyEventStyleVars();
 
         this.registerView(VIEW_TYPE, leaf => new DaybleCalendarView(leaf, this));
 
@@ -294,6 +297,19 @@ export default class DaybleCalendarPlugin extends Plugin {
                 void modal.open();
             }
         });
+        // Peek at hidden completed events without touching the display setting :: toggle-completed-events
+        this.addCommand({
+            id: 'toggle-completed-events',
+            name: 'Show/Hide completed events',
+            checkCallback: (checking) => {
+                if ((this.settings.completeBehavior ?? 'none') !== 'hide') return false;
+                if (!checking) {
+                    this.showCompletedEvents = !this.showCompletedEvents;
+                    void this.getCalendarView()?.render();
+                }
+                return true;
+            }
+        });
         this.addCommand({
             id: 'search-events',
             name: 'Search events',
@@ -374,13 +390,14 @@ export default class DaybleCalendarPlugin extends Plugin {
         );
 
         try { await this.ensureEntriesFolder(); } catch { /* intentional */ }
-        this.app.workspace.onLayoutReady(() => {
-            void this.openDayble();
-        });
     }
 
     onunload() {
         // Do not detach leaves here to respect user layout
+        document.documentElement.style.removeProperty('--dayble-event-title-font-size');
+        document.documentElement.style.removeProperty('--dayble-event-desc-font-size');
+        document.documentElement.style.removeProperty('--dayble-event-icon-gap');
+        document.documentElement.style.removeProperty('--event-horizontal-padding');
     }
 
     async loadSettings() {
@@ -472,8 +489,18 @@ export default class DaybleCalendarPlugin extends Plugin {
         }
     }
 
+    // Global event metric vars live on the root so every view (and inline styles) follow the settings live :: applyEventStyleVars
+    applyEventStyleVars() {
+        const root = document.documentElement;
+        root.style.setProperty('--dayble-event-title-font-size', `${this.settings.eventTitleFontSize ?? 0.9}em`);
+        root.style.setProperty('--dayble-event-desc-font-size', `${this.settings.eventDescFontSize ?? 0.85}em`);
+        root.style.setProperty('--dayble-event-icon-gap', `${this.settings.eventIconGap ?? 6}px`);
+        root.style.setProperty('--event-horizontal-padding', `${this.settings.eventHorizontalPadding ?? 6}px`);
+    }
+
     async saveSettings() {
         await this.saveData(this.settings);
+        this.applyEventStyleVars();
     }
 
     async openDayble() {
